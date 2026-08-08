@@ -1,0 +1,303 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+    <title>Downbeat — play it on your hardware</title>
+    <meta name="description" content="Write a progression, a bass line, drums and a melody, then play every part on your EP-133 or FM-1 — pads and keys lighting in time.">
+
+    <!-- Installed, this opens without browser chrome, which is also the real
+         fix for Safari's toolbars eating the bottom of the layout. -->
+    <link rel="manifest" href="manifest.webmanifest">
+    <meta name="theme-color" content="#09090b" media="(prefers-color-scheme: dark)">
+    <meta name="theme-color" content="#f2f2f7" media="(prefers-color-scheme: light)">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-mobile-web-app-title" content="Downbeat">
+    <!-- iOS ignores SVG for home-screen icons, so this one is a real PNG.
+         Both are built by tools/make-icons.js. -->
+    <link rel="apple-touch-icon" href="icons/icon-180.png">
+    <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect width='32' height='32' fill='%230b0c0e'/><rect x='6' y='7' width='4' height='16' rx='1.4' fill='%235b8cff'/><rect x='12.7' y='15' width='4' height='8' rx='1.4' fill='%235b8cff' opacity='.32'/><rect x='19.3' y='12.4' width='4' height='10.6' rx='1.4' fill='%235b8cff' opacity='.32'/><rect x='26' y='16.9' width='4' height='6.1' rx='1.4' fill='%235b8cff' opacity='.32'/><circle cx='8' cy='26.6' r='1.4' fill='%235b8cff'/></svg>">
+    <link rel="icon" type="image/png" sizes="192x192" href="icons/icon-192.png">
+
+    <link rel="stylesheet" href="styles.css">
+  </head>
+  <body>
+    <!-- The desk. Two regions and nothing else: the hardware, which never
+         moves and is never covered, and the stage, which carries whatever part
+         you are playing. Both overlays open inside the stage, which is what
+         keeps the hardware in sight while you work. -->
+    <header class="bar" id="bar">
+      <div class="bar-song">
+        <b id="songTitle">—</b>
+        <span id="songMeta"></span>
+      </div>
+      <span class="bar-pos" id="barPos" aria-live="off"></span>
+
+      <!-- On a wide screen these sit in the bar. On a phone ui.js moves this
+           whole group, and the part switcher with it, into #thumb at the foot
+           of the screen — the only part of a six-inch phone your thumb reaches
+           without shuffling your grip. Moved, not duplicated, so there is one
+           of each control and one set of handlers. -->
+      <div class="bar-controls" id="barControls">
+        <button class="play" id="playButton" aria-label="Play or stop" aria-keyshortcuts="Space">
+          <span class="play-icon" id="playIcon">▶</span><span id="playLabel">Play</span>
+        </button>
+        <button class="pill" id="loopButton" aria-pressed="true" title="Loop">Loop</button>
+        <button class="pill" id="soloButton" aria-pressed="false" title="Hear only the part you are playing">Solo</button>
+        <button class="pill" id="performButton" aria-pressed="false" title="Focus the interface for playing">Perform</button>
+        <button class="pill undo" id="undoButton" title="Undo the last song change" aria-keyshortcuts="Control+Z Meta+Z" hidden>Undo</button>
+        <span class="spacer"></span>
+        <button class="pill is-key" id="songButton" aria-haspopup="dialog">New song</button>
+        <button class="pill" id="structureButton" aria-haspopup="dialog">Structure</button>
+      </div>
+      <!-- Outside the group that moves: a phone's bottom row has room for the
+           things you touch while playing, and the theme is not one of them. It
+           stays up here, where it is out of the way and still one tap. -->
+      <button class="icon" id="themeButton" aria-label="Switch theme" title="Switch theme">☾</button>
+      <div class="bar-progress"><i id="barProgress"></i></div>
+    </header>
+
+    <div class="performance-chrome" id="performanceChrome" hidden>
+      <div><small>Performance mode</small><b id="performancePart">Melody</b></div>
+      <span id="performancePosition" aria-live="off"></span>
+      <div class="performance-actions">
+        <button class="icon" id="performancePrevious" aria-label="Previous part">‹</button>
+        <button class="play" id="performancePlay" aria-label="Play or stop">Play</button>
+        <button class="icon" id="performanceNext" aria-label="Next part">›</button>
+      </div>
+      <button class="pill" id="performanceExit">Done</button>
+    </div>
+
+    <main class="desk" id="desk">
+      <!-- ------------------------------------------------------------ rig -->
+      <section class="rig" id="rig" aria-label="Hardware">
+        <div class="rig-stage" id="rigStage" aria-live="off"></div>
+        <div class="devices" id="rigDevices" role="group" aria-label="Choose your hardware"></div>
+      </section>
+
+      <!-- ---------------------------------------------------------- stage -->
+      <section class="stage" id="stage">
+        <div class="stage-body" id="stageBody">
+          <nav class="parts" id="parts" role="group" aria-label="Choose a part"></nav>
+
+          <!-- On a phone the lane is a slim strip by default: the pads are what
+               you read while playing, and the shape of the part is one tap
+               away rather than permanently taking a fifth of the screen. -->
+          <div class="lane-wrap" id="laneWrap">
+            <button class="lane-toggle" id="laneToggle" aria-expanded="false" aria-controls="lane" aria-describedby="laneDescription">
+              <span class="lane-toggle-label">Shape</span><span class="chev">⌃</span>
+            </button>
+            <div class="lane-bars" id="laneBars" aria-hidden="true"></div>
+            <div class="lane" id="lane" aria-hidden="true"></div>
+            <span class="sr-only" id="laneDescription"></span>
+            <div class="lane-head" id="laneHead" hidden></div>
+          </div>
+
+          <div class="run" id="run"></div>
+
+          <details class="recipe" id="recipe">
+            <summary id="recipeSummary">How to set this up</summary>
+            <ol class="recipe-steps" id="recipeSteps"></ol>
+          </details>
+        </div>
+
+        <!-- Both sheets live inside the stage, so they cover the part you are
+             reading and never the hardware you are reading it for. -->
+        <div class="sheet-host" id="sheetHost" hidden>
+          <div class="scrim" id="scrim"></div>
+
+          <section class="sheet" id="songSheet" role="dialog" aria-modal="true" aria-labelledby="songSheetTitle" tabindex="-1" hidden>
+            <div class="sheet-head">
+              <h2 id="songSheetTitle">New song</h2>
+              <button class="icon" data-close-sheet aria-label="Close">✕</button>
+            </div>
+
+            <div class="sheet-body">
+              <div class="creation-hero">
+                <span class="eyebrow">Create</span>
+                <h3>Start with a sound</h3>
+                <p>Pick a genre and Downbeat will choose musical defaults you can refine.</p>
+              </div>
+
+              <div class="field">
+                <label for="genreSelect">Genre</label>
+                <select id="genreSelect"></select>
+                <p class="field-note" id="genreBlurb"></p>
+              </div>
+
+              <details class="creation-details" id="creationDetails">
+                <summary>Fine-tune the song</summary>
+                <div class="creation-details-body">
+                  <div class="field-row">
+                    <div class="field">
+                      <label for="keySelect">Key</label>
+                      <select id="keySelect"></select>
+                    </div>
+                    <div class="field">
+                      <label for="scaleSelect">Scale</label>
+                      <select id="scaleSelect"></select>
+                    </div>
+                  </div>
+
+                  <div class="field-row">
+                    <div class="field">
+                      <label for="energySelect">Feel</label>
+                      <select id="energySelect">
+                        <optgroup label="Calm to busy">
+                          <option value="still">Still &amp; sparse</option>
+                          <option value="soft">Soft &amp; spacious</option>
+                          <option value="flow" selected>Easy flow</option>
+                          <option value="bright">Bright &amp; lively</option>
+                          <option value="driving">Driving &amp; full</option>
+                        </optgroup>
+                        <optgroup label="Against the grain">
+                          <option value="heavy">Slow &amp; heavy</option>
+                          <option value="hushed">Busy but hushed</option>
+                        </optgroup>
+                      </select>
+                    </div>
+                    <div class="field">
+                      <label for="barsSelect">Length</label>
+                      <select id="barsSelect">
+                        <option value="auto" selected>Fits the genre</option>
+                        <option value="4">4 bars</option>
+                        <option value="8">8 bars</option>
+                        <option value="12">12 bars</option>
+                      </select>
+                    </div>
+                  </div>
+
+                  <div class="field">
+                    <div class="field-top">
+                      <label for="tempoRange">Tempo</label>
+                      <span class="field-read" id="tempoValue">—</span>
+                    </div>
+                    <input type="range" id="tempoRange" min="50" max="180" step="1" value="100" aria-label="Tempo in beats per minute">
+                    <div class="tempo-actions">
+                      <button class="ghost" id="tapTempoButton">Tap tempo</button>
+                      <button class="ghost" id="tempoReset" hidden>Use genre tempo</button>
+                    </div>
+                  </div>
+
+                  <div class="field-row compact-settings">
+                    <div class="field">
+                      <label for="countInSelect">Count-in</label>
+                      <select id="countInSelect">
+                        <option value="0">Off</option>
+                        <option value="1" selected>1 bar</option>
+                        <option value="2">2 bars</option>
+                      </select>
+                    </div>
+                    <label class="check"><span>Second melody</span><input type="checkbox" id="counterToggle"></label>
+                  </div>
+                </div>
+              </details>
+
+              <button class="go" id="generateButton">Generate song</button>
+
+              <div class="sheet-row">
+                <button class="ghost" id="rerollMelodyButton">New melody</button>
+                <button class="ghost" id="rerollChordsButton">New chords</button>
+              </div>
+              <div class="sheet-row">
+                <button class="ghost" id="saveButton">Save</button>
+                <button class="ghost" id="linkButton">Share</button>
+                <button class="ghost" id="copyButton">Copy</button>
+                <button class="ghost" id="midiButton">MIDI</button>
+                <button class="ghost" id="installButton" hidden>Install app</button>
+                <button class="ghost" id="helpButton">How it works</button>
+              </div>
+              <p class="install-help" id="installHelp" role="status" hidden>
+                On iPhone or iPad, tap Share, then choose <b>Add to Home Screen</b>.
+              </p>
+
+              <div class="saved">
+                <h3>Saved <span class="count" id="libraryCount" hidden>0</span></h3>
+                <div class="saved-list" id="libraryList"></div>
+                <p class="empty" id="libraryEmpty">Nothing saved yet.</p>
+              </div>
+            </div>
+          </section>
+
+          <section class="sheet" id="structureSheet" role="dialog" aria-modal="true" aria-labelledby="structureSheetTitle" tabindex="-1" hidden>
+            <div class="sheet-head">
+              <h2 id="structureSheetTitle">Structure</h2>
+              <button class="icon" data-close-sheet aria-label="Close">✕</button>
+            </div>
+
+            <div class="sheet-body">
+              <p class="sheet-lead"><b id="arrangeFormLabel"></b> <span id="arrangeSummary"></span></p>
+
+              <div class="map-wrap">
+                <div class="map" id="arrangeMap" aria-label="Arrangement map"></div>
+              </div>
+              <button class="ghost" id="arrangeReset" hidden>All parts back on</button>
+
+              <ol class="sections" id="arrangeSteps"></ol>
+
+              <div class="why">
+                <h3>Why this works</h3>
+                <p id="theoryText"></p>
+              </div>
+
+              <div class="why">
+                <h3>On the hardware</h3>
+                <div id="arrangeTips"></div>
+              </div>
+            </div>
+          </section>
+        </div>
+      </section>
+    </main>
+
+    <!-- Phone only. ui.js fills it by moving #parts and #barControls here. -->
+    <nav class="thumb" id="thumb" hidden></nav>
+
+    <div class="count-in" id="countIn" role="dialog" aria-modal="true" aria-labelledby="countInLabel" hidden>
+      <small id="countInLabel">Count in</small><b id="countInBeat" aria-live="assertive">4</b>
+      <button class="pill" id="countInCancel">Cancel</button>
+    </div>
+
+    <section class="onboarding" id="onboarding" role="dialog" aria-modal="true" aria-labelledby="onboardingTitle" hidden>
+      <div class="onboarding-card">
+        <button class="icon onboarding-close" id="onboardingClose" aria-label="Skip introduction">✕</button>
+        <div class="onboarding-page is-on" data-onboarding-page="0">
+          <span class="onboarding-mark">1</span>
+          <p class="eyebrow">Create</p>
+          <h2 id="onboardingTitle">A complete song sketch in seconds.</h2>
+          <p>Choose a sound, key and feel. Downbeat writes the harmony, melody, bass and drums together.</p>
+        </div>
+        <div class="onboarding-page" data-onboarding-page="1" hidden>
+          <span class="onboarding-mark">2</span>
+          <p class="eyebrow">Connect</p>
+          <h2 id="onboardingHardwareTitle">Choose the hardware in front of you.</h2>
+          <p>The faceplate shows the exact pads or keys for every part, with setup instructions when you need them.</p>
+        </div>
+        <div class="onboarding-page" data-onboarding-page="2" hidden>
+          <span class="onboarding-mark">3</span>
+          <p class="eyebrow">Perform</p>
+          <h2 id="onboardingPerformTitle">Press play and follow the lights.</h2>
+          <p>Performance mode keeps the active part, next inputs and transport within reach while the screen stays awake.</p>
+        </div>
+        <div class="onboarding-foot">
+          <div class="onboarding-dots" aria-hidden="true"><i></i><i></i><i></i></div>
+          <button class="go" id="onboardingNext">Continue</button>
+        </div>
+      </div>
+    </section>
+
+    <span class="sr-only" id="transportStatus" role="status" aria-live="polite"></span>
+    <div class="toast" id="toast" role="status"></div>
+    <script src="src/theory.js"></script>
+    <script src="src/genres.js"></script>
+    <script src="src/compose.js"></script>
+    <script src="src/audio.js"></script>
+    <script src="src/midi.js"></script>
+    <script src="src/devices.js"></script>
+    <script src="src/arrange.js"></script>
+    <script src="src/library.js"></script>
+    <script src="src/ui.js"></script>
+  </body>
+</html>

@@ -1,0 +1,546 @@
+/* Downbeat — audio engine.
+
+   Synthesised voices with real envelopes and filters, drums built from
+   oscillators and noise, a shared reverb send, and a lookahead scheduler
+   running off the audio clock rather than setTimeout — so playback stays in
+   time, loops seamlessly and works for a song of any length. */
+(function (global) {
+  'use strict';
+
+  const TRACKS = ['melody', 'counter', 'chords', 'bass', 'drums'];
+  const LOOKAHEAD_MS = 25;
+  const SCHEDULE_AHEAD = 0.12;
+
+  /* Voice definitions. `osc` is a stack of oscillators (relative octave,
+     detune in cents, mix); `fm` adds a modulator into the carriers; `amp` and
+     `filter` are ADSR envelopes in seconds. */
+  const PATCHES = {
+    epiano:    { gain: 0.16, reverb: 0.3, osc: [{ type: 'sine', gain: 1 }], fm: { ratio: 3, index: 320, decay: 0.42 }, amp: { a: 0.004, d: 0.5, s: 0.24, r: 0.5 }, filter: { base: 900, env: 2200, q: 0.7, a: 0.005, d: 0.5 } },
+    wurli:     { gain: 0.16, reverb: 0.34, osc: [{ type: 'sine', gain: 1 }, { type: 'triangle', gain: 0.28, detune: 6 }], fm: { ratio: 2, index: 210, decay: 0.5 }, amp: { a: 0.006, d: 0.6, s: 0.2, r: 0.55 }, filter: { base: 700, env: 1500, q: 0.8, a: 0.01, d: 0.6 } },
+    pad:       { gain: 0.1, reverb: 0.62, osc: [{ type: 'sawtooth', gain: 0.5, detune: -8 }, { type: 'sawtooth', gain: 0.5, detune: 9 }, { type: 'triangle', gain: 0.4, octave: -1 }], amp: { a: 0.55, d: 0.9, s: 0.75, r: 1.5 }, filter: { base: 380, env: 900, q: 0.6, a: 0.7, d: 1.4 } },
+    pluck:     { gain: 0.15, reverb: 0.26, osc: [{ type: 'sawtooth', gain: 0.7 }, { type: 'square', gain: 0.25, detune: 7 }], amp: { a: 0.003, d: 0.28, s: 0.08, r: 0.22 }, filter: { base: 620, env: 3200, q: 2.4, a: 0.004, d: 0.24 } },
+    stab:      { gain: 0.14, reverb: 0.36, osc: [{ type: 'sawtooth', gain: 0.5, detune: -12 }, { type: 'sawtooth', gain: 0.5, detune: 11 }], amp: { a: 0.004, d: 0.22, s: 0.03, r: 0.18 }, filter: { base: 800, env: 3600, q: 3.2, a: 0.005, d: 0.2 } },
+    supersaw:  { gain: 0.1, reverb: 0.4, osc: [{ type: 'sawtooth', gain: 0.4, detune: -14 }, { type: 'sawtooth', gain: 0.4, detune: 0 }, { type: 'sawtooth', gain: 0.4, detune: 15 }], amp: { a: 0.01, d: 0.35, s: 0.45, r: 0.35 }, filter: { base: 700, env: 2600, q: 1.6, a: 0.02, d: 0.4 } },
+    organ:     { gain: 0.12, reverb: 0.3, osc: [{ type: 'sine', gain: 0.6 }, { type: 'sine', gain: 0.35, octave: 1 }, { type: 'sine', gain: 0.2, octave: 1, detune: 702 }], amp: { a: 0.012, d: 0.1, s: 0.85, r: 0.12 }, filter: { base: 1400, env: 900, q: 0.5, a: 0.01, d: 0.2 } },
+    guitar:    { gain: 0.13, reverb: 0.24, osc: [{ type: 'sawtooth', gain: 0.6 }, { type: 'triangle', gain: 0.4, detune: -6 }], amp: { a: 0.004, d: 0.45, s: 0.2, r: 0.3 }, filter: { base: 700, env: 2000, q: 1.4, a: 0.006, d: 0.4 } },
+    nylon:     { gain: 0.16, reverb: 0.3, osc: [{ type: 'triangle', gain: 0.8 }, { type: 'sine', gain: 0.4, octave: 1 }], amp: { a: 0.005, d: 0.5, s: 0.06, r: 0.35 }, filter: { base: 900, env: 1600, q: 1, a: 0.005, d: 0.4 } },
+    bell:      { gain: 0.12, reverb: 0.5, osc: [{ type: 'sine', gain: 1 }], fm: { ratio: 3.5, index: 480, decay: 0.3 }, amp: { a: 0.002, d: 0.9, s: 0.02, r: 0.7 }, filter: { base: 1800, env: 2400, q: 0.6, a: 0.003, d: 0.6 } },
+
+    sineLead:  { gain: 0.16, reverb: 0.32, osc: [{ type: 'sine', gain: 0.85 }, { type: 'triangle', gain: 0.2, detune: 5 }], amp: { a: 0.012, d: 0.2, s: 0.6, r: 0.28 }, filter: { base: 1300, env: 1400, q: 0.7, a: 0.02, d: 0.3 } },
+    softLead:  { gain: 0.15, reverb: 0.36, osc: [{ type: 'triangle', gain: 0.7 }, { type: 'sine', gain: 0.35, octave: -1 }], amp: { a: 0.02, d: 0.25, s: 0.55, r: 0.35 }, filter: { base: 1100, env: 1200, q: 0.8, a: 0.03, d: 0.35 } },
+    brightLead: { gain: 0.13, reverb: 0.3, osc: [{ type: 'sawtooth', gain: 0.55 }, { type: 'square', gain: 0.2, detune: 8 }], amp: { a: 0.006, d: 0.22, s: 0.5, r: 0.26 }, filter: { base: 1200, env: 3000, q: 2, a: 0.008, d: 0.28 } },
+
+    upright:   { gain: 0.26, reverb: 0.14, osc: [{ type: 'triangle', gain: 0.9 }, { type: 'sine', gain: 0.5, octave: -1 }], amp: { a: 0.006, d: 0.4, s: 0.14, r: 0.24 }, filter: { base: 260, env: 700, q: 1.1, a: 0.008, d: 0.32 } },
+    fingerBass: { gain: 0.24, reverb: 0.12, osc: [{ type: 'sawtooth', gain: 0.5 }, { type: 'sine', gain: 0.7, octave: -1 }], amp: { a: 0.005, d: 0.34, s: 0.3, r: 0.22 }, filter: { base: 340, env: 900, q: 1.6, a: 0.006, d: 0.3 } },
+    synthBass: { gain: 0.22, reverb: 0.1, osc: [{ type: 'sawtooth', gain: 0.6 }, { type: 'square', gain: 0.3, octave: -1 }], amp: { a: 0.004, d: 0.24, s: 0.35, r: 0.16 }, filter: { base: 260, env: 1500, q: 3, a: 0.005, d: 0.22 } },
+    sub808:    { gain: 0.34, reverb: 0.08, osc: [{ type: 'sine', gain: 1 }], amp: { a: 0.006, d: 1.4, s: 0.5, r: 0.5 }, filter: { base: 180, env: 260, q: 0.7, a: 0.01, d: 0.8 }, pitchDrop: 7 },
+    subSine:   { gain: 0.24, reverb: 0.3, osc: [{ type: 'sine', gain: 1 }], amp: { a: 0.4, d: 0.8, s: 0.8, r: 1.2 }, filter: { base: 240, env: 200, q: 0.6, a: 0.4, d: 1 } }
+  };
+
+  let ctx = null;
+  let noiseBuffer = null;
+  let master = null;
+  let dryBus = null;
+  let wetBus = null;
+  /* Set once the user has asked for sound at all. Until then a suspended
+     context is correct and must be left alone — waking it unprompted is what
+     autoplay policies exist to stop. */
+  let wantsSound = false;
+  const buses = {};
+  const muted = { melody: false, counter: false, chords: false, bass: false, drums: false };
+
+  const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
+  const midiToFreq = (midi) => 440 * Math.pow(2, (midi - 69) / 12);
+
+  /* Safari suspends for two reasons and names them differently: 'suspended'
+     before the first gesture, and the non-standard 'interrupted' after a phone
+     call, Siri, or another app taking the audio session. Checking only the
+     first leaves the app permanently silent after a call. */
+  function wake() {
+    if (!ctx || ctx.state === 'running') return;
+    // Rejected outside a gesture, which is fine — the next tap will get it.
+    const p = ctx.resume();
+    if (p && p.catch) p.catch(() => {});
+  }
+
+  function ensure() {
+    wantsSound = true;
+    if (ctx) {
+      wake();
+      return ctx;
+    }
+    const Ctor = global.AudioContext || global.webkitAudioContext;
+    /* iOS constructs every context suspended, gesture or not, so the resume
+       below is not optional — without it the clock never starts, nothing is
+       ever scheduled, and the very first tap on Play is silent while the
+       transport happily reports that it is playing. */
+    ctx = new Ctor({ latencyHint: 'interactive' });
+    ctx.onstatechange = () => { if (ctx.state !== 'running' && wantsSound) wake(); };
+
+    /* Route through the media channel rather than the ringer, so the hardware
+       mute switch does not silence the whole app with no explanation. */
+    try {
+      if (global.navigator && global.navigator.audioSession) {
+        global.navigator.audioSession.type = 'playback';
+      }
+    } catch (e) { /* not supported — nothing to fall back to */ }
+
+    master = ctx.createGain();
+    master.gain.value = 0.9;
+
+    const shaper = ctx.createWaveShaper();
+    shaper.curve = softClipCurve();
+    shaper.oversample = '2x';
+
+    const compressor = ctx.createDynamicsCompressor();
+    compressor.threshold.value = -14;
+    compressor.knee.value = 24;
+    compressor.ratio.value = 4;
+    compressor.attack.value = 0.004;
+    compressor.release.value = 0.18;
+
+    master.connect(shaper).connect(compressor).connect(ctx.destination);
+
+    dryBus = ctx.createGain();
+    dryBus.connect(master);
+
+    const convolver = ctx.createConvolver();
+    convolver.buffer = makeImpulse(2.4, 2.6);
+    wetBus = ctx.createGain();
+    const wetLevel = ctx.createGain();
+    wetLevel.gain.value = 0.9;
+    wetBus.connect(convolver).connect(wetLevel).connect(master);
+
+    TRACKS.forEach((track) => {
+      const out = ctx.createGain();
+      const send = ctx.createGain();
+      out.connect(dryBus);
+      send.connect(wetBus);
+      buses[track] = { out, send };
+      applyMute(track);
+    });
+
+    noiseBuffer = makeNoise(2);
+    wake();
+    return ctx;
+  }
+
+  /* Coming back to the tab is the other moment the context needs waking — iOS
+     will not do it for you, and by then there is no gesture left to hang it on,
+     so this is best-effort and the next tap is the real backstop. */
+  if (global.document) {
+    global.document.addEventListener('visibilitychange', () => {
+      if (!global.document.hidden) wake();
+    });
+  }
+
+  function softClipCurve() {
+    const n = 2048;
+    const curve = new Float32Array(n);
+    for (let i = 0; i < n; i++) {
+      const x = (i / (n - 1)) * 2 - 1;
+      curve[i] = Math.tanh(x * 1.6) / Math.tanh(1.6);
+    }
+    return curve;
+  }
+
+  function makeImpulse(seconds, decay) {
+    const length = Math.floor(ctx.sampleRate * seconds);
+    const buffer = ctx.createBuffer(2, length, ctx.sampleRate);
+    for (let channel = 0; channel < 2; channel++) {
+      const data = buffer.getChannelData(channel);
+      for (let i = 0; i < length; i++) {
+        data[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / length, decay);
+      }
+    }
+    return buffer;
+  }
+
+  function makeNoise(seconds) {
+    const length = Math.floor(ctx.sampleRate * seconds);
+    const buffer = ctx.createBuffer(1, length, ctx.sampleRate);
+    const data = buffer.getChannelData(0);
+    for (let i = 0; i < length; i++) data[i] = Math.random() * 2 - 1;
+    return buffer;
+  }
+
+  function applyMute(track) {
+    const bus = buses[track];
+    if (!bus) return;
+    const level = muted[track] ? 0 : 1;
+    bus.out.gain.value = level;
+    bus.send.gain.value = level;
+  }
+
+  function setMute(track, value) {
+    muted[track] = !!value;
+    if (ctx) applyMute(track);
+  }
+
+  function isMuted(track) {
+    return !!muted[track];
+  }
+
+  /* ------------------------------------------------------------------ voice */
+
+  function playNote(track, patchName, midi, when, duration, velocity) {
+    ensure();
+    const patch = PATCHES[patchName] || PATCHES.pluck;
+    const bus = buses[track] || buses.melody;
+    const level = clamp(velocity === undefined ? 0.8 : velocity, 0.05, 1);
+    const freq = midiToFreq(midi);
+    const env = patch.amp;
+    const hold = Math.max(0.05, duration);
+    const peak = patch.gain * level;
+
+    const amp = ctx.createGain();
+    amp.gain.setValueAtTime(0.0001, when);
+
+    let tail = amp;
+    if (patch.filter) {
+      const filter = ctx.createBiquadFilter();
+      filter.type = 'lowpass';
+      filter.Q.value = patch.filter.q || 1;
+      const base = Math.min(patch.filter.base + freq * 0.6, 16000);
+      const top = Math.min(base + patch.filter.env, 17500);
+      filter.frequency.setValueAtTime(base, when);
+      filter.frequency.linearRampToValueAtTime(top, when + patch.filter.a);
+      filter.frequency.exponentialRampToValueAtTime(
+        Math.max(120, base * 0.75), when + patch.filter.a + patch.filter.d
+      );
+      amp.connect(filter);
+      tail = filter;
+    }
+
+    const wet = ctx.createGain();
+    wet.gain.value = patch.reverb === undefined ? 0.2 : patch.reverb;
+    tail.connect(bus.out);
+    tail.connect(wet).connect(bus.send);
+
+    const carriers = [];
+    patch.osc.forEach((spec) => {
+      const osc = ctx.createOscillator();
+      osc.type = spec.type;
+      const oscFreq = freq * Math.pow(2, spec.octave || 0);
+      osc.frequency.setValueAtTime(oscFreq, when);
+      if (patch.pitchDrop) {
+        osc.frequency.setValueAtTime(oscFreq * Math.pow(2, patch.pitchDrop / 12), when);
+        osc.frequency.exponentialRampToValueAtTime(oscFreq, when + 0.09);
+      }
+      if (spec.detune) osc.detune.setValueAtTime(spec.detune, when);
+      const mix = ctx.createGain();
+      mix.gain.value = spec.gain;
+      osc.connect(mix).connect(amp);
+      carriers.push(osc);
+    });
+
+    let modulator = null;
+    if (patch.fm) {
+      modulator = ctx.createOscillator();
+      modulator.type = 'sine';
+      modulator.frequency.setValueAtTime(freq * patch.fm.ratio, when);
+      const index = ctx.createGain();
+      index.gain.setValueAtTime(patch.fm.index, when);
+      index.gain.exponentialRampToValueAtTime(1, when + patch.fm.decay);
+      modulator.connect(index);
+      carriers.forEach((osc) => index.connect(osc.frequency));
+    }
+
+    // Amplitude envelope.
+    const attackEnd = when + env.a;
+    const decayEnd = attackEnd + env.d;
+    const sustain = Math.max(0.0001, peak * env.s);
+    amp.gain.linearRampToValueAtTime(peak, attackEnd);
+    amp.gain.exponentialRampToValueAtTime(sustain, decayEnd);
+    const release = Math.max(decayEnd, when + hold);
+    amp.gain.setValueAtTime(sustain, release);
+    amp.gain.exponentialRampToValueAtTime(0.0001, release + env.r);
+
+    const stopAt = release + env.r + 0.05;
+    carriers.forEach((osc) => { osc.start(when); osc.stop(stopAt); });
+    if (modulator) { modulator.start(when); modulator.stop(stopAt); }
+    /* A busy arrangement builds seven to nine nodes per note, a hundred-odd a
+       second, and leaves them hanging off a permanent bus. Desktop collects
+       them eventually; a phone has a hard per-tab ceiling and reloads the page
+       when it is crossed. Cutting the last node loose lets the whole chain go. */
+    reap(carriers[0], [amp, wet]);
+  }
+
+  /* Disconnect a voice's chain once its first source has finished. */
+  function reap(source, nodes) {
+    if (!source) return;
+    source.onended = () => {
+      nodes.forEach((n) => { try { n.disconnect(); } catch (e) { /* already gone */ } });
+    };
+  }
+
+  /* ------------------------------------------------------------------ drums */
+
+  function noiseSource(when, stopAt) {
+    const source = ctx.createBufferSource();
+    source.buffer = noiseBuffer;
+    source.loop = true;
+    source.start(when, Math.random() * 1.5);
+    source.stop(stopAt);
+    return source;
+  }
+
+  function burst(when, options) {
+    const { type, frequency, q, decay, gain, target } = options;
+    const filter = ctx.createBiquadFilter();
+    filter.type = type;
+    filter.frequency.value = frequency;
+    filter.Q.value = q || 1;
+    const amp = ctx.createGain();
+    amp.gain.setValueAtTime(gain, when);
+    amp.gain.exponentialRampToValueAtTime(0.0001, when + decay);
+    const source = noiseSource(when, when + decay + 0.02);
+    source.connect(filter).connect(amp);
+    amp.connect(target.out);
+    const wet = ctx.createGain();
+    wet.gain.value = options.reverb === undefined ? 0.12 : options.reverb;
+    amp.connect(wet).connect(target.send);
+    reap(source, [filter, amp, wet]);
+  }
+
+  function tone(when, options) {
+    const { type, from, to, glide, decay, gain, target } = options;
+    const osc = ctx.createOscillator();
+    osc.type = type || 'sine';
+    osc.frequency.setValueAtTime(from, when);
+    if (to) osc.frequency.exponentialRampToValueAtTime(to, when + (glide || 0.08));
+    const amp = ctx.createGain();
+    amp.gain.setValueAtTime(0.0001, when);
+    amp.gain.linearRampToValueAtTime(gain, when + 0.003);
+    amp.gain.exponentialRampToValueAtTime(0.0001, when + decay);
+    osc.connect(amp);
+    amp.connect(target.out);
+    const wet = ctx.createGain();
+    wet.gain.value = options.reverb === undefined ? 0.1 : options.reverb;
+    amp.connect(wet).connect(target.send);
+    osc.start(when);
+    osc.stop(when + decay + 0.05);
+    reap(osc, [amp, wet]);
+  }
+
+  /* `when` is an absolute context time, the same as playNote — the scheduler
+     always passes a real one. A preview has no time to hand over and used to
+     pass 0, which is in the past the moment the context has been running for a
+     second: the whole envelope was written behind the playhead and every drum
+     preview was silent. Absent or past means now. */
+  function playDrum(instrument, when, velocity) {
+    ensure();
+    const target = buses.drums;
+    const level = clamp(velocity === undefined ? 0.9 : velocity, 0.05, 1);
+    if (!(when > ctx.currentTime)) when = ctx.currentTime + 0.005;
+
+    switch (instrument) {
+      case 'kick':
+        tone(when, { type: 'sine', from: 150, to: 45, glide: 0.07, decay: 0.36, gain: 0.75 * level, target, reverb: 0.03 });
+        burst(when, { type: 'highpass', frequency: 1400, decay: 0.02, gain: 0.14 * level, target, reverb: 0.02 });
+        break;
+      case 'snare':
+        burst(when, { type: 'bandpass', frequency: 1750, q: 0.9, decay: 0.17, gain: 0.4 * level, target, reverb: 0.2 });
+        tone(when, { type: 'triangle', from: 190, decay: 0.09, gain: 0.22 * level, target, reverb: 0.12 });
+        break;
+      case 'hat':
+        burst(when, { type: 'highpass', frequency: 8200, decay: 0.035, gain: 0.24 * level, target, reverb: 0.08 });
+        break;
+      case 'openHat':
+        burst(when, { type: 'highpass', frequency: 7600, decay: 0.3, gain: 0.2 * level, target, reverb: 0.16 });
+        break;
+      case 'clap':
+        [0, 0.011, 0.022].forEach((offset, i) => {
+          burst(when + offset, { type: 'bandpass', frequency: 1150, q: 1.4, decay: 0.06, gain: 0.24 * level * (1 - i * 0.15), target, reverb: 0.22 });
+        });
+        burst(when + 0.03, { type: 'bandpass', frequency: 1000, q: 1.1, decay: 0.16, gain: 0.16 * level, target, reverb: 0.3 });
+        break;
+      case 'rim':
+        burst(when, { type: 'bandpass', frequency: 2400, q: 3, decay: 0.035, gain: 0.24 * level, target, reverb: 0.16 });
+        tone(when, { type: 'triangle', from: 1700, decay: 0.025, gain: 0.14 * level, target, reverb: 0.1 });
+        break;
+      case 'ride':
+        burst(when, { type: 'highpass', frequency: 5200, decay: 0.42, gain: 0.1 * level, target, reverb: 0.24 });
+        tone(when, { type: 'square', from: 3400, decay: 0.1, gain: 0.02 * level, target, reverb: 0.2 });
+        break;
+      case 'crash':
+        burst(when, { type: 'highpass', frequency: 3200, decay: 1.1, gain: 0.16 * level, target, reverb: 0.4 });
+        break;
+      default:
+        burst(when, { type: 'highpass', frequency: 6000, decay: 0.05, gain: 0.18 * level, target });
+    }
+  }
+
+  /* -------------------------------------------------------------- scheduler */
+
+  let events = [];
+  let timer = null;
+  let cursor = 0;
+  let loopStart = 0;
+  let stepDuration = 0.125;
+  let currentSong = null;
+  let looping = true;
+  let onStop = null;
+  let onLoop = null;
+
+  /* Flatten a song into one time-ordered event list. */
+  function buildEvents(song) {
+    const patches = song.genre.patches || {};
+    const list = [];
+    song.melody.forEach((n) => {
+      list.push({ step: n.start, track: 'melody', patch: patches.lead || 'sineLead', midi: n.midi, dur: n.dur, velocity: n.velocity });
+    });
+    (song.counter || []).forEach((n) => {
+      list.push({ step: n.start, track: 'counter', patch: patches.counter || 'nylon', midi: n.midi, dur: n.dur, velocity: n.velocity });
+    });
+    (song.chordTrack || []).forEach((c) => {
+      list.push({ step: c.start, track: 'chords', patch: patches.chord || 'epiano', midi: c.midi, dur: c.dur, velocity: c.velocity });
+    });
+    song.bass.forEach((b) => {
+      list.push({ step: b.start, track: 'bass', patch: patches.bass || 'fingerBass', midi: b.midi, dur: b.dur, velocity: b.velocity });
+    });
+    song.drums.forEach((d) => {
+      list.push({ step: d.step, track: 'drums', drum: d.instrument, velocity: d.velocity });
+    });
+    return list.sort((a, b) => a.step - b.step);
+  }
+
+  /* Swing pushes the offbeats later. Which subdivision counts as an offbeat
+     depends on whether the genre swings its eighths or its sixteenths. */
+  function swingOffset(song, step) {
+    if (!song.swing) return 0;
+    if (song.swingUnit === 16) return step % 2 === 1 ? song.swing * stepDuration * 0.5 : 0;
+    return step % 4 === 2 ? song.swing * stepDuration * 0.66 : 0;
+  }
+
+  function timeOf(step) {
+    return loopStart + step * stepDuration + swingOffset(currentSong, step);
+  }
+
+  function tick() {
+    if (!currentSong) return;
+    const horizon = ctx.currentTime + SCHEDULE_AHEAD;
+    const totalSteps = currentSong.totalSteps;
+
+    while (cursor < events.length && timeOf(events[cursor].step) < horizon) {
+      const event = events[cursor];
+      const when = timeOf(event.step);
+      if (when >= ctx.currentTime - 0.02) {
+        if (event.drum) {
+          playDrum(event.drum, when, event.velocity);
+        } else {
+          const seconds = Math.max(0.06, event.dur * stepDuration * 0.92);
+          playNote(event.track, event.patch, event.midi, when, seconds, event.velocity);
+        }
+      }
+      cursor++;
+    }
+
+    if (cursor >= events.length) {
+      const loopEnd = loopStart + totalSteps * stepDuration;
+      if (looping) {
+        if (loopEnd < horizon) {
+          loopStart = loopEnd;
+          cursor = 0;
+          if (onLoop) onLoop();
+        }
+      } else if (ctx.currentTime > loopEnd + 0.6) {
+        stop();
+      }
+    }
+  }
+
+  function start(song, options) {
+    ensure();
+    stop(true);
+    const opts = options || {};
+    currentSong = song;
+    looping = opts.loop !== false;
+    onStop = opts.onStop || null;
+    onLoop = opts.onLoop || null;
+    events = buildEvents(song);
+    stepDuration = 60 / song.bpm / 4;
+    loopStart = ctx.currentTime + 0.14;
+    cursor = 0;
+    timer = global.setInterval(tick, LOOKAHEAD_MS);
+    tick();
+    return loopStart;
+  }
+
+  /* Clearing the interval only stops *future* notes. Up to a lookahead window
+     of them is already committed to the graph, with release tails of over a
+     second running into a 2.4s reverb — so Stop used to be followed by several
+     seconds of decay, and a restart (which the tempo slider used to do on every
+     input event) layered the abandoned run underneath the new one. Ducking the
+     dry buses kills the committed notes without touching the reverb, so the
+     tail rings out naturally instead of being chopped. */
+  function silence() {
+    if (!ctx) return;
+    const at = ctx.currentTime;
+    TRACKS.forEach((track) => {
+      const bus = buses[track];
+      if (!bus) return;
+      bus.out.gain.cancelScheduledValues(at);
+      bus.out.gain.setValueAtTime(bus.out.gain.value, at);
+      bus.out.gain.linearRampToValueAtTime(0, at + 0.04);
+      bus.send.gain.cancelScheduledValues(at);
+      bus.send.gain.setValueAtTime(bus.send.gain.value, at);
+      bus.send.gain.linearRampToValueAtTime(0, at + 0.04);
+    });
+    // Back to whatever the mutes say, once the committed notes have gone.
+    global.setTimeout(() => { TRACKS.forEach(applyMute); }, 90);
+  }
+
+  function stop(silent) {
+    const wasPlaying = !!timer;
+    if (timer) { global.clearInterval(timer); timer = null; }
+    currentSong = null;
+    events = [];
+    cursor = 0;
+    if (wasPlaying) silence();
+    if (!silent && onStop) onStop();
+    if (!silent) onStop = null;
+  }
+
+  function isPlaying() {
+    return !!timer;
+  }
+
+  /* Where the playhead is now, in sixteenth-note steps.
+
+     `currentTime` is when a sample is handed to the output, not when it reaches
+     your ears. Wired that gap is a few milliseconds; over AirPods it is 150 to
+     300, and an app whose whole promise is "the pads light in time" cannot
+     afford to run a fifth of a second ahead of what you hear. */
+  function outputDelay() {
+    if (!ctx) return 0;
+    return ctx.outputLatency || ctx.baseLatency || 0;
+  }
+
+  function position() {
+    if (!currentSong || !ctx) return 0;
+    const elapsed = ctx.currentTime - outputDelay() - loopStart;
+    if (elapsed < 0) return 0;
+    return Math.min(currentSong.totalSteps, elapsed / stepDuration);
+  }
+
+  function setLoop(value) {
+    looping = !!value;
+  }
+
+  /* Audition a single chord or note outside of playback. */
+  function preview(midis, patchName, seconds, track) {
+    ensure();
+    const when = ctx.currentTime + 0.03;
+    const list = Array.isArray(midis) ? midis : [midis];
+    list.forEach((midi, i) => {
+      playNote(track || 'chords', patchName || 'epiano', midi, when + i * 0.012, seconds || 1, 0.7);
+    });
+  }
+
+  // Deliberately not called `Audio` — that name is already taken in a browser.
+  global.Engine = {
+    ensure, start, stop, isPlaying, position, setLoop, setMute, isMuted,
+    playNote, playDrum, preview, PATCHES, TRACKS
+  };
+})(window);
