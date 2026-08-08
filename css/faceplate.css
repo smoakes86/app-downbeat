@@ -1,0 +1,468 @@
+/* The hardware.
+
+   These are pictures of two real objects, so they keep their real-world colours
+   in both themes — only the lit and used states follow the part you are playing.
+   Every value comes from the closed EP / FM palettes in tokens.css; the thirty
+   anonymous hexes that used to live here, including three strokes of pure black,
+   are gone.
+
+   What is new is that the plate is now made of material rather than of flat
+   fills. There was not one gradient, filter, pattern or clip path anywhere in
+   the app before this, which is exactly why the hero read as a diagram of a
+   device instead of a device: nothing had a lit edge, nothing had a shadow side
+   and nothing cast anything onto the panel underneath it. The recipe is four
+   elements and it never varies — a recess, a two-stop cap, a specular hairline
+   along the top edge and an occlusion hairline at the base. One light source,
+   top-centre, everywhere, per §4.6. */
+@layer components {
+
+  /* --------------------------------------------------------------- shared */
+
+  .dev-svg { display:block; }
+  .dev-svg text { font-family:var(--mono); text-rendering:geometricPrecision; user-select:none; }
+  .dev-pad, .dev-wkey, .dev-bkey { cursor:pointer; outline:none; }
+  /* A pad with nothing loaded keeps its look — an empty pad on the real unit is
+     indistinguishable from a full one — but it stops claiming to be pressable.
+     It stays focusable and says why on activation (§9.6). */
+  .dev-pad[aria-disabled="true"], .dev-wkey[aria-disabled="true"],
+  .dev-bkey[aria-disabled="true"] { cursor:default; }
+  .pad-glows, .key-glows, .lcd-dots, .lcd-glass, .lcd-note,
+  .pad-ring, .wkey-ring, .bkey-ring,
+  .pad-glow, .wkey-glow, .bkey-glow { pointer-events:none; }
+
+  /* The two-stop gradients. Two stops is the ceiling: a third is decoration and
+     §4.6 cuts it. The stops are styled rather than written as attributes because
+     the gradient ids are namespaced per mount and CSS cannot know the serial. */
+
+  /* The ground plane is a shadow, so it takes the shadow token rather than a
+     black of its own: on the light theme's putty room a black contact shadow
+     reads as dirt, which is the whole of rule C8. .56 of --edge-cast lands on
+     the .35 §6.14 asks for in the dark theme and on a warm .15 in the light one,
+     where the cast is doing proportionally more of the lifting anyway. */
+  .g-ground-a { stop-color:var(--edge-cast); stop-opacity:.56; }
+  .g-ground-b { stop-color:var(--edge-cast); stop-opacity:0; }
+  /* Glass sheen, from the closed EP palette rather than a bare white. */
+  .g-glass-a { stop-color:var(--ep-glass); stop-opacity:1; }
+  .g-glass-b { stop-color:var(--ep-glass); stop-opacity:0; }
+
+  /* How light actually falls on a translucent cap: a hot centre and a coloured
+     edge, not a flat wash of the part colour. --part resolves here because the
+     <defs> sits inside the same subtree that #desk tints.
+
+     The core is the device's own cap white rather than #fff — C1 is absolute,
+     and a warm core is the truer read anyway: an LED under a moulded cap picks
+     up the plastic on the way out. */
+  .g-lit-a { stop-color:color-mix(in srgb, var(--part) 55%, var(--ep-cap-hi)); }
+  .g-lit-b { stop-color:var(--part); }
+  .dev-fm .g-lit-a { stop-color:color-mix(in srgb, var(--part) 55%, var(--fm-wkey-hi)); }
+
+  /* --------------------------------------------------- the lamp strike (§7.2)
+
+     One timing, four key types. There used to be three different timings across
+     pads, white keys, black keys and function keys, two of them zero, so a chord
+     voicing lit unevenly — the low note snapped on while the top of the stack
+     faded in behind it.
+
+     Attack rides [data-struck] at 40ms. Decay is beat-relative, so at 76 BPM a
+     struck pad smears like a long-persistence scope and at 158 BPM it
+     machine-guns: the interface gets faster when the music does. */
+  /* The transform is declared here rather than only inside the hover query so
+     the [data-struck] / [data-preview] duration lists below have two properties
+     to line up against: a duration list is matched to transition-property in
+     order, and a single value would have put the 40ms attack on the cap travel
+     as well. Nothing moves on a touch device, so carrying the transition there
+     costs a property nobody transitions. */
+  .dev-pad, .dev-wkey, .dev-bkey {
+    transition:--lit var(--t-decay) var(--e-decay),
+               transform var(--t-click) var(--e-travel);
+  }
+  .pad-glow, .wkey-glow, .bkey-glow, .pad-glow-b, .key-glow-b {
+    transition:--lit var(--t-decay) var(--e-decay);
+  }
+  /* Three speeds, and they are three different events. A strike attacks in 40ms
+     and decays on the beat. A preview (§7.5) is not a strike — it arrives on the
+     cap-travel curve, because it is the pad showing you what it would do rather
+     than doing it, and it stays until the pointer leaves. Release, either way,
+     is the beat-relative phosphor falloff above. */
+  .dev-svg [data-struck] { transition-duration:var(--t-lamp), var(--t-click); }
+  .dev-svg [data-preview] { transition-duration:var(--t-click), var(--t-click); }
+
+  /* The fourth key type. §7.2 counts the function keys in the same group as the
+     pads and the two kinds of keybed key, and until this line they were the one
+     with no timing at all: a part switch snapped KEYS and TIMING on while every
+     pad around them faded. Same curve, same token. */
+  .dev-key rect, .dev-key .dev-fn {
+    transition:fill var(--t-decay) var(--e-decay), stroke var(--t-decay) var(--e-decay);
+  }
+
+  /* Three things read --lit at once — the hot core, the shared bloom and the
+     0.8px the cap physically travels. `translate` rather than `transform`, so
+     the hover lift can own `transform` without the two fighting over one
+     property mid-decay. The depression is travel, so it is scaled by
+     --m-travel and goes to nothing under reduced motion while the light itself
+     — which is information — keeps its full decay (§5.8). */
+  .pad-glow, .wkey-glow, .bkey-glow {
+    opacity:var(--lit);
+    stroke:var(--on-part); stroke-width:1.5;
+  }
+  .pad-glow-b, .key-glow-b { opacity:var(--lit); stroke:none; }
+  .dev-pad, .dev-wkey, .dev-bkey {
+    translate:0 calc(var(--lit) * .8px * var(--m-travel));
+  }
+
+  /* The used map travels: it leaves the chip you pressed, crosses the lane and
+     the run, and arrives at the hardware three hops later, pad by pad in reading
+     order. Opacity rather than a fill swap, because a flat fill cannot
+     cross-fade to a gradient — and because a delay on a fill that is itself
+     tracking the --part cross-fade would just make the tint crawl. */
+  .pad-tint, .pad-bar, .wkey-tint, .wkey-bar, .bkey-tint {
+    opacity:0;
+    transition:opacity var(--t-throw) var(--e-detent)
+               calc(3 * var(--hop) + var(--pad-i, 0) * 14ms);
+  }
+  .dev-pad.used .pad-tint, .dev-pad.used .pad-bar,
+  .dev-wkey.used .wkey-tint, .dev-wkey.used .wkey-bar,
+  .dev-bkey.used .bkey-tint { opacity:1; }
+
+  /* ------------------------------------------------------- the type split
+
+     The device's own permanent silkscreen and Downbeat's generated instructions
+     used to be identical in face, weight and fill, so the eye could not separate
+     what the hardware says from what the app is telling you. Legends are light,
+     tracked out, held back to 72% and embossed; data is heavy and at full
+     strength. Sizes come off 7px and land on the §3.8 rungs — 7px on a plate
+     that renders at a third of its layout width was never actually readable.
+
+     The split runs through the face as well as the weight. A legend is
+     language — what the object says about itself — so it is Archivo, and
+     Archivo's expanded cut at 'wdth' 118 under the caps tracking *is*
+     rack-panel silkscreen, which is the one register you cannot fake by
+     tracking out a normal-width grotesque. Data stays in the mono, because
+     that is what the app is telling you (§9.2, no drift either way). */
+  .dev-brand, .dev-model, .dev-knob-cap, .dev-hintline, .dev-fn, .dev-group-id {
+    font-family:var(--sans);
+    font-size:9px;
+    font-variation-settings:'wght' 300,'wdth' 118;
+    letter-spacing:var(--tr-caps);
+  }
+  .pad-id, .pad-sub, .pad-main, .wkey-name, .seg, .tft {
+    font-variation-settings:'wght' 620;
+    fill-opacity:1;
+  }
+  /* §3.8 holds every legend back to 72%. §2.3 measures every faceplate legend at
+     4.5:1 or better and exempts exactly two things — the brand mark and the knob
+     captions. Those two cannot both be true: 72% takes --ep-legend on the body
+     from 5.10:1 to 3.01:1. So the hold-back is applied to precisely the two the
+     exemption names, and the legends you are meant to read at arm's length from
+     an instrument keep the contrast that was measured for them. The lightness
+     the 72% was buying is carried by the 300 weight and the emboss instead. */
+  .dev-brand, .dev-knob-cap { fill-opacity:.72; }
+  /* A 0.4px duplicate in the body colour behind the glyph. One line, and it is
+     the difference between ink printed on plastic and ink floating above it. */
+  .legend-emboss { fill-opacity:.35; }
+
+  /* ---------------------------------------------------------- the display
+
+     Four layers, because a backlit display is not a rectangle with text in it: a
+     recess it is set into, the matrix, the segment bloom behind the glyphs and a
+     sheen across the glass. The dot rect is painted over the text so the matrix
+     breaks the glyphs — that is the whole tell of a segment LCD, and the reason
+     the old flat rectangle read as a terminal window. */
+  .lcd-face { fill:var(--ep-lcd); }
+  .lcd-recess-dark { fill:none; stroke:rgba(0,0,0,.72); }
+  .lcd-recess-lite { fill:none; stroke:rgba(255,255,255,.06); }
+  .lcd-recess-dark, .lcd-recess-lite { stroke-width:1; }
+  .lcd-bloom { opacity:.55; }
+  .g-dot { fill:var(--ep-ink); fill-opacity:.22; }
+
+  /* A segment LCD tracks wide because every character is its own block of
+     segments with dead glass between them, so the caps tracking is the literal
+     truth here rather than a styling choice. --tr-caps is relative, which is
+     what the end-anchored note line's dx compensation is calculated against. */
+  .seg { fill:var(--ep-seg); font-size:12px; letter-spacing:var(--tr-caps); }
+  .seg-dim { opacity:.55; }
+  /* 15 rather than the --fd-lg §3.3 names for the readout: three baselines have
+     to share 50 units of glass, and at 19 the note's cap height runs into the
+     status line above it. This is the --fd rung and it is the largest one that
+     fits the object. */
+  .seg-right { font-size:15px; }
+
+  /* The tube catches, drops back, over-drives and settles — a cold-cathode
+     strike, not a fade. It belongs to power-on, so the keyframes and the rule
+     that fires it live in css/motion.css with the rest of the boot sequence;
+     only the bloom layer is faceplate-specific enough to stay here. Both hang
+     off `.is-powered`, never `.is-live` — `.is-live` means the transport is
+     running, and hanging the strike off it re-flashed the display on every
+     press of play. No fill mode either way, so a display whose boot class never
+     arrives is simply on. */
+  @keyframes lcd-bloom-in { from { opacity:0 } to { opacity:.55 } }
+  body.is-powered .lcd-bloom { animation:lcd-bloom-in 340ms var(--e-throw) backwards; }
+
+  /* ------------------------------------------------- EP-133 K.O. II */
+
+  .dev-ep .dev-body { stroke:var(--ep-edge); stroke-width:1; }
+  .dev-ep .g-body-a { stop-color:var(--ep-body-hi); }
+  .dev-ep .g-body-b { stop-color:var(--ep-body-lo); }
+  .dev-ep .g-cap-a { stop-color:var(--ep-cap-hi); }
+  .dev-ep .g-cap-b { stop-color:var(--ep-cap-lo); }
+
+  .dev-ep .dev-brand { fill:var(--ep-legend); }
+  .dev-ep .dev-model { fill:var(--ep-label); }
+  .dev-ep .dev-hintline { fill:var(--ep-legend); }
+  .dev-ep .dev-knob-cap { fill:var(--ep-legend); }
+  .dev-ep .legend-emboss { fill:var(--ep-body-hi); }
+
+  .dev-knob circle { fill:var(--ep-well); stroke:var(--ep-legend); }
+  .dev-knob line { stroke:var(--ep-label); stroke-width:1.6; }
+
+  .dev-key rect { fill:var(--ep-key); stroke:var(--ep-ink); }
+  .dev-key .dev-fn, .dev-key .dev-group-id { fill:var(--ep-key-ink); }
+  .dev-key .legend-emboss { fill:var(--ep-key); }
+  /* An engaged function key takes a part-coloured edge and a wash of the part on
+     its cap, but the caption stays --ep-key-ink. Printing the caption itself in
+     --part drops it to 3.76:1 on the dark key on the melody hue, and a legend
+     you have to squint at is a worse outcome than a slightly quieter on-state. */
+  .dev-key.is-on rect {
+    fill:color-mix(in srgb, var(--part) 20%, var(--ep-key));
+    stroke:var(--part); stroke-width:1.6;
+  }
+  .dev-group-id { font-size:13px; }
+  .rec-dot { fill:var(--ep-accent); }
+  .dev-fader .fader-track { fill:var(--ep-key); }
+  .dev-fader .fader-cap { fill:var(--ep-accent); stroke:var(--ep-ink); }
+
+  /* The pad, in the order it is drawn. */
+  .pad-well { fill:var(--ep-well); }
+  .pad-face { stroke:var(--ep-edge); }
+  /* 22% of the part on the cap resolves to 1.05-1.18:1 against the chassis, so
+     the tint is a supporting cue and never the signal. The 2.5px bar screen
+     printed along the bottom edge is what actually carries the used map, and it
+     is mandatory. */
+  .pad-tint {
+    fill:color-mix(in srgb, var(--part) 22%, var(--ep-cap));
+    stroke:color-mix(in srgb, var(--part) 45%, var(--ep-edge));
+  }
+  .pad-bar { fill:var(--part); }
+  /* The specular hairline along the top of the cap. It transitions because it
+     is the light half of the pad's approach state — see the states block at the
+     foot of this file — and a highlight that snaps on is a lamp, not a chamfer
+     turning into the light. */
+  .pad-spec {
+    fill:none; stroke:rgba(255,255,255,.7); stroke-width:1;
+    transition:stroke var(--t-click) var(--e-travel);
+  }
+  .pad-occ { fill:none; stroke:rgba(0,0,0,.14); stroke-width:1; }
+
+  .pad-id { font-size:9px; fill:var(--ep-id); text-anchor:start; letter-spacing:var(--tr-data); }
+  .pad-main { font-size:14px; fill:var(--ep-label); text-anchor:middle; letter-spacing:var(--tr-0); }
+  .pad-sub { font-size:9px; fill:var(--ep-legend); text-anchor:middle; letter-spacing:var(--tr-data); }
+
+  /* ------------------------------------------------------- M-VAVE FM-1 */
+
+  /* THE UNIT DENSITY PROBLEM, and the reason the rungs above are not the whole
+     answer.
+
+     §3.8's table gives one set of sizes for both plates, and it argues for them
+     in *rendered* terms — "7px on a plate that renders at a third of its layout
+     width was never actually readable". But a font-size inside a viewBox is
+     written in user units, and the two objects put wildly different numbers of
+     user units across the opening they are drawn into:
+
+       EP-133   356 units wide, in a rig column of clamp(340px, 34%, 560px).
+                At 1440x900 that is 476px of column, 444px of stage, and the
+                plate is height-bound at 444x673 — 1.25 CSS px per unit. A
+                9-unit legend renders at 11.2px.
+       FM-1     682 units wide, in a wide column of clamp(400px, 42%, 700px).
+                At 1440x900 that is 588px of column and 556px of stage —
+                0.82 CSS px per unit. The identical 9-unit legend renders at
+                7.3px, and .wkey-name's 8.5 renders at 6.9px.
+
+     So the same rung is 11px on one object and 7px on the other, which is
+     exactly what the visual critique saw: the FM's silkscreen reads as very
+     small at the size the plate now draws. The plate got two and a half times
+     bigger in the last pass and its type did not.
+
+     A static bump would fix one viewport and break the next — the column is a
+     clamp, so the scale runs from about 0.54 on a 900px tablet to 0.9 at 1440
+     and higher again on a wide desk. --dev-u is CSS pixels per user unit,
+     measured off the mounted plate by src/devices.js, so the FM asks for a
+     rendered size and divides by the scale to get the units that produce it.
+     The ceiling is not taste: it is the point past which the plate's own
+     geometry stops holding the glyphs — 12 units is where "presets" reaches
+     the knob beside it, 11 is where the TFT's longest scale name reaches the
+     glass edge, 10 is where "Snare" reaches the edges of a 38.75-unit white
+     key. Below the ceiling every one of them lands on §3.8's rung exactly;
+     above it the plate is simply small and the type is as large as it can be.
+     With no observer and no support, var()'s fallback of 1 reproduces the
+     old literal sizes rather than breaking. */
+  .dev-fm .dev-brand, .dev-fm .dev-model, .dev-fm .dev-knob-cap, .dev-fm .dev-fn {
+    font-size:clamp(6px, calc(9px / var(--dev-u, 1)), 12px);
+  }
+
+  .dev-fm .dev-body { stroke:var(--fm-ink); stroke-width:1; }
+  .dev-fm .g-body-a { stop-color:var(--fm-body-hi); }
+  .dev-fm .g-body-b { stop-color:var(--fm-body-lo); }
+  .dev-fm .g-cap-a { stop-color:var(--fm-wkey-hi); }
+  .dev-fm .g-cap-b { stop-color:var(--fm-wkey-lo); }
+  /* A TFT and a segment LCD do not look alike: colder glass, and a sharper
+     non-dotted pixel grid of full-height columns rather than a dot matrix. The
+     cold comes from the unit's own display blue rather than an invented one —
+     the FM palette is a closed set and nothing new gets added to it. */
+  .dev-fm .g-glass-a { stop-color:var(--fm-t1); stop-opacity:.07; }
+  .dev-fm .g-glass-b { stop-color:var(--fm-t1); stop-opacity:0; }
+  .dev-fm .g-dot { fill:var(--fm-ink); fill-opacity:.3; }
+  .dev-fm .lcd-face { fill:var(--fm-tft); }
+
+  .dev-fm .dev-brand { fill:var(--fm-brand); }
+  .dev-fm .dev-model { fill:var(--fm-legend); }
+  .dev-fm .dev-knob-cap { fill:var(--fm-brand); }
+  .dev-fm .legend-emboss { fill:var(--fm-body-hi); }
+  .dev-fm .dev-knob circle { fill:var(--fm-body-hi); stroke:var(--fm-ink); }
+  .dev-fm .dev-knob line { stroke:var(--fm-wkey-hi); }
+  .dev-fm .dev-key rect { fill:var(--fm-body-hi); stroke:var(--fm-ink); }
+  .dev-fm .dev-key .dev-fn { fill:var(--fm-brand); }
+  .dev-fm .dev-key .legend-emboss { fill:var(--fm-body-hi); }
+  /* The FM's own on-state is amber, not the part colour — its LEDs are amber and
+     that is what OCT± lights up. --fm-t3 on --fm-body-hi measures 5.8:1, so this
+     one can afford to colour the caption. */
+  .dev-fm .dev-key.is-on rect {
+    fill:color-mix(in srgb, var(--fm-t3) 16%, var(--fm-body-hi));
+    stroke:var(--fm-t3);
+  }
+  .dev-fm .dev-key.is-on .dev-fn { fill:var(--fm-t3); }
+
+  /* The TFT does not track out: it is a raster panel drawing a UI font, not a
+     grid of segment blocks, so it takes the data tracking and the segment
+     tracking stays on the thing that physically has gaps in it. */
+  .tft { font-size:clamp(6px, calc(9px / var(--dev-u, 1)), 11px); letter-spacing:var(--tr-data); }
+  .tft.t1 { fill:var(--fm-t1); }
+  .tft.t2 { fill:var(--fm-t2); }
+  .tft.t3 { fill:var(--fm-t3); }
+
+  .wkey-face { stroke:var(--fm-edge); }
+  .wkey-tint {
+    fill:color-mix(in srgb, var(--part) 22%, var(--fm-wkey));
+    stroke:color-mix(in srgb, var(--part) 45%, var(--fm-edge));
+  }
+  .wkey-bar { fill:var(--part); }
+  /* The front chamfer: 4px of 8%-darker key with a 1px highlight above it. It is
+     the only thing that says the key has thickness rather than being a painted
+     rectangle, and it is what the hover state shortens when the key sinks. */
+  .wkey-chamfer { fill:color-mix(in srgb, var(--fm-wkey) 92%, var(--fm-ink)); }
+  .wkey-lip {
+    fill:none; stroke:rgba(255,255,255,.6); stroke-width:1;
+    transform-box:fill-box; transform-origin:50% 50%;
+    transition:transform var(--t-click) var(--e-travel),
+               stroke var(--t-click) var(--e-travel);
+  }
+  /* §3.8 asks for 8.5px rendered on a keybed key. The ceiling is the five-glyph
+     drum label — "Snare", "Crash" — inside a 38.75-unit white key; a note name
+     is only two or three glyphs and never reaches it. */
+  .wkey-name {
+    font-size:clamp(6px, calc(8.5px / var(--dev-u, 1)), 10px);
+    fill:var(--fm-legend); text-anchor:middle;
+  }
+
+  .bkey-face { fill:var(--fm-bkey); stroke:var(--fm-ink); }
+  /* Black keys carry a heavier tint and no printed bar: 25 units is not enough
+     width for a 2.5px bar to read as anything but a smudge, and against
+     --fm-bkey a 32% mix already clears on its own. */
+  .bkey-tint { fill:color-mix(in srgb, var(--part) 32%, var(--fm-bkey)); }
+  .bkey-lip {
+    fill:none; stroke:rgba(255,255,255,.14); stroke-width:1;
+    transition:stroke var(--t-click) var(--e-travel);
+  }
+
+  /* --------------------------------------------------------------- states */
+
+  /* One ring, one definition, and `outline:none` on the group — the UA ring on
+     an SVG <g> is a bounding box that ignores rx, so on a rounded cap it draws a
+     rectangle around a pill.
+
+     It gets its own element, drawn last, because every layer on a cap paints
+     over the one below it: stroking the face rect put the ring underneath the
+     used tint and the hot core, so focusing a pad that happened to be played
+     showed nothing. Amber, because amber sits outside the track palette and so
+     reads on all ten hues and on both key colours. */
+  .dev-ring { fill:none; stroke:none; stroke-width:2.5; }
+  .dev-pad:focus-visible .pad-ring,
+  .dev-wkey:focus-visible .wkey-ring,
+  .dev-bkey:focus-visible .bkey-ring { stroke:var(--lamp); }
+
+  /* The approach state has two halves, and separating them is what lets the
+     keyboard have one.
+
+     THE LIGHT HALF — the chamfer catches. A cap rising towards a light source
+     fixed at top-centre shows more of its specular hairline, and a key sinking
+     away from it shows less of its front lip. That is the whole of the change
+     in illumination, and it is drawn on the one-pixel edge that actually faces
+     the light rather than as a filter over the cap's whole face. The previous
+     rule here was `filter:brightness(1.04)` on .pad-face, which is the
+     brightness bump the material law exists to forbid — and it also promoted
+     every hovered pad to its own raster surface for the sake of four percent.
+
+     THE TRAVEL HALF — pads rise and keys sink, because that is what a pad does
+     and what a key does. Getting this backwards on either one is immediately
+     wrong to anybody who has touched the hardware.
+
+     Focus takes the light and not the travel, which is the same split
+     css/controls.css makes for the chrome tiers and for the same reason: the
+     amber ring has already moved the eye, and a control that lifts under focus
+     reads as pressed. So a keyboard user gets the affordance — this cap is the
+     one under your hand, and the display is already printing what it plays —
+     without the plate appearing to be held down.
+
+     Every distance is scaled by --m-travel, so reduced motion takes the travel
+     and leaves the light. */
+  .dev-pad:focus-visible:not([aria-disabled="true"]) .pad-spec { stroke:rgba(255,255,255,.95); }
+  .dev-wkey:focus-visible:not([aria-disabled="true"]) .wkey-lip { stroke:rgba(255,255,255,.85); }
+  .dev-bkey:focus-visible:not([aria-disabled="true"]) .bkey-lip { stroke:rgba(255,255,255,.3); }
+
+  /* The disabled guard is on every one of these and it is not defensive. An
+     unloaded pad keeps its look — an empty pad on the real unit is
+     indistinguishable from a full one, so dimming it would be the diagram
+     creeping back in — which means the *only* thing left saying it is not
+     pressable is that it does not respond to being approached or pressed.
+     Without the guard it lit and travelled exactly like a loaded one. */
+  @media (hover:hover) and (pointer:fine) {
+    .dev-pad:hover:not([aria-disabled="true"]) {
+      transform:translateY(calc(-.8px * var(--m-travel)));
+    }
+    .dev-pad:hover:not([aria-disabled="true"]) .pad-spec { stroke:rgba(255,255,255,.95); }
+    .dev-wkey:hover:not([aria-disabled="true"]),
+    .dev-bkey:hover:not([aria-disabled="true"]) {
+      transform:translateY(calc(.9px * var(--m-travel)));
+    }
+    .dev-wkey:hover:not([aria-disabled="true"]) .wkey-lip {
+      transform:scaleX(calc(1 - .14 * var(--m-travel)));
+    }
+    .dev-bkey:hover:not([aria-disabled="true"]) .bkey-lip { stroke:rgba(255,255,255,.3); }
+
+    /* §6.9 — hovering the device button reaches the object behind it, so the
+       button visibly belongs to the thing it switches. Held off during playback
+       deliberately: a filter on the root of the hero re-rasters the whole plate
+       on every frame of a decay, and §5.7 rejects exactly that for performance
+       mode. Stopped, it costs one composite.
+
+       One declaration, and it has to stay one. css/controls.css carried a
+       second copy of this on .rig-stage, the SVG's own parent, so the effect
+       compounded to saturate(1.06) through two nested filter surfaces — the
+       precise nesting §5.7 rejects for the per-pad blooms. That copy is gone;
+       this is the survivor because it names a token duration rather than the
+       literal 180ms §6.9 asks for, which is not on the scale (§9.4). */
+    body:not(.is-live) .rig:has(.device:hover) .dev-svg { filter:saturate(1.03); }
+    .dev-svg { transition:filter var(--t-throw) var(--e-travel); }
+  }
+
+  /* Press, last, because it has to outrank hover on the one property they
+     share. A cap that lights but does not move is a picture of a cap: the pad
+     goes *in* under the finger, past where hover had lifted it, and the key
+     bottoms out and its front lip all but disappears. Outside the hover query,
+     because a touch device has no hover and still has a press — and carrying
+     the same guard as hover, so the two match in specificity and the later one
+     wins on order rather than by accident. */
+  .dev-pad:active:not([aria-disabled="true"]) { transform:translateY(calc(.9px * var(--m-travel))); }
+  .dev-wkey:active:not([aria-disabled="true"]),
+  .dev-bkey:active:not([aria-disabled="true"]) { transform:translateY(calc(1.8px * var(--m-travel))); }
+  .dev-wkey:active:not([aria-disabled="true"]) .wkey-lip { transform:scaleX(calc(1 - .3 * var(--m-travel))); }
+}

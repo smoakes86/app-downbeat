@@ -1,0 +1,517 @@
+/* Machines do not bounce. Every curve in this app describes a mechanism with
+   mass and a hard stop; the only elasticity is where real elasticity exists — a
+   finger dragging a sheet and letting go, and the knob on a switch.
+
+   The six named curves are not declared here. src/motion.js writes them onto
+   the document element from the same literal list that backs Motion.EASE, so a
+   curve read from JS and the same curve read from CSS cannot drift apart. The
+   six durations are not declared here either; they are tokens.
+
+   §8.2 puts every @keyframes in this file so that a curve cannot be defined in
+   four places and retuned in one. Three names live elsewhere and both
+   exceptions are deliberate rather than drift: css/run.css declares
+   run-chip-in, run-empty-in and run-sweep beside their reduced-motion
+   redeclarations, because a keyframe can only be overridden by another
+   declaration of the same name and a copy in this later layer would win
+   unconditionally and take the override with it; css/faceplate.css declares
+   lcd-bloom-in for the same reason. Everything else is below. */
+@layer motion {
+  /* One knob decides whether authored motion *travels*. Every entrance, exit,
+     recoil and keyframe below writes its distance as `calc(<n> * var(--m-travel))`
+     and its scale as `calc(1 - <n> * var(--m-travel))`, so css/a11y.css can
+     retire the whole vestibular half of the system with a single declaration
+     while the opacity and colour cross-fades underneath keep their full
+     duration. The point is that an entrance authored *after* this file — by
+     anyone — inherits that behaviour for free rather than needing its own
+     reduced-motion clause, which is exactly how the old wildcard came to exist.
+
+     The boot sequence also multiplies its *delays* by it. A stagger is travel
+     through time rather than through space, and §5.8 asks for the sequence to
+     collapse rather than merely to stop moving.
+
+     It is a motion-layer implementation detail, not a design token: nothing
+     outside this file and its a11y override should read it. */
+  :root { --m-travel:1; }
+
+  /* ==================================================== keyframes
+     Every name a component names, in one place. Several are declared ahead of
+     the markup that will run them — a keyframe with no consumer costs nothing,
+     a keyframe defined in four places costs a redesign — and several exist
+     because a component file named them in a comment and left them for this
+     file to write, which is the contract §8.2 sets up. */
+
+  /* Sheets. On a wide screen the drawer is thrown in from the right, where the
+     space is; on a phone it rises from the bottom, where your thumb is. Both
+     carry an opacity leg so that with travel switched off they still read as an
+     arrival rather than a glitch. */
+  @keyframes sheet-in { from { opacity:0; transform:translateX(calc(24px * var(--m-travel))); } }
+  @keyframes sheet-up { from { opacity:0; transform:translateY(calc(100% * var(--m-travel))); } }
+
+  /* Every dimmed room in the app — the scrim behind a sheet, the count-in, the
+     onboarding — arrives on this one name at three different durations.
+
+     Opacity only, and that is not a shortcut. All three carry a backdrop-filter
+     and §7.6 asks for the count-in's blur to ramp `0 → 20px`; interpolating the
+     filter itself would mean writing a `from` whose function list matches each
+     element's `to` exactly, and a mismatched list interpolates discretely — the
+     onboarding's `blur() saturate()` pair would snap. A backdrop-filter is
+     composited *with* the element's own alpha, so fading the element from zero
+     already fades the blur in with it. One leg, the specified result, and no
+     per-surface copy of the keyframe. */
+  @keyframes scrim-in { from { opacity:0; } }
+
+  /* The onboarding card arrives 80ms into the dimmed room, rising the same 10px
+     it will sink back through on the way out, so the two directions read as one
+     object rather than two effects. */
+  @keyframes onboarding-card-in {
+    from { opacity:0;
+           transform:translateY(calc(10px * var(--m-travel))) scale(calc(1 - .012 * var(--m-travel))); }
+  }
+  /* Direction is carried (§5.5). --dir is written from the page delta, so the
+     incoming page enters from the side the outgoing one is leaving towards and
+     Back is not Next played again. The exit in css/overlays.css is the same
+     14px with the sign flipped. */
+  @keyframes onboarding-page-in {
+    from { opacity:0; transform:translateX(calc(var(--dir, 1) * 14px * var(--m-travel))); }
+  }
+
+  /* The house arrival for anything that is simply *now there*: the onboarding's
+     page contents, an empty state, the shared-link landing, and the generic
+     reveal of a [hidden] toggle. Six pixels, because the surfaces that use it
+     are already inside something that has arrived — this is the last 6px of a
+     journey, not the whole of one. */
+  @keyframes rise-in { from { opacity:0; transform:translateY(calc(6px * var(--m-travel))); } }
+  /* css/sheets.css asks for this one by its own name. It is rise-in; the two
+     should be folded together the next time that file is opened. */
+  @keyframes empty-in { from { opacity:0; transform:translateY(calc(6px * var(--m-travel))); } }
+
+  /* A saved song arrives from the leading edge and a deleted one collapses out
+     through it (`.lib-card.is-removing` translates -12px). Entering on the same
+     axis is what makes the list read as a stack of cards being dealt and
+     collected rather than as rows blinking. */
+  @keyframes card-in { from { opacity:0; transform:translateX(calc(-8px * var(--m-travel))); } }
+
+  /* The arrangement's energy profile draws itself once, on sheet open. Written
+     as `1 - --m-travel` rather than as a literal 0 so that with travel off the
+     bars are simply already at height and only fade up: an energy profile is
+     data, and data that never arrives is a blank chart. */
+  @keyframes energy-rise { from { opacity:0; transform:scaleY(calc(1 - var(--m-travel))); } }
+
+  /* The armed-delete countdown. Deliberately NOT travel-gated: this hairline is
+     the only representation of the 3.2 seconds you have to change your mind, so
+     it is information and it runs at full length under every preference. */
+  @keyframes arm-deplete { from { transform:scaleX(1); } to { transform:scaleX(0); } }
+
+  /* Disclosures. A details body cannot transition from nothing — there is no
+     start value until the UA has already revealed it — so the reveal is a
+     keyframe on a grid wrapper whose row track goes 0fr → 1fr. It is layout,
+     and it is allowed to be: a disclosure is never open during a playback path,
+     which is the only place §5.7 forbids layout work. The content follows 60ms
+     behind the box so it is never seen inside a collapsed one. */
+  @keyframes disclose { from { grid-template-rows:0fr; } }
+  @keyframes disclose-fade {
+    from { opacity:0; transform:translateY(calc(-4px * var(--m-travel))); }
+  }
+
+  /* Two toasts in a row must read as two arrivals rather than one caption
+     change. Only the midpoint is declared: the ends interpolate from whatever
+     the pill actually computes, which is how the -50% centring survives an
+     animation that would otherwise replace the whole transform. */
+  @keyframes toast-swap {
+    50% { opacity:.4;
+          transform:translate(-50%, calc(2px * var(--m-travel))) scale(calc(1 - .025 * var(--m-travel))); }
+  }
+
+  /* Performance mode's strip drops in from above the top edge and leaves back
+     through it, so entering and exiting the mode are one movement reversed. */
+  @keyframes perf-chrome-in {
+    from { opacity:0; transform:translateY(calc(-8px * var(--m-travel))); }
+  }
+
+  /* The count-in numeral. This one survives reduced motion with its opacity leg
+     intact: it is the app telling you where the beat is, and a music tool that
+     stops indicating the beat is broken rather than accessible. */
+  @keyframes count-pulse {
+    from { opacity:.35; transform:scale(calc(1 - .18 * var(--m-travel))); }
+    to   { opacity:1;   transform:scale(1); }
+  }
+  /* Each digit hands off to the next rather than being deleted (§7.6). */
+  @keyframes count-digit-out { to { opacity:0; transform:scale(calc(1 + .06 * var(--m-travel))); } }
+  /* A 2px lamp scanline crossing the viewport in exactly one beat. */
+  @keyframes count-scan { from { transform:translateY(0); } to { transform:translateY(100dvh); } }
+
+  /* POWER-ON (§7.1). The panel's bevel strokes in left to right. The clip is
+     inset by -80px on the three settled edges so the cast underneath the panel
+     is never clipped — a rounded clip-path tight to the border box would eat
+     the shadow for the length of the animation and then pop it back. */
+  @keyframes panel-strike {
+    from { clip-path:inset(-80px 100% -80px -80px round var(--r-panel));
+           opacity:0;
+           transform:translateY(calc(6px * var(--m-travel))) scaleY(calc(1 - .015 * var(--m-travel))); }
+    to   { clip-path:inset(-80px round var(--r-panel));
+           opacity:1;
+           transform:none; }
+  }
+  /* No `to` on these three: the animation interpolates from the stated rest
+     value to whatever the element actually computes, so the play lamp picks up
+     its real box-shadow — bevel and all — instead of being pinned to whichever
+     shadow list happened to be typed here. */
+  @keyframes plate-in  { from { opacity:0; } }
+  @keyframes legend-in { from { opacity:0; transform:translateY(calc(3px * var(--m-travel))); } }
+  @keyframes lamp-strike { from { box-shadow:none; } }
+  /* A real cold-cathode strike, not a fade: the tube overshoots, drops back and
+     settles. The numbers are the bible's, measured off a CRT turning on. */
+  @keyframes lcd-strike {
+    0% { opacity:0 } 8% { opacity:.35 } 12% { opacity:.08 }
+    20% { opacity:1 } 26% { opacity:.72 } 100% { opacity:1 }
+  }
+
+  /* GENERATE (§7.7). A tape head passing over the lane: one 3px element that
+     travels, never a moving background-position, so the whole thing is a single
+     composited layer. */
+  @keyframes sweep {
+    from { opacity:0; transform:translateX(0); }
+    14%  { opacity:1; }
+    to   { opacity:0; transform:translateX(var(--sweep-span, 100cqw)); }
+  }
+  /* What the sweep becomes when travel is off: the same statement — "this half
+     of the screen is new" — made in one place instead of across one. */
+  @keyframes cross-cut { from { opacity:0 } 50% { opacity:.5 } to { opacity:0 } }
+
+  /* THE PART DETENT (§7.3). The switch body kicks against the direction of
+     travel and returns. --dir is written from the index delta, so moving left
+     and moving right are not the same animation. */
+  @keyframes part-recoil {
+    50% { transform:translateX(calc(var(--dir, 1) * -1.5px * var(--m-travel))); }
+  }
+
+  /* THE MARK COUNTS THE BAR (§7.4). Four strokes, one per beat, striking and
+     decaying rather than blinking. CSS off --beat-ms rather than a per-frame
+     bus, because writing an inherited registered property to :root every frame
+     invalidates the whole document. ui.js writes --mark-sync once on playback
+     start to line the loop up with the audio clock. */
+  @keyframes mark-strike { 0% { --lit:1 } 22% { --lit:0 } 100% { --lit:0 } }
+
+  /* ==================================================== staging
+     Colour propagates outward from the control you touched: it never teleports
+     and it never all arrives in the same frame. Motion.stagger writes --enter-i
+     per node and caps it at twelve, so a 64-chip run cannot take a second to
+     arrive. This is a transition-delay, never a chain of setTimeouts. */
+  .is-entering { transition-delay:calc(var(--enter-i, 0) * var(--hop)); }
+
+  /* ==================================================== exits
+     Exit = round(0.55 x entrance), always on --e-close (§5.3). Written as a
+     calc off the entrance rather than as the answer, so the relationship is
+     visible at the point of use and cannot drift when an entrance is retuned.
+     Five entrance times — 240ms, 260ms, 280ms, 300ms and 340ms — sit between
+     the duration rungs and are written literally here; they are the
+     bible's numbers for surfaces whose mass is genuinely between a drawer and a
+     switch.
+
+     Every one of these is reached by Motion.hideWith(el, 'is-leaving', ms),
+     which adds the class, waits, and only then sets [hidden]. Nothing in
+     Downbeat is permitted to vanish in a frame. */
+  .is-leaving {
+    opacity:0; pointer-events:none;
+    transition:opacity calc(var(--t-throw) * .55) var(--e-close);
+  }
+
+  /* The other half of that contract, and the half that was missing. A class
+     being *removed* cannot be animated — once it is gone there is no transition
+     left on the element to run — so every surface that comes back from [hidden]
+     by having .is-leaving taken off it was still arriving in a single frame.
+     §5.3's table gives a [hidden] toggle 220ms in against its 120ms out; this is
+     the 220ms. It is an animation rather than a transition for exactly the
+     reason above: an animation does not need a previous value to start from. */
+  .is-arriving { animation:rise-in var(--t-throw) var(--e-throw) backwards; }
+
+  .sheet.is-leaving {
+    opacity:0; transform:translateX(calc(24px * var(--m-travel)));
+    transition:opacity calc(var(--t-slide) * .55) var(--e-close),
+               transform calc(var(--t-slide) * .55) var(--e-close);
+  }
+  /* The one breakpoint query outside css/responsive.css, and it is here because
+     it is not a layout decision: the phone sheet arrives on the Y axis, so it
+     has to leave on the Y axis, and an exit that contradicts its own entrance
+     reads as two different objects. The 699px edge and the 260ms entrance are
+     both copied from the .sheet rule in responsive.css — if that moves, this
+     moves with it. */
+  @media (max-width:699px) {
+    .sheet.is-leaving {
+      transform:translateY(calc(100% * var(--m-travel)));
+      transition-duration:calc(260ms * .55);
+    }
+  }
+  /* The one entry in this table with an exit and no entrance of its own, and it
+     is deliberate rather than half-written: the host is an inert full-stage box
+     whose two children each arrive on their own clock, so an entrance here
+     would fade the scrim twice. It exists as the exit because the host is the
+     element a dismissal most naturally reaches for — hide the container and
+     both children go with it — and it carries the sheet's clock so that the
+     container and its contents leave together rather than in two passes.
+
+     It was unreached until the verification pass: closeSheet() used to set
+     .hidden on the host, the scrim and both sheets in the same frame, so all
+     three sheet exits in this file were authored and never ran. ui.js now hides
+     the host through Motion.hideWith at 176ms — this rule's own clock — and
+     hides the two sheets underneath only after it lands. */
+  .sheet-host.is-leaving { transition:opacity calc(var(--t-slide) * .55) var(--e-close); }
+
+  /* The scrim's blur comes off with it. Leaving a 8px backdrop-filter running
+     on a transparent element keeps a full-screen raster alive for nothing. */
+  .scrim.is-leaving {
+    opacity:0; backdrop-filter:blur(0px); -webkit-backdrop-filter:blur(0px);
+    transition:opacity calc(280ms * .55) var(--e-close),
+               backdrop-filter calc(280ms * .55) var(--e-close);
+  }
+
+  .onboarding.is-leaving { opacity:0; transition:opacity calc(340ms * .55) var(--e-close); }
+  .onboarding.is-leaving .onboarding-card {
+    transform:translateY(calc(8px * var(--m-travel)));
+    transition:transform calc(340ms * .55) var(--e-close);
+  }
+  /* §5.3 is a ratio, not a guideline. css/overlays.css gives the outgoing page
+     the same 160ms it arrives in, which reads as a cross-fade between two
+     equals rather than as one page getting out of another's way. The transform
+     and its direction stay where they are declared; only the clock is corrected
+     here, on the layer that owns the exit table. */
+  .onboarding-page.is-leaving { transition-duration:calc(160ms * .55); }
+
+  /* The count-in hands off to playback rather than being deleted: the numeral
+     grows as the transport takes over. */
+  .count-in.is-leaving {
+    opacity:0; transition:opacity calc(300ms * .55) var(--e-close);
+  }
+  .count-in.is-leaving b {
+    transform:scale(calc(1 + .14 * var(--m-travel)));
+    transition:transform calc(300ms * .55) var(--e-close);
+  }
+
+  /* The toast is the one surface whose exit is the *removal* of a class, so its
+     two directions are two transitions on the same element. Asymmetry is the
+     whole point: it is thrown in and it accelerates away. */
+  .toast { transition:opacity var(--t-click) var(--e-close), transform var(--t-click) var(--e-close); }
+  .toast.show { transition:opacity 200ms var(--e-throw), transform 200ms var(--e-throw); }
+  .toast.is-leaving {
+    opacity:0;
+    transform:translate(-50%, calc(12px * var(--m-travel))) scale(calc(1 - .04 * var(--m-travel)));
+  }
+
+  /* Two exits that were declaring a transform and losing their fade to the
+     cascade. `.performance-chrome.is-leaving` names a transition list of its
+     own, which — being more specific than the generic `.is-leaving` above —
+     replaces it wholesale, so the opacity that rule sets was landing in one
+     frame while the transform travelled for 143ms; `.landing.is-leaving`
+     declares no list at all and inherits the opacity-only one, so its lift
+     snapped instead. Both legs, both surfaces, one duration each, stated on the
+     layer that owns exits. */
+  .performance-chrome.is-leaving {
+    transition:opacity calc(260ms * .55) var(--e-close),
+               transform calc(260ms * .55) var(--e-close);
+  }
+  .landing.is-leaving {
+    transition:opacity calc(240ms * .55) var(--e-close),
+               transform calc(240ms * .55) var(--e-close);
+  }
+
+  /* Both empty registers — css/sheets.css's `.empty` inside a list and
+     css/overlays.css's `.empty-state` on a panel — arrive on 240ms and had no
+     way back out, so an empty library that filled, or an error that was
+     resolved, still cut. They leave upward: an apology that is no longer true
+     should get out of the way of the thing that replaced it. */
+  .empty.is-leaving,
+  .empty-state.is-leaving {
+    opacity:0; transform:translateY(calc(-4px * var(--m-travel)));
+    transition:opacity calc(240ms * .55) var(--e-close),
+               transform calc(240ms * .55) var(--e-close);
+  }
+
+  /* ==================================================== choreography
+     THE PART DETENT (§7.3/§5.5). --part and --part-ink are registered, so this
+     one declaration cross-fades the entire right-hand side; everything
+     downstream that reads var(--part) comes with it for free. Without it the
+     app's stated central visual idea is a single-frame teleport. */
+  #desk {
+    transition:--part var(--t-throw) var(--e-detent),
+               --part-ink var(--t-throw) var(--e-detent);
+  }
+  /* And then it arrives in reading order rather than everywhere at once. Each
+     region re-transitions the value it inherits, one --hop further out than the
+     last, so you watch the tint travel from the chip you pressed to the
+     hardware: chip 0, lane 1, run 2, faceplate 3. */
+  #lane, #laneBars, .lane-head {
+    transition:--part var(--t-throw) var(--e-detent) var(--hop),
+               --part-ink var(--t-throw) var(--e-detent) var(--hop);
+  }
+  #run {
+    transition:--part var(--t-throw) var(--e-detent) calc(2 * var(--hop)),
+               --part-ink var(--t-throw) var(--e-detent) calc(2 * var(--hop));
+  }
+  #rigStage {
+    transition:--part var(--t-throw) var(--e-detent) calc(3 * var(--hop)),
+               --part-ink var(--t-throw) var(--e-detent) calc(3 * var(--hop));
+  }
+  /* Then across the pad grid at 14ms per pad in reading order. --pad-i is
+     written by devices.js at mount; until it is, every pad shares the
+     faceplate's three hops, which is the current behaviour and is correct, just
+     less alive. */
+  .dev-pad {
+    transition:--part var(--t-throw) var(--e-detent) calc(3 * var(--hop) + var(--pad-i, 0) * 14ms),
+               --part-ink var(--t-throw) var(--e-detent) calc(3 * var(--hop) + var(--pad-i, 0) * 14ms);
+  }
+  .parts.is-detent { animation:part-recoil 90ms var(--e-travel); }
+
+  /* THE THEME CHANGE. Same choreography as the detent — rig 0, stage 1 hop, bar
+     2 hops, so the lights come up across the desk rather than the page
+     inverting. The descendant selector is deliberate and it is why the class is
+     temporary: applying three colour transitions to every node in the document
+     is cheap for 320ms and unacceptable as a resting state, so applyTheme adds
+     the class and removes it on transitionend. */
+  body.theme-shifting, body.theme-shifting *, body.theme-shifting *::before, body.theme-shifting *::after {
+    transition:background-color var(--t-slide) var(--e-detent),
+               color var(--t-slide) var(--e-detent),
+               border-color var(--t-slide) var(--e-detent);
+  }
+  body.theme-shifting .stage, body.theme-shifting .stage * { transition-delay:var(--hop); }
+  body.theme-shifting .bar, body.theme-shifting .bar * { transition-delay:calc(2 * var(--hop)); }
+
+  /* GENERATE (§7.7). The band is scoped to whatever it is mounted inside, so a
+     reroll can sweep only the half that changed — which is the entire point of
+     having two buttons. 240ms in the bible; --t-throw is the rung it rounds to
+     and keeps every duration on the scale.
+
+     The 60ms is §5.5's generate row: the title slot-cuts at 0 and the head
+     passes 60ms behind it, so the two are one event rather than two that fired
+     together. `both` rather than `forwards` because the fill now has a delay to
+     cover as well as a tail — without it the band paints its untransformed
+     gradient across the whole lane for four frames before it starts. */
+  .sweep {
+    background:linear-gradient(180deg, color-mix(in srgb, var(--part) 40%, transparent), var(--part));
+    inset:0 auto 0 0; opacity:0; pointer-events:none; position:absolute; width:3px; z-index:3;
+    animation:sweep var(--t-throw) var(--e-throw) 60ms both;
+  }
+  /* The run's half of the same pass, given the same 60ms so lane and run are
+     one head crossing two surfaces. `both` rather than backwards, because
+     css/run.css declares the animation with no fill mode at all: the ::before
+     it creates is a full-width --part gradient at opacity 1 in its own element
+     style, so without a fill it painted solid for the 40ms between the band
+     finishing and ui.js taking the class off. Holding both ends at the
+     keyframe's own opacity 0 covers the new delay and closes that flash. */
+  .run.is-sweeping::before { animation-delay:60ms; animation-fill-mode:both; }
+
+  /* ==================================================== rest states
+     POWER-ON (§7.1). The unit is authored powered-off and paints that way; the
+     boot flips one class and the sequence runs.
+
+     A note on the gate, because it reads as a deviation and is not: the bible
+     writes this as `body:not(.is-live)`, but §5.7 and §7.4 both define
+     `.is-live` as *playback is running* — will-change goes on at play and comes
+     off at stop, and the mark counts only while the song does. Powering the
+     interface off whenever the transport is stopped is not what §7.1 describes,
+     so boot gets its own pair: .is-booting is the powered-off state and
+     .is-powered runs the sequence. Both are opt-in, which also means that until
+     the boot is wired the app simply renders — a rest state that hides the
+     interface behind a class nobody sets is a blank screen, not a design. */
+  body.is-booting:not(.is-powered) .rig,
+  body.is-booting:not(.is-powered) .stage {
+    opacity:0;
+    transform:translateY(calc(6px * var(--m-travel))) scaleY(calc(1 - .015 * var(--m-travel)));
+  }
+  body.is-booting:not(.is-powered) .rig-stage { opacity:0; }
+  body.is-booting:not(.is-powered) .legend,
+  body.is-booting:not(.is-powered) .plate { opacity:0; }
+  /* The lamp is dark until the unit can actually be played. */
+  body.is-booting:not(.is-powered) .play { box-shadow:none; }
+
+  /* In order: the hardware first and fastest, because it should already be
+     there when the chrome arrives; the panels stroking in behind it with the
+     rig leading the stage by 60ms; the display striking; the legends and the
+     control tiers staggering; and the play lamp last, because that is the
+     moment the app becomes usable and it should look like it.
+
+     backwards, never both: the fill has to cover the delay and then get out of
+     the way, so each element ends on its own declared style rather than on
+     whatever was typed into a keyframe. */
+  body.is-powered .rig-stage { animation:plate-in 220ms var(--e-throw) backwards; }
+  /* The only `linear` in the app, and it is not an exception to the six curves:
+     the strike's shape lives in its six keyframe stops, so easing between them
+     would smear the overshoot that is the entire effect.
+
+     The whole display group, not its rects: the glyphs are part of what the
+     tube is striking, and animating only the panes behind them left the text
+     sitting there fully lit through the flicker. */
+  body.is-powered .dev-display { animation:lcd-strike 340ms linear backwards; }
+  body.is-powered .rig   { animation:panel-strike 260ms var(--e-throw) backwards; }
+  body.is-powered .stage { animation:panel-strike 260ms var(--e-throw) 60ms backwards; }
+
+  /* Step 4, and it is the engraved register plus the five control tiers rather
+     than the legends alone. ui.js writes --enter-i onto both: 0..n across
+     `.legend, .plate` via Motion.stagger, and §5.5's hand-set 0,1,1,2,2 across
+     the transport, the toggle well, the opener group, the device picker and the
+     part switcher — indices no single stagger call can produce. Those five had
+     the numbers and nothing to paint them with, which is a sequence declared
+     and not run.
+
+     The delay is clamped at the sixth rung. §5.5 says six regions at 45ms;
+     Motion.stagger caps at twelve nodes, and twelve rungs of 45ms would still
+     be arriving 75ms after the play lamp — the one element the bible names as
+     last. Clamping here rather than lowering the cap in JS keeps the stagger
+     contract intact for the run, which genuinely wants all twelve. */
+  body.is-powered .legend,
+  body.is-powered .plate,
+  body.is-powered .is-entering,
+  body.is-powered .transport,
+  body.is-powered .toggle-well,
+  body.is-powered .key-group,
+  body.is-powered #rigDevices,
+  body.is-powered #parts {
+    animation:legend-in var(--t-throw) var(--e-throw) backwards;
+    animation-delay:calc(min(var(--enter-i, 0) * 45ms, 225ms) * var(--m-travel));
+  }
+
+  /* Step 5, and the reconciliation §5.2 and §7.1 needed. The token said the
+     unit powers up in 520ms; the sequence said ~640ms end to end; nothing read
+     the token, so the two disagreed quietly. The sequence now *ends* at
+     --t-power by construction — the lamp's 180ms strike is subtracted from it
+     rather than added to a literal 460ms — so there is one number, it is the
+     token, and changing it retimes the boot instead of contradicting it.
+
+     The token is now 640ms, which is §7.1's own total, so the strike begins at
+     460ms: after the legends have finished landing at 445ms and not before,
+     which is the whole point of calling the lamp the last thing to arrive. */
+  body.is-powered .play {
+    animation:lamp-strike 180ms var(--e-decay) calc(var(--t-power) - 180ms) backwards;
+  }
+
+  /* Promoted for the length of playback and demoted again on stop. A layer
+     hint left on permanently is memory the compositor cannot reclaim, and on
+     the phone it is the difference between a smooth playhead and a stuttering
+     one. */
+  body.is-live .lane-head,
+  body.is-live #barProgress { will-change:transform; }
+
+  /* ==================================================== the mark
+     The resting ink of each stroke lives here rather than inline on the SVG
+     because a stroke's rest level is a *state* — beat one is solid when the
+     mark is still and drops to .6 while it is counting, so it has somewhere to
+     strike from — and an inline declaration would outrank every layer. */
+  .mark .mark-stroke { --rest:.34; }
+  .mark .mark-stroke[data-lead] { --rest:1; }
+  body.is-live .mark.is-live .mark-stroke[data-lead] { --rest:.6; }
+  .mark.is-live .mark-stroke {
+    animation:mark-strike calc(var(--beat-ms) * 4 * 1ms) var(--e-decay) infinite;
+    animation-delay:calc(var(--beat-ms) * var(--beat, 0) * 1ms + var(--mark-sync, 0ms));
+  }
+  /* The room is still when the app is still. No idle breathing — and the name
+     is dropped rather than only paused, because a paused animation still
+     applies its 0% frame, which here is the strike: the mark would freeze fully
+     lit instead of resting. */
+  body:not(.is-live) .mark.is-live .mark-stroke { animation-name:none; animation-play-state:paused; }
+
+  /* THE ROOM GOES STILL (§7.9). Offline is carried by the system's own
+     behaviour rather than by a badge: the mark stops counting and takes a
+     single hairline ring. No colour, no borrowed hue — there is no track that
+     means "disconnected". */
+  body.is-offline .mark .mark-stroke { animation-name:none; }
+  body.is-offline .mark { outline:1px solid var(--edge-hot); outline-offset:var(--sp-1); }
+}

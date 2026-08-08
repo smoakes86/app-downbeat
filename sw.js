@@ -1,16 +1,38 @@
 /* Downbeat's offline shell. The song itself is also saved in localStorage by
    ui.js, so an interrupted connection loses neither the app nor the work. */
-const CACHE = 'downbeat-shell-v2';
+const CACHE = 'downbeat-shell-v3';
+/* The fetch handler below returns early for cross-origin requests, so anything
+   not in this array and not same-origin simply does not exist offline. That is
+   why the two typefaces are here: without them the installed app — which is
+   this product's primary form — would fall back to system faces in the one
+   context it was built for. */
 const SHELL = [
   './',
   './index.html',
-  './styles.css',
   './manifest.webmanifest',
+  './css/tokens.css',
+  './css/base.css',
+  './css/layout.css',
+  './css/controls.css',
+  './css/lane.css',
+  './css/run.css',
+  './css/faceplate.css',
+  './css/sheets.css',
+  './css/overlays.css',
+  './css/motion.css',
+  './css/responsive.css',
+  './css/a11y.css',
+  './fonts/archivo-latin.woff2',
+  './fonts/archivo-latin-ext.woff2',
+  './fonts/martianmono-latin.woff2',
+  './fonts/martianmono-latin-ext.woff2',
   './src/theory.js',
   './src/genres.js',
   './src/compose.js',
   './src/audio.js',
   './src/midi.js',
+  './src/mark.js',
+  './src/motion.js',
   './src/devices.js',
   './src/arrange.js',
   './src/library.js',

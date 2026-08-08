@@ -1,0 +1,518 @@
+/* One part's shape on the grid. The same renderers that drew five stacked lanes
+   draw one, with room to be read. The lane is a milled well cut into the panel,
+   so everything in it is *below* the surface — which is why its bevel is
+   inverted and its boundary is the load-bearing hairline rather than the
+   decorative one.
+
+   Two families meet here and they do not mix. Every note, every drum hit and
+   every band is PIGMENT: matte, opaque, never glowing, and the only thing in
+   the app allowed to carry musical data. The playhead is EMISSION: it belongs
+   to the transport, it is amber in both themes, and it is the one object in
+   this file permitted a bloom. */
+@layer components {
+
+  /* The gutter is the whole alignment story.
+
+     Three things annotate the same step grid — the bar-number rail above it,
+     the bar rules drawn over it, and the playhead sweeping across it — and
+     until now each one measured from a different origin. The drum grid is
+     inset behind a voice-name column, so on drums the playhead sat 80px left
+     of the beat it claimed to be on and every bar number pointed at the wrong
+     sixteenth. The fix is not an offset applied to the playhead: it is one
+     property that says where the step grid starts, declared once, resolved by
+     all three.
+
+     --lane-gutter is measured from the lane's *padding* box, because that is
+     the containing block an absolutely positioned playhead inside .lane
+     resolves against. --lane-tail is the matching inset on the right. Both are
+     zero for a pitched lane except for the keyboard gutter; for drums they are
+     exactly the drum row's own geometry, so the numbers are derived rather
+     than guessed:  padding + name column + column gap.
+
+     100cqw is the wrap's border box, which is also the lane's border box, so
+     the two 1px hairlines have to come back out of the track. Everything that
+     follows is exact — at --head 0 the playhead sits on bar one's tick and at
+     --head 1 it sits on the loop point, with no correction term anywhere.
+
+     --enter-i is the region's slot in the boot sequence (§6.12: the lane is
+     third). It is set here rather than on the legend because it inherits, so
+     the SHAPE legend, the plate and anything else the region grows later all
+     arrive together without a second number to keep in sync. */
+  .lane-wrap {
+    --lane-gutter:26px;
+    --lane-tail:0px;
+    --lane-track:calc(100cqw - 2px - var(--lane-gutter) - var(--lane-tail));
+    --enter-i:3;
+    container-type:inline-size;
+    display:flex; flex:none; flex-direction:column; position:relative;
+  }
+  /* Who gets the stage's spare height. It used to be the run, unconditionally,
+     which was right when the run needed eight full-width lines for eight bars.
+     It now needs four, and measured at 1440x900 that left 102px of empty milled
+     well under the last chip — the same fault as the FM-1's panel, one region
+     over. The pitched lane takes three quarters of the surplus and spends it on
+     row height, because a taller row is a taller note: the same contour drawn
+     in more ink rather than the same contour with more black around it. It
+     grows and never shrinks, so a short stage still squeezes the run (which can
+     scroll) and never the grid (which cannot).
+
+     Drums used to be excluded, on the grounds that a stretched drum lane is a
+     hole with a border round it. That was true only because the step cell was
+     a fixed 20px: excluding the lane did not remove the surplus, it moved it
+     one region down, and measured at 1440x900 the run then held a four-voice
+     kit legend — one system, 66px of chips — inside a 442px well with 381px of
+     milled nothing under it. The same fault as the rig panel, two regions over.
+
+     So the drum lane takes its share like the pitched one, and the step cell
+     stops being fixed. A voice row that grows is a taller hit block over the
+     same 128 columns, which is ink; a voice row that cannot grow inside a lane
+     that can is the hole the old comment was right about. */
+  .stage-body > .lane-wrap { flex:3 0 auto; }
+  /* Collapsed, the lane is a 36px strip by choice and the run is the whole
+     point of the screen. Nothing here may grow. Both classes, in that order:
+     lane-slim is the remembered preference and is set at every width, while
+     the strip only actually exists under has-thumb — gating on the preference
+     alone silently froze the desktop lane at its minimum. */
+  body.has-thumb.lane-slim .stage-body > .lane-wrap { flex:none; }
+  .lane-wrap.is-drums { --lane-gutter:calc(64px + var(--sp-2) * 2); --lane-tail:var(--sp-2); }
+  /* The drum name column narrows with the viewport (responsive.css), so the
+     origin has to narrow with it. This breakpoint lives beside the geometry it
+     corrects rather than in responsive.css — split across two files the two
+     numbers drift, which is how the 80px error happened in the first place. */
+  @media (max-width:699px) {
+    .lane-wrap.is-drums { --lane-gutter:calc(44px + var(--sp-2) * 2); }
+  }
+  /* Collapsed, there is no rail and no keyboard, so the grid starts at the
+     lane's edge and the origin follows it there. */
+  body.has-thumb.lane-slim .lane-wrap { --lane-gutter:0px; --lane-tail:0px; }
+  body.has-thumb.lane-slim .lane-wrap.is-drums { --lane-gutter:var(--sp-2); --lane-tail:var(--sp-2); }
+
+  /* The silkscreen and the disclosure share one line, because they are the same
+     statement: this region is the shape of the part, and here is how much of it
+     you want. Silkscreen goes on the metal, never in the recess (§3.5), so the
+     row sits on the panel face above the well and the legend keeps the 8px the
+     layer below gives it — as the row's own bottom margin rather than the
+     legend's, so the two children cannot disagree about the baseline. */
+  .lane-top {
+    align-items:center; display:flex; gap:var(--sp-3);
+    justify-content:space-between; margin-bottom:var(--sp-2); min-height:var(--fs-legend);
+  }
+  .lane-top .legend { margin-bottom:0; }
+
+  /* The rail spans exactly the track, so label n and rule n share an x. The
+     extra pixel each side is the lane's hairline, which the rail does not
+     have. The bar-1 tick is no longer suppressed: a rail that draws three
+     ticks for four bars is a rail you cannot count along. */
+  .lane-bars {
+    display:grid; grid-template-columns:repeat(var(--bars,4),minmax(0,1fr));
+    margin:0 0 var(--sp-1);
+    padding-left:calc(var(--lane-gutter) + 1px);
+    padding-right:calc(var(--lane-tail) + 1px);
+  }
+  .lane-bars span {
+    border-left:1px solid var(--edge); color:var(--label-tertiary);
+    font-family:var(--mono); font-size:var(--fd-xs);
+    font-variation-settings:'wdth' 87.5,'wght' 400;
+    /* 5px, not a rung: it is the optical clearance that stops the numeral
+       touching its own tick, and 4px lets the 1 kiss the rule at --fd-xs. */
+    letter-spacing:var(--tr-data); line-height:var(--lh-data); padding-left:5px;
+    transition:color var(--t-throw) var(--e-detent),
+               border-left-color var(--t-throw) var(--e-detent);
+  }
+  /* The bar you are in. The rail is above the well, not inside it, so this is
+     the transport annotating itself rather than light leaking into the lane —
+     which is why it is the flat --lamp-ink and carries no bloom. The weight
+     step is the second, non-colour cue (C10): at 10px a hue change alone is a
+     coin toss for a deutan reader. */
+  .lane-bars span.is-now {
+    border-left-color:var(--lamp); color:var(--lamp-ink);
+    font-variation-settings:'wdth' 87.5,'wght' 620;
+  }
+
+  /* Two declarations here are one decision, and neither works alone.
+
+     height:0 is what makes the stretchable row track below behave. A `1fr` row
+     in a grid whose own height is `auto` resolves to max-content, so with the
+     wrap out of spare room — 768x1024, measured — the rows quietly grew to fit
+     their note labels and the lane took 26px it had not been given, off the
+     run. Starting the flex basis at zero makes the used height come out of flex
+     layout instead, which is a definite height, and `1fr` then means what it
+     says.
+
+     min-height then has to be stated, because a flex item's automatic minimum
+     is zero the moment its overflow is not visible and this well clips by
+     definition — left on `auto` the lane collapsed to its two hairlines.
+     `min-content` is exactly the number the automatic rule would have produced
+     if it applied: the sum of the row minimums for a pitch grid, the stack of
+     voice rows for a kit. The well can never be squeezed below the part it is
+     drawing.
+
+     The collapsed strip overrides both with its own height and must keep
+     winning, which it does on specificity. */
+  .lane {
+    background:var(--inset); border:1px solid var(--edge-hot); border-radius:var(--r-well);
+    box-shadow:var(--bevel-in); flex:1 1 auto; height:0; min-height:min-content;
+    overflow:hidden; position:relative;
+  }
+  /* --row-h is a floor, not a height. ui.js divides the band's height budget by
+     the row count to get it, and where the stage has more room than the budget
+     asks for the rows share the difference rather than leaving it under the
+     grid — the surplus becomes pitch resolution, which is the one thing this
+     region exists to show. The keyboard gutter below repeats the identical
+     track list, so the two can never disagree about where a semitone is. */
+  .lane.is-pitched {
+    display:grid; grid-template-columns:repeat(var(--steps,64),minmax(0,1fr));
+    grid-template-rows:repeat(var(--rows,8),minmax(var(--row-h,22px),1fr));
+    padding-left:var(--lane-gutter);
+  }
+  /* The row minimum is --row-h and nothing else, and the floor is stated as the
+     arithmetic rather than left to `min-content`. Under an intrinsic height a
+     flexible track is sized as though it were `auto`, so every row grew to fit
+     the note label sitting in it — ten budgeted pixels became twelve, thirteen
+     times over, which is 27px the lane took off the run without being given it.
+     Naming the height makes it definite, and a definite height is the one case
+     where `1fr` divides what it was actually handed. It is the same expression
+     the empty state below uses, read back through the same fallbacks.
+
+     The items lose their own minimums for the same reason: a note block is a
+     rectangle of pigment whose height IS the pitch resolution, and it has no
+     size of its own to insist on. */
+  .lane.is-pitched { min-height:calc(var(--rows,8) * var(--row-h,22px) + 2px); }
+  .lane.is-pitched > * { min-height:0; }
+  .lane.is-drums { display:flex; flex-direction:column; gap:2px; padding:var(--sp-2); }
+  /* Neither grid means there are no notes to draw. The well keeps the height it
+     would have had — a part with nothing in it must not collapse the panel and
+     shove the run up the screen, because then switching parts moves everything
+     you were looking at (§9.5: conditional content reserves its space). The
+     row figures are the same ones ui.js computes, read back through their own
+     fallbacks. */
+  .lane:not(.is-pitched):not(.is-drums),
+  .lane.is-drums:has(> .tl-off) {
+    align-content:center; justify-items:center;
+    min-height:calc(var(--rows,8) * var(--row-h,22px) + 2px);
+  }
+  .lane:not(.is-pitched):not(.is-drums) { display:grid; }
+  /* margin:auto centres in both the grid case and the drums flex column, so
+     the empty state does not need to know which shell it landed in. */
+  .tl-off {
+    color:var(--muted); display:grid; font-size:var(--fs-meta); gap:var(--sp-3);
+    justify-items:center; line-height:var(--lh-ui); margin:auto; max-width:34ch;
+    padding:var(--sp-3); text-align:center;
+  }
+
+  /* Bar rules, inset to the track rather than to the lane — over the name
+     column they were drawing a barline through a word. */
+  .lane::after {
+    background-image:linear-gradient(to right,var(--edge-hot) 0 1px,transparent 1px);
+    background-size:calc(100% / var(--bars,4)) 100%; content:"";
+    inset:0 var(--lane-tail) 0 var(--lane-gutter);
+    pointer-events:none; position:absolute; z-index:2;
+  }
+  /* The pitched lane had no beat rules at all, so a sixteenth and a quarter
+     looked the same distance apart. Two weights from two boundary tokens: the
+     beat is the decorative hairline, the bar is the load-bearing one, and the
+     bar is listed first so it paints over the beat it coincides with. */
+  .lane.is-pitched::after {
+    background-image:
+      linear-gradient(to right,var(--edge-hot) 0 1px,transparent 1px),
+      linear-gradient(to right,var(--edge) 0 1px,transparent 1px);
+    background-size:
+      calc(100% / var(--bars,4)) 100%,
+      calc(100% / (var(--bars,4) * 4)) 100%;
+  }
+  /* An empty lane has no grid to rule, and a barline drawn across a sentence
+     reads as a strikethrough. */
+  .lane:not(.is-pitched):not(.is-drums)::after { content:none; }
+
+  /* Piano-roll banding. A pitch grid with no black-key shading is a chart with
+     no gridlines: you can see the contour but you cannot name an interval. The
+     bands are grid items rather than a repeating gradient because the pattern
+     of black keys is irregular and a gradient cannot know where the lane's top
+     row happens to land. */
+  .lane-band { grid-column:1 / -1; pointer-events:none; position:relative; z-index:0; }
+  .lane-band.is-black { background:color-mix(in srgb, var(--edge) 40%, transparent); }
+  /* The tonic is the one row the ear is measuring everything against, so it is
+     the one row allowed the part's own pigment. */
+  .lane-band.is-tonic { box-shadow:inset 0 -2px 0 var(--part); }
+
+  /* The keyboard gutter tells you which rows those are. It is drawn from the
+     hardware palette rather than from ink: --alu against --inset is the only
+     pair whose polarity survives both themes, so the white keys stay lighter
+     than the black ones in a lit room as well as a dark one. */
+  .lane-keys {
+    border-right:1px solid var(--edge-hot); bottom:0; display:grid;
+    grid-template-rows:repeat(var(--rows,8),minmax(var(--row-h,22px),1fr));
+    left:0; pointer-events:none; position:absolute; top:0;
+    width:var(--lane-gutter); z-index:2;
+  }
+  .lane-keys i { background:var(--alu); position:relative; }
+  .lane-keys i.is-black { background:var(--inset); }
+  .lane-keys i:not(.is-black) { box-shadow:inset 0 -1px 0 color-mix(in srgb, var(--room) 70%, transparent); }
+  /* Only labelled when the row is tall enough to hold ten-pixel type without
+     clipping it — ui.js adds the class after it has computed the row height. */
+  .lane-keys.has-labels i[data-label]::after {
+    color:var(--ink); content:attr(data-label); font-family:var(--mono);
+    font-size:var(--fd-xs); font-variation-settings:'wdth' 87.5,'wght' 400; left:3px;
+    letter-spacing:var(--tr-data); line-height:var(--lh-data);
+    position:absolute; top:50%; transform:translateY(-50%);
+  }
+  body.has-thumb.lane-slim .lane-keys { display:none; }
+
+  /* The playhead is light, not pigment: it belongs to the transport, so it is
+     amber in both themes and it is the one thing in the lane allowed to bloom.
+
+     It translates. A playhead is written every animation frame from the audio
+     clock, and `left` is a layout property — the old rule made the browser
+     re-lay-out the lane sixty times a second to move a two-pixel rule. The
+     translate is resolved entirely from --lane-gutter and --lane-track, so
+     the drum lane and the pitched lane need no separate arithmetic.
+
+     It is present but dark when the transport is stopped, and it fades rather
+     than being switched off: `hidden` on a rule that was mid-sweep is the
+     dismissal §7.10 exists to abolish. One class carries both directions, so
+     there is no timer to get wrong. */
+  .lane-head {
+    background:var(--lamp); border-radius:var(--r-pill); bottom:0;
+    box-shadow:var(--bloom-lamp); left:0; opacity:0; pointer-events:none; position:absolute;
+    top:0; transform:translate3d(calc(var(--lane-gutter) + var(--head,0) * var(--lane-track)), 0, 0);
+    transition:opacity var(--t-click) var(--e-decay);
+    width:2px; z-index:3;
+  }
+  body.is-live .lane-head { opacity:1; }
+  /* The wake. The lane reads as being written rather than scrolled, so the
+     light is behind the rule and not in front of it. */
+  .lane-head::before {
+    background:linear-gradient(to right, transparent,
+      color-mix(in srgb, var(--lamp) 24%, transparent));
+    bottom:0; content:""; position:absolute; right:100%; top:0; width:40px;
+  }
+  .lane-head[hidden] { display:none; }
+
+  /* A note is a block of pigment pressed into the well, and the amount of ink
+     in it is the velocity. Not height, which would lie about pitch, and not
+     opacity, which would turn the loudest note into the one you can see least
+     of on a dark ground — a tint of the same opaque ink, which is what a
+     halftone screen print actually does with a soft accent.
+
+     --lit is the playhead's mark: it goes to 1 as the head reaches the note
+     and decays behind it on the beat-relative --t-decay. It is a registered
+     <number>, so the mix below is re-evaluated per frame from one transition
+     rather than from a per-frame write. */
+  .tl-note {
+    align-items:center;
+    background:color-mix(in srgb,
+      var(--lamp) calc(var(--lit,0) * 38%),
+      color-mix(in srgb, var(--tone, var(--part)) calc(46% + var(--vel,.8) * 54%), var(--inset)));
+    border-radius:var(--r-chip); box-shadow:var(--bevel); color:var(--on-part);
+    display:flex; font-family:var(--mono); font-size:var(--fd-xs);
+    font-variation-settings:'wdth' 87.5,'wght' 620; justify-content:center;
+    letter-spacing:var(--tr-data); line-height:var(--lh-data); margin:1px;
+    min-width:0; overflow:visible; position:relative;
+    transition:--lit var(--t-decay) var(--e-decay),
+               filter var(--t-click) var(--e-travel);
+    z-index:1;
+  }
+  .tl-note::before { content:attr(data-label); }
+  .tl-note.is-melody  { --tone:var(--t-melody); }
+  .tl-note.is-counter { --tone:var(--t-counter); }
+  .tl-note.is-chords  { --tone:var(--t-chords); }
+  .tl-note.is-bass    { --tone:var(--t-bass); }
+  /* Above 0.85 the note carries a full-chroma cap along its top edge. Density
+     alone cannot separate 0.86 from 0.99, and the cap survives greyscale. */
+  .tl-note.is-accent { box-shadow:inset 0 2px 0 var(--tone, var(--part)), var(--bevel); }
+  .tl-note.is-dense { font-size:0; }
+
+  /* Bass notes are coloured and lettered by the job they do. The ramp sets the
+     ink the density mix works from rather than replacing the background, so a
+     quiet root and a loud one are still told apart — and it needs no
+     !important now that it is one class more specific than the base. */
+  .tl-note.role-root { --tone:var(--role-root); }
+  .tl-note.role-fifth { --tone:var(--role-fifth); }
+  .tl-note.role-third { --tone:var(--role-third); }
+  .tl-note.role-seventh, .tl-note.role-ninth,
+  .tl-note.role-sixth, .tl-note.role-fourth { --tone:var(--role-other); }
+  /* Two exceptions: an approach note is a hatch, and an octave is an outline.
+     Neither is a flat fill, so neither can be mixed. */
+  .tl-note.role-approach { background:var(--role-approach); }
+  .tl-note.role-octave {
+    background:transparent; border:1px solid var(--t-bass); box-shadow:none;
+    color:var(--t-bass-ink);
+  }
+
+  /* The key to the letters, and only the bass part has one. It arrives with the
+     lane rather than appearing in a frame; it leaves through Motion.hideWith
+     like every other dismissal in the app. */
+  .role-key {
+    animation:legend-in var(--t-throw) var(--e-throw) backwards;
+    display:flex; flex-wrap:wrap; gap:var(--sp-3); margin-top:var(--sp-2);
+  }
+  .role-key li { align-items:center; color:var(--muted); display:flex; font-size:var(--fs-meta); gap:6px; }
+  .role-key b {
+    align-items:center; border-radius:var(--r-chip); color:var(--on-part); display:flex;
+    font-family:var(--mono); font-size:var(--fd-xs);
+    font-variation-settings:'wdth' 87.5,'wght' 620;
+    height:17px; justify-content:center; letter-spacing:var(--tr-data);
+    line-height:var(--lh-data); width:17px;
+  }
+  .role-key b.role-root { background:var(--role-root); }
+  .role-key b.role-fifth { background:var(--role-fifth); }
+  .role-key b.role-third { background:var(--role-third); }
+  .role-key b.role-seventh, .role-key b.role-ninth,
+  .role-key b.role-sixth, .role-key b.role-fourth { background:var(--role-other); }
+  .role-key b.role-approach { background:var(--role-approach); }
+  .role-key b.role-octave { background:transparent; border:1px solid var(--t-bass); color:var(--t-bass-ink); }
+
+  /* Drums keep a row per voice — a step sequencer is the only honest picture.
+     The row is not a control: at 20px tall inside a 210px well it could never
+     be one, and the same WCAG 2.5.8 arithmetic that took the click handler off
+     .tl-note applies to it exactly. The drum pads on the faceplate are the
+     preview target, and they are 44px. */
+  /* flex:1 with a zero basis is what lets the four voices divide the well
+     between them instead of stacking 20px deep at the top of it. The height
+     below is the floor a kit keeps on a short screen, not the height it
+     draws at on a desktop. */
+  .drum-row {
+    align-items:stretch; display:grid; flex:1 1 0; gap:0 var(--sp-2);
+    grid-template-columns:64px minmax(0,1fr); min-height:20px;
+  }
+  .drum-row > .drum-name { align-self:center; }
+  .drum-name {
+    color:var(--label-tertiary); font-family:var(--mono); font-size:var(--fd-xs);
+    font-variation-settings:'wdth' 87.5,'wght' 400;
+    letter-spacing:var(--tr-data); line-height:var(--lh-data); text-align:right;
+  }
+  .drum-cells { display:grid; grid-template-columns:repeat(var(--steps,64),minmax(0,1fr)); overflow:hidden; }
+  /* Three weights of rule from two boundary tokens: the sixteenth is a whisper,
+     the beat is the decorative hairline, the bar is the load-bearing one. */
+  .drum-cell { border-left:1px solid color-mix(in srgb, var(--edge) 45%, transparent); min-height:20px; }
+  .drum-cell.is-beat { border-left-color:var(--edge); }
+  .drum-cell.is-bar { border-left-color:var(--edge-hot); }
+  /* Exactly the pitched lane's ink, with --strength standing in for --vel: one
+     velocity idea, one formula, two grids. The old mix was against
+     `transparent`, which is opacity wearing a pigment's clothes — it dissolves
+     the hit into whatever is behind it and leaves nothing for the light theme's
+     ring to sit on. --lit rides along so the drum grid is written by the
+     playhead the same way the pitched lane is. */
+  .drum-cell.is-hit {
+    background:color-mix(in srgb,
+      var(--lamp) calc(var(--lit,0) * 38%),
+      color-mix(in srgb, var(--t-drums) calc(46% + var(--strength,.8) * 54%), var(--inset)));
+    transition:--lit var(--t-decay) var(--e-decay);
+  }
+  /* A ghost is quieter *and* smaller — density carries it in colour, the short
+     block carries it in shape, so the two cues never depend on each other
+     (C10). The pad is inside the border box, so the sixteenth rule still runs
+     the full height of the row and the grid stays countable. */
+  .drum-cell.is-ghost { background-clip:content-box; padding:var(--sp-1) 0; }
+  /* Above 0.85, the same full-chroma cap the pitched lane uses. */
+  .drum-cell.is-accent { box-shadow:inset 0 2px 0 var(--t-drums); }
+  /* A roll is more than one hit inside one sixteenth: it is not a louder hit,
+     so it is not a denser fill. It is the hatch, on the same reasoning as the
+     bass approach note. */
+  .drum-cell.is-roll { background:repeating-linear-gradient(90deg,var(--t-drums) 0 2px,transparent 2px 4px); }
+
+  /* Light theme: every pigment block carries a near-black hairline. Light track
+     fills measure only 1.36-2.21:1 against the light well, below the 3:1 floor
+     for a meaningful graphic — the ring measures 5.09-8.27:1 against the fill
+     and is what screen-printed ink on a light substrate actually looks like.
+     The dark theme must not have it; its fills already clear 7:1.
+
+     The cells take theirs inset. A five-pixel cell with a ring outside its box
+     is a ring with a cell inside it, and the neighbouring hit is 1px away. */
+  body.light .tl-note, body.light .role-key b { box-shadow:0 0 0 1px var(--on-part); }
+  body.light .tl-note.is-accent { box-shadow:inset 0 2px 0 var(--tone, var(--part)), 0 0 0 1px var(--on-part); }
+  body.light .drum-cell.is-hit,
+  body.light .drum-cell.is-roll { box-shadow:inset 0 0 0 1px var(--on-part); }
+  body.light .drum-cell.is-accent { box-shadow:inset 0 2px 0 var(--t-drums), inset 0 0 0 1px var(--on-part); }
+
+  /* Collapsed, the lane is a glance at the shape of the part; the pads keep the
+     room. Expanded it is the full grid. The toggle only exists where the space
+     is actually contested — and where it exists it is a 44px target with all
+     five states, not a chevron you have to aim at. */
+  .lane-toggle { display:none; }
+  body.has-thumb .lane-toggle {
+    align-items:center; border-radius:var(--r-cap); color:var(--muted); display:flex;
+    font-size:var(--fs-meta); gap:var(--sp-1); justify-content:flex-end; margin-left:auto;
+    /* 2px, so the label stays optically flush with the lane's right edge; the
+       focus ring is a box-shadow and sits outside the box either way. */
+    min-height:var(--tap); padding:0 var(--sp-0);
+    transition:color var(--t-click) var(--e-travel),
+               transform var(--t-click) var(--e-travel);
+  }
+  @media (hover:hover) and (pointer:fine) {
+    .lane-toggle:hover { color:var(--ink); }
+  }
+  .lane-toggle:active { transform:translateY(.5px); }
+  /* The one ring, on the one radius the control actually has. The transparent
+     outline is what carries it through forced-colors mode, where a box-shadow
+     is not painted at all. */
+  .lane-toggle:focus-visible {
+    box-shadow:var(--focus-ring); outline:2px solid transparent; outline-offset:2px;
+  }
+  .lane-toggle[disabled], .lane-toggle[aria-disabled=true] {
+    cursor:not-allowed; opacity:.42; transform:none;
+  }
+  /* Declared here rather than left to the breakpoint, because which way a
+     chevron points is a property of the control and not of the viewport. */
+  .lane-toggle .chev {
+    display:inline-block; font-size:var(--fs-legend);
+    transition:transform 300ms var(--e-detent);
+  }
+  body.has-thumb.lane-slim .lane-toggle .chev { transform:rotate(180deg); }
+
+  /* The chevron used to turn while the panel it points at jumped. Both now run
+     for the same 300ms on the same curve, so the disclosure reads as one
+     gesture instead of two unrelated ones — which is why the rail and the
+     playhead fade out rather than being switched off mid-move. 300ms is the
+     bible's own figure for this one gesture (§6.12) and it is written on both
+     sides of it; the point is that the two numbers are the same number. */
+  body.has-thumb .lane { transition:height 300ms var(--e-detent); }
+  body.has-thumb .lane-bars, body.has-thumb .lane-head {
+    transition:opacity 300ms var(--e-detent);
+  }
+  /* An explicit height, not a max: the collapsed lane divides it between the
+     pitch rows, and fr units have nothing to divide without one. The expanded
+     height is stated too, because a transition out of `auto` does not run. */
+  body.has-thumb .lane.is-pitched { height:calc(var(--rows,8) * var(--row-h,22px) + 2px); }
+  /* min-height goes with the height: the strip is a deliberate 36px glance and
+     the well's own min-content floor — thirteen semitones, or eight voice rows
+     at 5px — would otherwise hold it open. */
+  body.has-thumb.lane-slim .lane { height:36px; min-height:0; }
+  body.has-thumb.lane-slim .lane-bars,
+  body.has-thumb.lane-slim .lane-head { opacity:0; pointer-events:none; }
+  body.has-thumb.lane-slim .tl-note { border-radius:2px; font-size:0; margin:0 1px; }
+  body.has-thumb.lane-slim .lane.is-drums { gap:1px; padding:var(--sp-1) var(--sp-2); }
+  body.has-thumb.lane-slim .drum-name { display:none; }
+  body.has-thumb.lane-slim .drum-row { grid-template-columns:minmax(0,1fr); }
+  body.has-thumb.lane-slim .drum-cell { height:5px; padding:0; }
+  body.has-thumb.lane-slim #roleKey { display:none; }
+
+  /* The lane is the read-only contour its markup already declares it to be.
+     The per-note click target was five pixels by eighteen — a fifth of the
+     WCAG 2.5.8 minimum in each axis — and the run of chips directly below it
+     already previews every one of these notes at a proper 44px. So the only
+     hover in the well is the one that says "this is the note you are pointing
+     at", and it is a brightness step rather than a colour change, because
+     changing the colour of a pigment block is a lie about the part. */
+  @media (hover: hover) and (pointer: fine) {
+    .tl-note:hover { filter:brightness(1.12); }
+  }
+}
+
+/* One rule outside the cascade, and it is not a style decision.
+
+   css/responsive.css:130 pins `.lane.is-pitched { grid-template-rows }` from
+   the responsive layer, which outranks components no matter how specific a
+   components selector is. The collapsed lane is 36px tall and its rows have to
+   divide that height between them; with the responsive rule winning, the rows
+   stay at their full pitch and the well clips everything below the second one,
+   so the phone's default view of a melody is the top two semitones of it.
+
+   The row height cannot be fought from CSS the usual way either — ui.js writes
+   --row-h inline on .lane, and an inline custom property beats every layer.
+   Unlayered is therefore the only place this can be stated from this file.
+   When the responsive layer drops its pin this block moves back inside
+   @layer components, where it belongs. */
+body.has-thumb.lane-slim .lane.is-pitched {
+  grid-template-rows:repeat(var(--rows,8), minmax(0, 1fr));
+}

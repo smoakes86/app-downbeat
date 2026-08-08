@@ -1,0 +1,589 @@
+/* The two sheets, and the disclosure that behaves like them.
+
+   Both sheets are children of the stage, not of the page. That single
+   structural fact is the best idea in the original app: the hardware stays lit
+   beside the sheet, so you are never configuring a thing you cannot see. Every
+   decision below exists to make that legible rather than to fight it — the
+   sheet is 448px of translucent material laid over the *reading* surface, the
+   rig keeps its own light, and the only thing the sheet takes from the desk is
+   focus.
+
+   The register is set by three type roles and nothing else: legends name
+   regions, Archivo carries language, Martian Mono carries data. Where a control
+   used to be one of nine identical ghosts in a row, it is now inside a named
+   group — a bank of six unlabelled buttons is a menu, and this is a desk. */
+@layer components {
+
+  /* ============================================================ disclosure
+     One glyph for every disclosure in the app. Two crossed bars that rotate 45
+     degrees into a close mark, replacing the two conventions the codebase had
+     been running side by side (an arrow on .recipe, a fullwidth CJK plus on
+     .creation-details). Drawn rather than typed, because a plus sign rendered
+     in whatever fallback font the platform supplies is the largest single
+     source of cross-platform ugliness in this UI. */
+  .disclosure {
+    color:var(--muted); flex:none; height:var(--sp-4); position:relative; width:var(--sp-4);
+    transition:transform var(--t-throw) var(--e-detent), color var(--t-click) var(--e-travel);
+  }
+  .disclosure::before, .disclosure::after {
+    background:currentColor; content:""; left:50%; position:absolute; top:50%;
+  }
+  .disclosure::before { height:1px; width:var(--sp-3); transform:translate(-50%,-50%); }
+  .disclosure::after  { height:var(--sp-3); width:1px; transform:translate(-50%,-50%); }
+  [open] > summary .disclosure { color:var(--ink); transform:rotate(45deg); }
+
+  /* Open is a keyframe and close is a transition, and the asymmetry is forced
+     rather than chosen. A disclosure body has no start value until the UA has
+     already revealed it, so the reveal has to be an animation — but the return
+     trip needs somewhere to go, and the collapsed state was never declared:
+     the wrapper resolved to 1fr open *and* shut, so the 0fr half of the idea
+     only ever existed inside the keyframe. Nothing looked wrong, because a
+     closed <details> does not paint; what was missing was the close.
+
+     So 0fr is the resting state now and 1fr is what [open] does to it, which
+     gives the transition below a real pair of values in both directions. The
+     content fades 60ms behind the box on the way in so it is never seen inside
+     a collapsed one, and leads it out on the way back. Keyframes live in
+     css/motion.css; if they are missing the content simply appears, which is
+     the correct degradation. */
+  .disclose {
+    display:grid; grid-template-rows:0fr;
+    transition:grid-template-rows calc(280ms * .55) var(--e-close);
+  }
+  .disclose > * {
+    min-height:0; opacity:0; overflow:hidden;
+    transition:opacity calc(220ms * .55) var(--e-close);
+  }
+  [open] > .disclose { grid-template-rows:1fr; animation:disclose 280ms var(--e-throw); }
+  [open] > .disclose > * { opacity:1; animation:disclose-fade 220ms var(--e-throw) 60ms backwards; }
+
+  /* And the half a stylesheet cannot do on its own: the UA yanks the body out
+     of the render tree in the same frame the attribute drops, so a collapse has
+     nothing left to collapse. ::details-content is the box the UA gives that
+     body, and transitioning its content-visibility with allow-discrete holds it
+     rendered for exactly the length of the exit instead. The pseudo-element is
+     deliberately not wrapped in @supports: an engine that does not know it
+     treats the whole selector as invalid and drops the rule, the body goes back
+     to leaving in one frame, and that is the same behaviour every engine had
+     before this block — degradation, not breakage. */
+  details:has(> .disclose)::details-content {
+    transition:content-visibility calc(280ms * .55) var(--e-close) allow-discrete;
+  }
+  details[open]:has(> .disclose)::details-content { content-visibility:visible; }
+
+  /* ================================================================ recipe
+     The setup instructions are the largest block of prose in the app and also
+     the most useful, so they keep their words and lose their permanence. The
+     summary is the SET-UP legend itself — silkscreen on the lid of the box it
+     opens — which is why it is set in the legend register rather than as a
+     sentence. */
+  .recipe {
+    background:color-mix(in srgb, var(--raised) 48%, transparent);
+    border:0; border-radius:var(--r-well); box-shadow:var(--bevel-in); flex:none;
+    padding:0 var(--sp-3);
+  }
+  .recipe > summary {
+    align-items:center; color:var(--label-tertiary); cursor:pointer; display:flex;
+    font-family:var(--sans); font-size:var(--fs-legend);
+    font-variation-settings:'wdth' 118, 'wght' 640; gap:var(--sp-2);
+    justify-content:space-between; letter-spacing:var(--tr-caps);
+    line-height:var(--lh-data); list-style:none; min-height:var(--tap);
+    text-transform:uppercase;
+    transition:color var(--t-click) var(--e-travel);
+  }
+  .recipe > summary::-webkit-details-marker { display:none; }
+  .recipe-steps {
+    border-top:1px solid var(--edge); display:grid; gap:var(--sp-3);
+    padding:var(--sp-3) var(--sp-0) var(--sp-4);
+    /* The in half of the content swap below. */
+    transition:opacity 160ms var(--e-throw), transform 160ms var(--e-throw);
+  }
+  /* Content changing silently under an open disclosure is the classic "did that
+     just change?" failure: switch the part or the device with SET-UP open and
+     three paragraphs of instructions used to be replaced between frames. Out at
+     100ms, in at 160ms, over a 6px rise (§6.15's numbers, not the spacing
+     scale's — this is a travel distance, not a gap). */
+  .recipe-steps.is-swapping {
+    opacity:0; transform:translateY(6px);
+    transition:opacity 100ms var(--e-close), transform 100ms var(--e-close);
+  }
+  /* The first column is the step disc's own 20px, not a spacing rung: a 24px
+     column round a 20px circle reads as a misaligned bullet. */
+  .recipe-steps li { display:grid; gap:var(--sp-3); grid-template-columns:20px minmax(0,1fr); }
+  .recipe-steps b { display:block; font-size:var(--fs-ui); font-variation-settings:'wght' 620; margin-bottom:var(--sp-0); }
+  .recipe-steps p { color:var(--muted); font-size:var(--fs-body); line-height:var(--lh-body); }
+  /* --ink, not --muted: --high is the lightest surface in the dark theme and
+     --muted on it measures ~2.6:1. The step number is small mono text and has
+     to clear 4.5. */
+  .step-n {
+    align-items:center; background:var(--high); border-radius:var(--r-pill);
+    box-shadow:var(--bevel); color:var(--ink); display:flex; flex:none;
+    font-family:var(--mono); font-size:var(--fd-xs); height:20px;
+    justify-content:center; letter-spacing:var(--tr-data); line-height:var(--lh-data);
+    width:20px;
+    transition:background-color var(--t-throw) var(--e-detent), color var(--t-throw) var(--e-detent);
+  }
+
+  /* ================================================================ sheets */
+  .sheet-host { inset:0; position:absolute; z-index:20; }
+  .sheet-host[hidden] { display:none; }
+
+  .scrim {
+    background:color-mix(in srgb, var(--room) 62%, transparent);
+    backdrop-filter:blur(8px); -webkit-backdrop-filter:blur(8px);
+    inset:0; position:absolute;
+    animation:scrim-in 280ms var(--e-throw);
+    /* The resting transition the drag code assumes exists — see the note on
+       .sheet below. ease is not one of the six curves, so this is --e-travel at
+       the nearest rung above 300ms. */
+    transition:opacity var(--t-slide) var(--e-travel);
+  }
+
+  .sheet {
+    background:var(--material); border:0; border-left:1px solid var(--edge);
+    backdrop-filter:blur(30px) saturate(170%); -webkit-backdrop-filter:blur(30px) saturate(170%);
+    bottom:0; box-shadow:var(--cast-3); display:flex; flex-direction:column;
+    overflow:hidden; position:absolute; right:0; top:0; width:min(448px, 100%);
+    animation:sheet-in var(--t-slide) var(--e-throw);
+    /* The resting transform transition is what the drag-to-dismiss code at
+       ui.js:849 assumes exists: it sets style.transition='none' while dragging
+       and clears it on release, which was a no-op until now — under the
+       threshold the sheet teleported back to zero instead of springing. This is
+       the one place --e-rubber is allowed outside the .check knob, because it
+       is the one place real elasticity exists: a finger letting go. */
+    transition:transform 340ms var(--e-rubber);
+  }
+  .sheet[hidden] { display:none; }
+  /* Kept deliberately: the dialog itself takes focus so the title is announced,
+     and a ring around a 448px panel would be noise rather than guidance. */
+  .sheet:focus { outline:none; }
+
+  /* --------------------------------------------------------- sheet identity
+     Two sheets, two jobs, and until now two identical grey headers. The
+     difference is carried by type and by structure rather than by hue, because
+     colour in this app always means a part: each head names its register in the
+     eyebrow, and only the song sheet carries a footer — the one action its live
+     fields cannot express is pinned there, so the sheet you configure and the
+     sheet you commit from are visibly different objects. */
+  .sheet-head {
+    align-items:center; background:var(--raised); border-bottom:1px solid var(--edge);
+    box-shadow:var(--bevel); display:flex; flex:none; gap:var(--sp-3);
+    min-height:62px; padding:var(--sp-3) var(--sp-4);
+  }
+  .sheet-title { display:grid; gap:var(--sp-0); margin-right:auto; min-width:0; }
+  .sheet-head h2 {
+    font-size:var(--fs-title); font-variation-settings:'wdth' 106, 'wght' 720;
+    letter-spacing:var(--tr-tight); line-height:var(--lh-heading);
+  }
+  .sheet-body {
+    display:flex; flex-direction:column; gap:var(--sp-4); overflow:auto; padding:var(--sp-4);
+  }
+  /* The sheet scrolls as a whole; nothing inside it shrinks. Without this a
+     child with its own overflow — the arrangement map — has no automatic
+     minimum size and gets crushed to nothing by the column. */
+  .sheet-body > * { flex:none; }
+  /* The sticky commit rail. A CTA that scrolls away below nine other buttons is
+     a CTA nobody presses. */
+  .sheet-foot {
+    background:var(--raised); border-top:1px solid var(--edge); box-shadow:var(--bevel);
+    display:grid; flex:none; gap:var(--sp-2); padding:var(--sp-3) var(--sp-4);
+  }
+  .sheet-lead { color:var(--muted); font-size:var(--fs-meta); }
+  .sheet-lead b { color:var(--ink); font-size:var(--fs-lead); letter-spacing:var(--tr-snug); }
+
+  /* Chrome suppression. On a phone the thumb bar used to stay fully lit and
+     fully dead under the user's thumb; on a desktop the rig is marked inert the
+     moment a sheet opens, so leaving it at full strength was a lie either way.
+     It dims rather than disappearing, because the whole point of putting the
+     sheet inside the stage is that the hardware is still there. */
+  body:not(.sheet-open) .thumb, body:not(.sheet-open) .rig {
+    transition:opacity 180ms var(--e-close), filter 180ms var(--e-close);
+  }
+  body.sheet-open .thumb, body.sheet-open .rig {
+    filter:saturate(.4); opacity:.38;
+    transition:opacity 280ms var(--e-throw), filter 280ms var(--e-throw);
+  }
+
+  [data-close-sheet] { min-height:var(--tap); min-width:var(--tap); }
+
+  /* ------------------------------------------------------------- grouping
+     Nine identical ghosts in two anonymous rows become named groups. The legend
+     above each one is the same silkscreen register as the rest of the desk, so
+     the sheet reads as part of the same machine and not as a settings page. */
+  .sheet-group, .sheet-section { display:grid; gap:var(--sp-2); min-width:0; }
+  /* layout.css gives every legend a bottom margin for the cases where it labels
+     a region it does not own; inside a grid the gap already does that job. */
+  .sheet-group > .legend, .sheet-section > .legend { margin-bottom:0; }
+  .sheet-row { display:flex; flex-wrap:wrap; gap:var(--sp-2); }
+  .sheet-row > .ghost { flex:1 1 auto; }
+  /* EXPORT is four verbs of similar weight. Two equal columns keep them a block
+     rather than a ragged line, and stop the fourth orphaning at 360px. */
+  .sheet-row.is-export { display:grid; grid-template-columns:repeat(2, minmax(0,1fr)); }
+  /* The footer row is housekeeping, not authoring: same targets, quieter ink,
+     no housing. */
+  .sheet-row.is-quiet {
+    border-top:1px solid var(--edge); margin-top:var(--sp-1); padding-top:var(--sp-3);
+  }
+  .sheet-row.is-quiet .ghost {
+    background:none; box-shadow:none; color:var(--muted); padding:0 var(--sp-2);
+  }
+
+  /* ========================================================== create form */
+  .creation-hero { display:grid; gap:var(--sp-1); padding:var(--sp-0) var(--sp-0) 0; }
+  .eyebrow {
+    color:var(--lamp-ink); font-family:var(--sans); font-size:var(--fs-legend);
+    font-variation-settings:'wdth' 118, 'wght' 640; letter-spacing:var(--tr-caps);
+    line-height:var(--lh-data); text-transform:uppercase;
+  }
+  /* §6.21 removed the second heading — a sheet titled "New song" does not need
+     one telling you to start. The bridge rule that hid it went out with the
+     element in the same pass, per the section's own instruction; leaving it
+     behind would silently hide any heading anyone adds here later. */
+  .creation-hero p { color:var(--muted); font-size:var(--fs-body); line-height:var(--lh-body); }
+
+  .creation-details {
+    background:color-mix(in srgb, var(--raised) 42%, transparent);
+    border:1px solid var(--edge); border-radius:var(--r-well); box-shadow:var(--bevel-in);
+    overflow:hidden;
+  }
+  .creation-details > summary {
+    align-items:center; cursor:pointer; display:flex; font-size:var(--fs-ui);
+    font-variation-settings:'wght' 620; gap:var(--sp-3); justify-content:space-between;
+    list-style:none; min-height:48px; padding:0 var(--sp-4);
+    transition:color var(--t-click) var(--e-travel);
+  }
+  .creation-details > summary::-webkit-details-marker { display:none; }
+  .creation-details-body {
+    border-top:1px solid var(--edge); display:grid; gap:var(--sp-4); padding:var(--sp-3);
+  }
+  .tempo-actions { display:flex; gap:var(--sp-2); }
+  .compact-settings { align-items:end; }
+  .compact-settings .check { margin:0; }
+
+  /* Informational, not emissive. This panel used to carry a 10% amber wash,
+     which put light on a surface that is not a lamp; it is a raised note now
+     and the amber stays where it means something. */
+  .install-help {
+    background:var(--raised); border:1px solid var(--edge); border-radius:var(--r-cap);
+    box-shadow:var(--bevel-in); color:var(--muted); font-size:var(--fs-meta);
+    line-height:var(--lh-body); padding:var(--sp-3);
+  }
+  .install-help b { color:var(--ink); }
+  .install-help[hidden] { display:none; }
+  .undo { color:var(--lamp-ink); }
+
+  /* ============================================================== library */
+  /* minmax(0,1fr), not the implicit `auto`. A grid column's automatic minimum
+     is min-content, and a .lib-card's min-content is its title on one nowrap
+     line plus two 44px tap targets — 418px, measured, against a 336px sheet at
+     390. The column took the card's word for it and the whole library hung 70px
+     past the panel, reachable only by scrolling the sheet sideways. Capping the
+     track is what lets .lib-load's ellipsis do the job it was written for. */
+  .saved {
+    border-top:1px solid var(--edge); display:grid; gap:var(--sp-3);
+    grid-template-columns:minmax(0,1fr); padding-top:var(--sp-4);
+  }
+  .saved-head { align-items:center; display:flex; gap:var(--sp-2); }
+  .saved-head .legend { margin-bottom:0; margin-right:auto; }
+  /* --ink on --high for the same contrast reason as .step-n. */
+  .count {
+    background:var(--high); border-radius:var(--r-pill); box-shadow:var(--bevel);
+    color:var(--ink); font-size:var(--fs-micro); padding:var(--sp-0) var(--sp-2);
+  }
+  .count[hidden] { display:none; }
+  .saved-list { display:grid; gap:var(--sp-2); grid-template-columns:minmax(0,1fr); }
+
+  /* The asymmetric padding is an optical correction, not an oversight: the
+     delete cluster on the right is already inset by its own tap target, so an
+     even 13px would read as a lopsided card. */
+  .lib-card {
+    align-items:center; background:var(--inset); border:1px solid var(--edge-hot);
+    border-radius:var(--r-cap); box-shadow:var(--bevel-in); display:flex; gap:var(--sp-2);
+    min-height:56px; padding:8px 10px 8px 13px;
+    transition:border-color var(--t-click) var(--e-travel),
+               box-shadow var(--t-click) var(--e-travel),
+               transform var(--t-click) var(--e-travel);
+  }
+  /* Amber, not the part hue: which song is loaded has nothing to do with which
+     part is selected. The 2px bar down the leading edge is the second,
+     non-colour cue — a lamp border alone is hue doing the work on its own. */
+  .lib-card.is-current {
+    border-color:var(--lamp);
+    box-shadow:var(--bevel-in), inset var(--sp-0) 0 0 var(--lamp);
+  }
+  .lib-card.is-staged {
+    animation:card-in var(--t-throw) var(--e-throw) backwards;
+    animation-delay:calc(var(--enter-i, 0) * var(--hop));
+  }
+  /* The deleted card collapses out of the list; Motion.flip then walks the
+     survivors into their new places, so nothing teleports. */
+  .lib-card.is-removing {
+    border-width:0; height:0; margin:0; min-height:0; opacity:0; overflow:hidden;
+    padding-bottom:0; padding-top:0; transform:translateX(calc(var(--sp-3) * -1));
+    transition:height 200ms var(--e-close), min-height 200ms var(--e-close),
+               opacity 200ms var(--e-close), padding-bottom 200ms var(--e-close),
+               padding-top 200ms var(--e-close), transform 200ms var(--e-close);
+  }
+
+  .lib-load { flex:1 1 auto; min-width:0; text-align:left; }
+  .lib-load b {
+    display:block; font-size:var(--fs-ui); font-variation-settings:'wght' 620;
+    overflow:hidden; text-overflow:ellipsis; white-space:nowrap;
+    transition:color var(--t-click) var(--e-travel);
+  }
+  .lib-load small {
+    color:var(--muted); display:block; font-size:var(--fs-meta);
+    overflow:hidden; text-overflow:ellipsis; white-space:nowrap;
+  }
+  /* "3 days ago" is language, not data, so it stays in Archivo — and in --muted
+     rather than --label-tertiary, which is the legend register and measures
+     3.45:1 against the light theme's --inset card. */
+  .lib-load em { color:var(--muted); font-size:var(--fs-micro); font-style:normal; }
+  .lib-actions { display:flex; flex:none; gap:var(--sp-1); }
+  .lib-icon {
+    align-items:center; border-radius:var(--r-cap); color:var(--muted); display:flex;
+    font-size:var(--fs-meta); justify-content:center; min-height:var(--tap);
+    min-width:var(--tap); overflow:hidden; padding:0 var(--sp-2); position:relative;
+    transition:background-color var(--t-click) var(--e-travel),
+               color var(--t-click) var(--e-travel),
+               min-width var(--t-throw) var(--e-detent);
+  }
+  /* Destructive is record red as a fill behind --on-lamp and nothing else — the
+     counter hue used to do this job, which made a delete button look like a
+     musical part. Armed, the icon grows into a labelled pill on a min-width
+     transition so the row does not reflow, and the hairline underneath depletes
+     over exactly the 3.2s window ui.js gives you to change your mind. */
+  .lib-icon.is-armed {
+    background:var(--rec); color:var(--on-lamp); font-size:var(--fs-micro);
+    font-variation-settings:'wght' 620; min-width:calc(var(--tap) * 2);
+  }
+  .lib-icon.is-armed::after {
+    animation:arm-deplete 3200ms linear forwards;
+    background:var(--on-lamp); bottom:var(--sp-2); content:""; height:1px;
+    left:var(--sp-2); position:absolute; right:var(--sp-2); transform-origin:left center;
+  }
+
+  /* ========================================================= empty states
+     One register for all four apologies: the mark at readout size in the
+     hairline ink, the reason as a title, the fix as a real button. An empty
+     list that only says "nothing here" has told you the one thing you already
+     knew. */
+  .empty {
+    align-items:center; display:grid; gap:var(--sp-3); justify-items:center;
+    padding:var(--sp-5) var(--sp-4); text-align:center;
+    animation:empty-in 240ms var(--e-throw);
+  }
+  .empty[hidden] { display:none; }
+  .empty-mark { line-height:var(--lh-data); max-width:100%; opacity:.15; width:var(--fs-readout); }
+  .empty-mark .mark { display:block; height:auto; width:100%; }
+  /* The mark ships with a lamp lead stroke; at 15% behind an empty list it is
+     not a lamp, it is an engraving, so every stroke falls back to plain ink and
+     the container's opacity does the rest. */
+  .empty-mark .mark rect { fill:var(--ink); }
+  .empty b {
+    display:block; font-size:var(--fs-title); font-variation-settings:'wdth' 106, 'wght' 720;
+    letter-spacing:var(--tr-tight); line-height:var(--lh-heading);
+  }
+  .empty p { color:var(--muted); font-size:var(--fs-body); line-height:var(--lh-body); max-width:34ch; }
+
+  /* ========================================================== arrangement
+     The densest surface in the app, and the one that was hardest to read: four
+     track rows against up to eight sections, with the row labels scrolling away
+     from the grid they label the moment the map got wider than the sheet. */
+  .map-wrap {
+    overflow-x:auto; padding-bottom:var(--sp-1);
+    /* The right edge fades while there is more map to the right, and clears
+       when you reach the end. Colour is irrelevant in a mask — only the alpha
+       is read — but it still comes from a token rather than a raw literal. */
+    mask-image:linear-gradient(to right, var(--ink) calc(100% - var(--sp-5)), transparent);
+    -webkit-mask-image:linear-gradient(to right, var(--ink) calc(100% - var(--sp-5)), transparent);
+  }
+  .map-wrap.is-end { mask-image:none; -webkit-mask-image:none; }
+  /* 58px is the measured width of the longest track label set in the mono at
+     --fd-sm; max-content is the ceiling rather than the floor so a longer label
+     widens the gutter instead of being clipped behind the sticky rule. */
+  .map {
+    display:grid; gap:var(--sp-1);
+    grid-template-columns:minmax(var(--map-gutter,58px), max-content) var(--cols,1fr);
+    min-width:min-content;
+  }
+  /* The corner sticks with the labels below it, or the header row slides out
+     from under a column of names that stayed put. */
+  .map-corner, .map-track {
+    background:var(--panel); border-right:1px solid var(--edge); left:0;
+    position:sticky; z-index:2;
+  }
+  .map-track {
+    align-items:center; color:var(--muted); display:flex; font-family:var(--mono);
+    font-size:var(--fd-sm); letter-spacing:var(--tr-data); line-height:var(--lh-data);
+    padding-right:var(--sp-2);
+  }
+  .map-head {
+    background:var(--high); border-radius:var(--r-cap); box-shadow:var(--bevel);
+    min-height:var(--tap); min-width:0; padding:var(--sp-2); text-align:left;
+    transition:background-color 180ms var(--e-travel), color 180ms var(--e-travel),
+               box-shadow 180ms var(--e-travel), transform var(--t-click) var(--e-travel);
+  }
+  /* Auditioning is a fill *and* a machined bar down the leading edge, so the
+     state survives a monochrome screenshot and deuteranopia alike. */
+  .map-head.is-auditioning {
+    background:var(--part); color:var(--on-part);
+    box-shadow:var(--bevel), inset var(--sp-1) 0 0 var(--on-part);
+  }
+  .map-head b {
+    display:block; font-size:var(--fs-meta); font-variation-settings:'wght' 620;
+    overflow:hidden; text-overflow:ellipsis; white-space:nowrap;
+  }
+  .map-head small {
+    display:block; font-size:var(--fs-legend); font-variation-settings:'wdth' 118, 'wght' 500;
+    letter-spacing:var(--tr-caps); line-height:var(--lh-data); opacity:.78; text-transform:uppercase;
+  }
+  .map-energy {
+    align-items:flex-end; background:var(--inset); border-radius:var(--r-chip);
+    box-shadow:var(--bevel-in); display:flex; height:var(--sp-5); min-width:0; overflow:hidden;
+  }
+  .map-energy i {
+    background:linear-gradient(to top, var(--part), color-mix(in srgb, var(--part) 40%, transparent));
+    border-radius:var(--r-chip); min-width:0; transform-origin:bottom center; width:100%;
+  }
+  /* The energy profile draws itself once, on sheet open, left to right. It does
+     not replay on every regenerate — the class is only applied by the open
+     handler, and renderStructure() rebuilds the row without it. */
+  .map-energy.is-staged i {
+    animation:energy-rise 400ms var(--e-throw) backwards;
+    animation-delay:calc(var(--enter-i, 0) * var(--hop));
+  }
+  /* Filled versus hollow, not light hue versus dark hue: a light-theme track
+     fill measures 1.36-2.21:1 against the cell bed, so the *presence* of the
+     fill is what has to carry the read. */
+  .map-cell {
+    border-radius:var(--r-chip); box-shadow:inset 0 0 0 1px var(--edge-hot);
+    min-height:var(--sp-4); min-width:0;
+  }
+  .map-cell.is-melody.is-on  { background:var(--t-melody);  box-shadow:none; }
+  .map-cell.is-counter.is-on { background:var(--t-counter); box-shadow:none; }
+  .map-cell.is-chords.is-on  { background:var(--t-chords);  box-shadow:none; }
+  .map-cell.is-bass.is-on    { background:var(--t-bass);    box-shadow:none; }
+  .map-cell.is-drums.is-on   { background:var(--t-drums);   box-shadow:none; }
+  /* Rule C7: a light-theme pigment block always carries its near-black ring,
+     because on putty the fill alone is below the 3:1 floor for a meaningful
+     graphic. The dark theme must not have it — the fills clear 7:1 there. */
+  body.light .map-cell.is-on { box-shadow:inset 0 0 0 1px var(--on-part); }
+
+  /* ============================================================ sections */
+  .sections { display:grid; gap:var(--sp-3); }
+  .sections li { display:grid; min-width:0; }
+  /* Was a bare <li> with cursor:pointer and no tabindex — the descriptive prose
+     of the whole arrangement, entirely unreachable from a keyboard. */
+  .section-step {
+    background:color-mix(in srgb, var(--raised) 45%, transparent); border-radius:var(--r-cap);
+    box-shadow:var(--bevel-in); display:grid; gap:var(--sp-3);
+    grid-template-columns:var(--sp-6) minmax(0,1fr); min-height:var(--tap);
+    padding:var(--sp-3); text-align:left; width:100%;
+    transition:background-color var(--t-click) var(--e-travel),
+               box-shadow var(--t-click) var(--e-travel),
+               transform var(--t-click) var(--e-travel);
+  }
+  .section-step .step-n {
+    align-self:start; border-radius:var(--r-pill); height:var(--sp-6); width:var(--sp-6);
+  }
+  /* Auditioning marks the step with a --part bar down its leading edge rather
+     than tinting the whole card. A 14% lime wash under --muted prose measures
+     3.3:1, and the bar is the better cue anyway: it is a shape, so it survives
+     a greyscale print of this screen. */
+  .sections li.is-auditioning .section-step {
+    box-shadow:var(--bevel-in), inset var(--sp-1) 0 0 var(--part);
+  }
+  .sections li.is-auditioning .step-n { background:var(--part); color:var(--on-part); }
+  .sections b { display:block; font-size:var(--fs-ui); font-variation-settings:'wght' 620; }
+  .sections b small {
+    color:var(--muted); font-size:var(--fs-meta); font-variation-settings:'wght' 400;
+  }
+  .sections p { color:var(--muted); font-size:var(--fs-body); line-height:var(--lh-body); margin-top:var(--sp-0); }
+  .drop-note { color:var(--muted); display:block; font-size:var(--fs-micro); margin-top:var(--sp-1); }
+  /* Success is the cool secondary emission, never a track hue: colour in this
+     app always means a part. */
+  .drop-note.is-full { color:var(--vfd); }
+
+  /* ================================================================== why */
+  .why { border-top:1px solid var(--edge); display:grid; gap:var(--sp-2); padding-top:var(--sp-4); }
+  .why h3 { font-size:var(--fs-ui); font-variation-settings:'wght' 620; }
+  .why p { color:var(--muted); font-size:var(--fs-body); line-height:var(--lh-body); }
+  .why div { display:grid; gap:var(--sp-2); }
+  .why b { color:var(--ink); }
+
+  /* =============================================================== states
+     Rest is above. Everything that happens when you reach for one of these is
+     here, in one place, so a control cannot ship with three of its five states
+     designed. */
+  .recipe > summary:focus-visible, .creation-details > summary:focus-visible,
+  .lib-load:focus-visible, .lib-icon:focus-visible, .map-head:focus-visible,
+  .section-step:focus-visible {
+    outline:2px solid transparent; outline-offset:2px; box-shadow:var(--focus-ring);
+  }
+  /* Against --m-travel rather than a bare half pixel, so css/a11y.css retires
+     the press by consuming the knob it already owns instead of naming four more
+     selectors. A press state that has to be listed somewhere else is a press
+     state the next person will author without one. */
+  .lib-icon:active, .map-head:active, .section-step:active, .lib-load:active {
+    transform:translateY(calc(.5px * var(--m-travel, 1)));
+  }
+
+  /* The pointer half of every state below is inside the hover query, which is
+     the right place for it and the wrong place for the *affordance*: a keyboard
+     user tabbing the library got a ring and nothing else, while the mouse got a
+     title in full ink and a lifted card. These are the same reaches, on focus,
+     outside the query — colour only, because the ring is already doing the
+     job the lift does for a pointer. */
+  .recipe > summary:focus-visible, .creation-details > summary:focus-visible { color:var(--ink); }
+  .recipe > summary:focus-visible .disclosure,
+  .creation-details > summary:focus-visible .disclosure { color:var(--ink); }
+  .lib-card:has(.lib-load:focus-visible) .lib-load b { color:var(--ink); }
+  .lib-icon:focus-visible { background:var(--high); color:var(--ink); }
+  .section-step:focus-visible { background:color-mix(in srgb, var(--raised) 62%, transparent); }
+  /* The quiet row needs its own line for the same reason it needs its own
+     hover: it re-declares colour at a class deeper than the .ghost rules in
+     css/controls.css, in a file that is linked after them and in the same
+     layer, so the tier's own focus ink never reached it. */
+  .sheet-row.is-quiet .ghost:focus-visible:not(:disabled, [aria-disabled=true]) { color:var(--ink); }
+
+  /* Unavailable, not invisible: an aria-disabled control stays focusable and
+     explains itself on activation (§9.6), so it must still look like a control. */
+  .lib-icon:disabled, .lib-icon[aria-disabled=true],
+  .map-head:disabled, .map-head[aria-disabled=true],
+  .section-step:disabled, .section-step[aria-disabled=true],
+  .lib-load:disabled, .lib-load[aria-disabled=true] {
+    cursor:not-allowed; opacity:.42;
+  }
+
+  @media (hover: hover) and (pointer: fine) {
+    .recipe > summary:hover, .creation-details > summary:hover { color:var(--ink); }
+    .recipe > summary:hover .disclosure, .creation-details > summary:hover .disclosure { color:var(--ink); }
+    .lib-card:hover { border-color:var(--alu-edge); transform:translateY(calc(-1px * var(--m-travel, 1))); }
+    .lib-card:hover .lib-load b { color:var(--ink); }
+    /* Every icon in the cluster brightens the same way. The destructive
+       identity belongs to the *armed* state, not to hovering the button: a
+       control that turns red under the cursor reads as an error, and --rec-ink
+       does not clear 4.5:1 on --high in either theme anyway. */
+    .lib-icon:hover { background:var(--high); color:var(--ink); }
+    /* The machined edge catches the light rather than the whole cap changing
+       metal: --ink on a solid --alu-edge fill measures 3.37:1, which is below
+       the floor for the 12px label this button carries. The guard list is the
+       same one css/controls.css uses on every hover that writes a shadow, and
+       for the same four reasons — press, ring, and the two disabled forms all
+       outrank it in meaning while losing to it in the cascade. */
+    .map-head:hover:not(.is-auditioning):not(:active, :focus-visible, :disabled, [aria-disabled=true]) {
+      box-shadow:var(--bevel), inset 0 0 0 1px var(--alu-edge);
+    }
+    .section-step:hover { background:color-mix(in srgb, var(--raised) 62%, transparent); }
+    /* The quiet row's ghosts have no housing at rest, so hovering one draws the
+       housing rather than lifting a cap that is not there. :not(:focus-visible)
+       for the reason .map-head above needs it — this selector is a class deeper
+       than .ghost:focus-visible in css/controls.css and would otherwise take the
+       amber ring off a hovered-and-focused button. */
+    .sheet-row.is-quiet .ghost:hover:not(:active, :focus-visible, :disabled, [aria-disabled=true]) {
+      box-shadow:inset 0 0 0 1px var(--edge);
+    }
+    .sheet-row.is-quiet .ghost:hover { color:var(--ink); }
+  }
+}
