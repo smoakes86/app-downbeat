@@ -1,0 +1,441 @@
+/* The preferences win over everything, which is why this is the last layer.
+
+   The wildcard that used to live at styles.css:1211 — *{transition-duration:.001ms}
+   — is deleted. It was the lifeless outcome by construction: it removed the
+   --t-lamp pad strike, which is information, and it would have silently neutered
+   every entrance authored after it. What follows is curated instead.
+
+   The dividing line is not "is it animation", it is "does it carry meaning".
+   Colour, border-color, background-color and fill keep their full duration
+   because a control that changes state without saying so is a worse product for
+   everyone. The lamp strike and its beat-relative decay keep their full
+   duration for the same reason: this is a music tool, and one that stops
+   indicating the beat under reduced motion is broken, not accessible. What goes
+   is the vestibular half — travel, parallax, scale, sweeps and the counting
+   mark. */
+@layer a11y {
+  @media (prefers-reduced-motion: reduce) {
+    /* Two levers do most of the work, and both are consumed rather than
+       imposed. The whole of css/motion.css — and now css/faceplate.css,
+       css/controls.css, css/sheets.css and css/overlays.css — writes its
+       distances as calc(<n> * var(--m-travel)) and its scales as
+       calc(1 - <n> * var(--m-travel)), so the first declaration collapses every
+       authored entrance, exit, recoil and press to its opacity leg, including
+       entrances that do not exist yet.
+
+       --hop is the choreography step, and it is only ever a *delay*: nine
+       transition-delays in css/motion.css, three animation-delays across the
+       run, the library and the arrangement map. Zeroing it lands §5.8's
+       "entrances arrive together" everywhere at once, including the outward
+       colour propagation of the part detent, which under this setting should be
+       one cross-fade rather than a wave crossing the desk.
+
+       That is the difference between a curated block and a wildcard: the
+       wildcard had to be exhaustive to work, these have to be consumed. */
+    :root { --m-travel:0; --hop:0ms; }
+
+    /* Nothing loops. */
+    *, *::before, *::after { animation-iteration-count:1 !important; }
+
+    /* ---------------------------------------------------------- travel
+       Hover lift and press travel authored outside the files that use
+       --m-travel, named one by one. They are listed rather than wildcarded
+       because half the transforms in the app are layout — the toast's own
+       centring, the phone sheet's grabber, the lane playhead's position, the
+       keyboard-gutter labels' optical centring — and a blanket transform:none
+       takes those with it and breaks the interface it was trying to calm.
+
+       Two names, and it used to be nine. css/sheets.css, css/overlays.css and
+       now css/lane.css all write their presses as calc(<n> * var(--m-travel)),
+       so the seven entries that used to sit here are consumed by the
+       declaration above instead of enumerated below. That is the direction of
+       travel for this block: every name removed from it is a file that will
+       keep behaving when someone adds a control to it without reading this
+       one. What is left belongs to css/run.css alone. */
+    .seq-chip:active, .seq-chord:active { transform:none; }
+
+    /* Three surfaces whose *state change* is a translate that no token gates:
+       the swapped setup instructions, the deleted library card, and the thumb
+       bar leaving. In all three the opacity leg is the statement and the
+       movement was only its delivery, so the destination is kept and the
+       journey is not. The thumb writes `translate`, not `transform`, so it
+       needs its own property. */
+    .recipe-steps.is-swapping, .lib-card.is-removing { transform:none; }
+    .thumb.is-leaving { translate:none; }
+
+    /* The toast is authored as a 12px rise and a 4% scale, and its own centring
+       lives in the same declaration — so this restates the resting transform
+       with the travel removed rather than cancelling it, which would drop the
+       pill to the left edge of the screen. */
+    .toast { transform:translate(-50%, 0); }
+
+    /* ------------------------------------------------- transform-only tweens
+       Each of these transitions a transform and nothing else, or a transform
+       alongside something that must survive. Cutting the tween costs no state
+       information: the switch knob is still at the far end of its track, the
+       chevron is still pointing the other way, the disclosure is still a close
+       mark, the active dot is still the long one. They just get there without
+       travelling. Where a colour or an opacity shares the list it is restated,
+       because `transition:none` here would take that with it. */
+    .check input::after { transition:none; }
+    .lane-toggle .chev { transition:none; }
+    .onboarding-dots button { transition:none; }
+    .disclosure { transition:color var(--t-click) var(--e-travel); }
+    .pill.is-key::after { transition:opacity var(--t-click) var(--e-travel); }
+    .onboarding-dots button::after { transition:background-color var(--t-throw) var(--e-detent); }
+    /* The two indicator dots grow from zero width so the label slides instead
+       of jumping. With travel off there is nothing to slide, and animating
+       width and margin to no purpose is a layout tween for decoration. The dot
+       still fades up, because its presence is the second, non-colour cue that
+       rule C10 requires and it must not simply blink into being.
+
+       --e-linear rather than the bare keyword that used to be written here, and
+       it is §5.1's own case rather than a shrug: what is left is a pure alpha
+       ramp, which has no mass to accelerate, on the one preference where the
+       dot must not look like it is travelling. */
+    .pill[aria-pressed]::before, .part::before { transition:opacity var(--t-fade) var(--e-linear); }
+
+    /* Two layout tweens — the desk regrid and the phone lane's height — are
+       NOT listed here, and their absence is the point. Both are boxes changing
+       size over time, which is the most literal vestibular motion left in the
+       app, so both do collapse under this preference; they do it by writing
+       their own duration as calc(<n> * var(--m-travel)) at the point of use,
+       the same way every distance in the system does.
+
+       Naming them here instead would have been a bug rather than a style
+       choice. `.desk { transition:none }` in this layer outranks
+       `#desk { transition:--part … }` in the motion layer — a later layer beats
+       an ID — so the one declaration that cross-fades the entire right-hand
+       side on a part change would have died with the regrid. Reaching across
+       layers to cancel a transition by name is how you delete the thing sharing
+       the property.
+
+       The used map arrives at the hardware pad by pad at --s-pad in reading order
+       (§5.5). Zeroing --hop above collapses the three region hops in front of it
+       but cannot reach this term, because --pad-i is written as an inline style
+       on each group and an inline custom property outranks every layer — so the
+       tint still crossed twelve pads as a wave roughly 150ms long. It is
+       choreography, not information: the map is the same map whenever it lands,
+       so it lands at once.
+
+       The groups themselves are not listed: their only transitions are the
+       lamp's --lit decay and the cap's travel, and neither carries a delay. The
+       wave lives entirely on these five children. */
+    .pad-tint, .pad-bar, .wkey-tint, .wkey-bar, .bkey-tint { transition-delay:0s; }
+
+    /* ----------------------------------------------------------- entrances
+       Arrive together instead of in sequence. The stagger is choreography, not
+       information. */
+    .is-entering { transition-delay:0ms; }
+    body.is-powered .is-entering { animation-delay:0ms; }
+    .parts.is-detent { animation:none; }
+
+    /* Surfaces whose entrance is a keyframe rather than a transition. Each is
+       shortened to the 120ms opacity reveal §7.1 sets as the house reduced
+       form; an element that arrives with nothing at all reads as a glitch
+       rather than as an arrival, which is why none of these is `animation:none`.
+
+       The 120ms is --t-least, and it now has a name. It appears seven times
+       below and it is a single decision made once — "under this preference
+       everything arrives in the same short beat" — rather than seven judgements
+       about mass, which is the only thing §5.2's ladder measures. That is why
+       it is not a rung on that ladder: it sits apart in tokens.css as the floor,
+       named for the perceptual limit rather than for a weight, so nobody later
+       reaches for it to describe a small object. Rounding it onto --t-click or
+       --t-cut would have retuned §7.1's stated number to fit a scale that was
+       never asked to describe it.
+       The sheet's case is the sharp one: `transition:none` here would sit in
+       the a11y layer and kill the exit authored in the motion layer, and a
+       sheet that vanishes in a frame is the outcome this block exists to
+       prevent, so the resting transition is replaced rather than removed. */
+    .sheet { animation-duration:var(--t-least); transition:opacity calc(var(--t-slide) * .55) var(--e-close); }
+    .scrim, .count-in, .onboarding, .onboarding-page, .onboarding-card,
+    .performance-chrome, .empty-state, .empty, .landing { animation-duration:var(--t-least); }
+    .onboarding-card { animation-delay:0ms; }
+    /* The onboarding's page contents step at --s-region rather than off --hop,
+       because their order is structural, so they need the delay taken out by
+       name — zeroing --hop above cannot reach a fixed-rate step. */
+    .onboarding-page > *, .onboarding-foot { animation-delay:0ms; animation-duration:var(--t-least); }
+
+    /* A disclosure body growing from 0fr is a box changing size under the
+       cursor — the reveal is the most literal layout animation in the app, and
+       the collapse is the same animation backwards. Both go.
+
+       The content's own fade stays, and on the way in that is the whole
+       arrival: SET-UP appears rather than glitching into place. On the way back
+       it is moot, and deliberately so — with the box collapsed in one frame the
+       content is clipped to nothing before the fade can be seen, so holding the
+       body rendered for it would only be a disclosure that outstays the click.
+       That is what the third rule stops. An engine that does not know
+       ::details-content drops it exactly as it drops the one in
+       css/sheets.css. */
+    [open] > .disclose { animation:none; }
+    .disclose { transition:none; }
+    details:has(> .disclose)::details-content { transition:none; }
+    /* The energy profile draws itself by scaling eight bars up from nothing.
+       The profile is the information; the drawing of it is not, so the bars are
+       simply there. */
+    .map-energy.is-staged i { animation:none; }
+    /* Two messages in a row flinch the toast so the second is seen. Under this
+       setting the text swap has to carry that on its own — a pill that jumps
+       under a caption change is exactly the class of motion being removed. */
+    .toast.is-swapping { animation:none; }
+
+    /* ---------------------------------------------------------- power-on
+       The sequence collapses to a 120ms opacity reveal with the display already
+       lit (§7.1). The theatre is the sequence; the fact that the unit is on is
+       not, so the panels still arrive rather than being there from nowhere. */
+    body.is-powered .rig,
+    body.is-powered .stage,
+    body.is-powered .bay,
+    body.is-powered .legend,
+    body.is-powered .plate,
+    /* The other six selectors css/motion.css's boot rule covers, and they were
+       the half of the sequence this block did not reach. §5.5 step 4 is the
+       engraved register *plus* the five control tiers, all on legend-in at
+       --t-throw; only the register was being shortened here, so under reduced
+       motion the panels and the legends landed at 120ms and then the transport,
+       the toggle well, the opener group, the device picker and the part
+       switcher went on arriving for another hundred milliseconds behind them.
+       A collapsed sequence that collapses unevenly is still a sequence. One
+       duration, one curve, everything at once. */
+    body.is-powered .is-entering,
+    body.is-powered .transport,
+    body.is-powered .toggle-well,
+    body.is-powered .key-group,
+    body.is-powered #rigDevices,
+    body.is-powered #parts { animation:plate-in var(--t-least) var(--e-throw) backwards; }
+    body.is-powered .rig-stage { animation-duration:var(--t-least); }
+    /* The flicker is the one part of the sequence that is purely theatre, and a
+       six-stop opacity stutter is exactly what this setting exists to stop. The
+       display comes up already lit, bloom and all. */
+    body.is-powered .dev-display,
+    body.is-powered .lcd-bloom { animation:none; }
+    /* The lamp still strikes. It is a box-shadow coming up on the one control
+       that means "the unit can be played now" — emission, not travel — so it
+       keeps its authored gesture at the reduced length rather than being cut. */
+    body.is-powered .play { animation-delay:0ms; animation-duration:var(--t-least); }
+
+    /* ----------------------------------------------------- sweeps and scans
+       The colour sweep becomes a cross-cut: the same statement — this half of
+       the screen is new — made in one place instead of across one. The run
+       declares its own equivalent in css/run.css, next to the keyframe it has
+       to redefine. */
+    .sweep { animation-name:cross-cut; animation-duration:var(--t-least); }
+
+    /* The count-in's scanline is a 2px bar crossing the entire viewport once
+       per beat, four times, over a dimmed room — the largest single vestibular
+       trigger in the app. It goes, and nothing is lost: the numeral itself
+       keeps both of its arrival animations, because lcd-strike is pure opacity
+       and count-pulse's seat is written against --m-travel, so what remains is
+       a digit striking on the beat. That is the indication; the scan was the
+       flourish. */
+    .count-in::after, .count-in.pulse::after { animation:none; opacity:0; }
+
+    /* The mark holds at rest instead of counting. It is the one thing in the
+       app that would otherwise flash four times a bar for the length of a song,
+       and unlike the pads it is decoration: nothing about the music is
+       unreadable without it. The pads keep striking. */
+    .mark .mark-stroke { animation-name:none; }
+
+    /* --------------------------------------------------- deliberately kept
+       For the next person reading this file, the things NOT listed above are
+       the point of it: --lit and its beat-relative decay on every pad, key,
+       note and drum cell; the `now` marker in the run and its --t-lift falloff;
+       the transport slot filling; the lane's is-now bar; every border-color,
+       background-color, colour and fill transition on every control; the
+       3.2-second depleting hairline under an armed delete, which is a countdown
+       and therefore a readout; and the focus ring. All of those say what the
+       app is doing. None of them move you. */
+  }
+
+  /* The old rule reached the chrome and missed the two surfaces that actually
+     sit over content. */
+  @media (prefers-reduced-transparency: reduce) {
+    .bar, .thumb, .sheet, .performance-chrome, .onboarding, .onboarding-card,
+    .count-in, .scrim {
+      backdrop-filter:none; -webkit-backdrop-filter:none;
+    }
+    /* Opaque, and opaque at the right depth: a sheet is a surface lifted above
+       the stage, so it takes --panel and keeps its shadow rather than
+       flattening into the room behind it. These five are every consumer of
+       --material, which is the only translucent surface token in the system. */
+    .bar, .thumb, .performance-chrome, .sheet, .onboarding-card { background:var(--panel); }
+    .onboarding, .count-in { background:color-mix(in srgb, var(--room) 96%, transparent); }
+    .scrim { background:color-mix(in srgb, var(--room) 88%, transparent); }
+    /* With the blur gone the scrim has nothing left to animate but its opacity,
+       and leaving a zero-radius filter in the transition list keeps a
+       full-screen raster alive for nothing. */
+    .scrim.is-leaving {
+      backdrop-filter:none; -webkit-backdrop-filter:none;
+      transition:opacity calc(var(--t-open) * .55) var(--e-close);
+    }
+  }
+
+  /* This has to name body *and* body.light. The previous version targeted only
+     `body`, which the light theme's own block outranked at equal specificity in
+     the same layer — so the whole preference was a no-op in the light theme,
+     which is the theme with the least contrast headroom to begin with. */
+  @media (prefers-contrast: more) {
+    body, body.light {
+      --muted:color-mix(in srgb, var(--ink) 82%, var(--panel));
+      --label-tertiary:color-mix(in srgb, var(--ink) 76%, var(--panel));
+      --edge:color-mix(in srgb, var(--ink) 46%, transparent);
+      --edge-hot:color-mix(in srgb, var(--ink) 68%, transparent);
+    }
+    /* Load-bearing boundaries go to 2px. This is the only place in the app a
+       border is allowed a second weight, and only elements that actually own a
+       `border` are listed: the capped tiers carry their ring as an inset
+       box-shadow drawn from --edge, so the token boost above has already
+       thickened them in the only sense available. */
+    .lane, .seq-chip, .seq-chord, select, .lib-card, .sheet, .stage, .rig,
+    .creation-details, .landing, .onboarding-card, .toast,
+    .bar, .thumb, .performance-chrome { border-width:2px; }
+
+    /* Thickening the chip's border moves its border box out from under the
+       pseudo that casts its elevation, and the pseudo has to follow. An
+       absolutely positioned box is inset from its containing block's PADDING
+       box, so css/run.css's inset:-1px lands on the outer edge of a 1px border
+       and 1.0px INSIDE a 2px one: measured a 94x62 pseudo against a 96x64 chip,
+       the cast originating from behind the chip's own hairline on all four
+       edges. -2px puts it back on the border box, 96x64 against 96x64.
+
+       No border-radius override, and that is deliberate rather than forgotten.
+       border-radius is the radius of the BORDER box, so the chip's corner is
+       --r-cap at either border weight, and at -2px the pseudo's border box
+       coincides with it exactly — the concentric gap is 0, which is the case
+       run.css's plain var(--r-cap) already states. Adding a pixel here for each
+       pixel of border would draw the cast's corners rounder than the corner
+       they trace, which is the bug that rule was just corrected for. */
+    .seq-chip::before, .seq-chord::before { inset:-2px; }
+
+    /* .42 is a legible dimming against a lit panel and an illegible one against
+       a preference that exists because the reader has no headroom to spare. An
+       unavailable control still has to be readable — under §9.6 it stays
+       focusable and explains itself on activation, which it cannot do if its
+       own label is the thing that has been taken away. The state is still
+       carried: the cursor, aria-disabled, and the OFF tag on a part. */
+    .pill:disabled, .icon:disabled, .ghost:disabled, .device:disabled, .go:disabled,
+    .pill[aria-disabled=true], .icon[aria-disabled=true], .ghost[aria-disabled=true],
+    .device[aria-disabled=true], .part:disabled, .part.is-empty, .part[aria-disabled=true],
+    .seq-chip:disabled, .seq-chord:disabled,
+    .seq-chip[aria-disabled=true], .seq-chord[aria-disabled=true],
+    .lib-icon:disabled, .lib-icon[aria-disabled=true],
+    .map-head:disabled, .map-head[aria-disabled=true],
+    .section-step:disabled, .section-step[aria-disabled=true],
+    .lib-load:disabled, .lib-load[aria-disabled=true],
+    .onboarding-back[aria-disabled=true], select:disabled, input[type=range]:disabled {
+      opacity:.62;
+    }
+    .check:has(input:disabled) { opacity:.62; }
+
+    /* The spec plate is engraving — 16% ink is the point of it (§7.8) — but a
+       reader who has asked for more contrast has asked to be able to read the
+       things on the panel, and the plate is one of them. It stays the faintest
+       type on screen; it stops being invisible. Same for the mark behind an
+       empty state. */
+    .plate { color:color-mix(in srgb, var(--ink) 40%, transparent); }
+    .empty-state .mark, .empty-mark { opacity:.34; }
+  }
+
+  /* The system palette replaces ours entirely. Four things have to survive
+     that: the boundary of every control, every state we currently carry in
+     colour — because colour is exactly what forced-colors takes away — every
+     glyph we draw as a mask over a background, and the score. */
+  @media (forced-colors: active) {
+    .pill, .icon, .ghost, .part, .device, .play, .go, .skip,
+    .seq-chip, .seq-chord, .lib-card, .lib-icon, .lib-load, .map-head,
+    .map-cell, .section-step, .check input, select,
+    .toast, .landing, .sheet, .onboarding-card, .performance-chrome {
+      border:1px solid CanvasText;
+    }
+    /* The transport slot is three pixels tall, so a border would leave one
+       pixel of interior for the segments to fill. An outline draws the same
+       boundary and takes no room to do it. */
+    .bar-progress { outline:1px solid CanvasText; }
+    /* Silence is drawn as a dashed outline rather than as a fill, and that
+       distinction is the only thing separating a rest from a note here. */
+    .seq-rest { border:1px dashed CanvasText; }
+    :focus-visible { outline:2px solid Highlight; outline-offset:2px; }
+
+    /* ON is a different metal in this app, and forced-colors flattens metal.
+       An inset ring is the same statement in a palette we do not own. */
+    .is-capped, .pill[aria-pressed=true], .device.is-on, .part.is-on,
+    .map-cell.is-on, .lib-card.is-current, .play.is-playing {
+      outline:2px solid Highlight; outline-offset:-3px;
+    }
+    /* The brushed-aluminium cap is a two-stop gradient, and a gradient is a
+       background-*image*, which forced-colors does not touch. Left alone, a
+       capped control paints our anodised grey over the system's ButtonFace and
+       the ring above it has to fight it. The ring is the whole statement here,
+       so the metal comes off. */
+    .is-capped, .pill[aria-pressed=true], .device.is-on, .part.is-on,
+    .play.is-playing, .map-energy i, .sweep, .run.is-sweeping::before {
+      background-image:none;
+    }
+
+    /* Where you are in the song is the one readout that cannot degrade.
+       The audition flag is written to every [data-section] node, so the step
+       button carries it directly; the descendant form is listed beside it
+       because sheets.css styles the state off the <li> and the two must not be
+       able to disagree. */
+    .seq-chip.now, .seq-chord.now, .map-head.is-auditioning,
+    .section-step.is-auditioning, .sections li.is-auditioning .section-step {
+      outline:2px solid Highlight; outline-offset:1px;
+    }
+
+    /* Glyphs drawn as a mask over `background:currentColor` — the transport's
+       play/stop, the opener chevron, the five part shape tokens, the two limbs
+       of the disclosure cross. background-color is one of the properties forced
+       colors overwrites, so every one of them is repainted in Canvas and
+       vanishes: the part switcher loses the shape tokens that are its
+       deuteran-safe second cue, and Play loses its glyph entirely. A system
+       colour keyword written inside this query is passed through untouched,
+       which is the whole mechanism for adjusting rather than opting out. */
+    .play-icon, .pill.is-key::after, .part::after { background-color:ButtonText; }
+    .disclosure::before, .disclosure::after { background-color:CanvasText; }
+
+    /* Emission. Everything amber in the app means the transport, and Highlight
+       is the palette's own "this is the active thing" — so the completed bars,
+       the running fill, the count-in scanline and the checked switch all land
+       on it rather than on a fill the UA has already flattened to Canvas. */
+    .bar-seg.is-done, .bar-seg > i, .bar-progress > i,
+    .count-in::after, .check input:checked { background-color:Highlight; }
+    /* The knob has to stay visible against a Highlight track. */
+    .check input::after { background-color:ButtonFace; border:1px solid ButtonText; }
+    /* Two rules, not one selector list: a single unrecognised vendor pseudo
+       drops every selector beside it, and no engine knows both of these. */
+    input[type=range]::-webkit-slider-thumb { background-color:ButtonText; }
+    input[type=range]::-moz-range-thumb { background-color:ButtonText; }
+    input[type=range]::-moz-range-progress { background-color:Highlight; }
+    /* The chip's printed part-bar is the mark that says "this lights a pad"
+       (§7.5). It is a 2px fill, so it goes to Canvas and the chain loses its
+       visible half. */
+    .seq-chip::after, .seq-chord::after { background-color:Highlight; }
+
+    /* The two displays and the lit pads are pictures of hardware, not chrome:
+       forcing them to Canvas/CanvasText turns the faceplate into a wireframe
+       and destroys the one thing on screen that is meant to look like an
+       object. Opting them out is what forced-color-adjust is for — and the
+       pads still clear contrast, because both hardware palettes are closed
+       sets that were measured. */
+    .rig-stage svg, .dev-display, .dev-pad, .dev-key, .dev-wkey, .dev-bkey {
+      forced-color-adjust:none;
+    }
+
+    /* The lane is the same argument, and it is the stronger one. Its fills are
+       forced but its gradients are not, so a partially-forced lane is a Canvas
+       bed with our own barlines and our own approach-note hatch still painted
+       over it, and every note the same solid colour with the piano banding
+       gone — not a more accessible score, no score. Both lane palettes are
+       closed sets measured in §2.3, C7 gives the light theme its near-black
+       keyline, and velocity, role and track are all carried inside them. So the
+       drawing keeps its own ink and the system palette draws the frame around
+       it: an outline rather than the border, because the border belongs to the
+       opted-out box. */
+    .lane { forced-color-adjust:none; outline:1px solid CanvasText; }
+    /* Which leaves the amber playhead, the one thing in the lane that belongs
+       to the transport rather than to the score. */
+    .lane-head { background:Highlight; }
+  }
+}

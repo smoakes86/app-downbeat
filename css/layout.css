@@ -1,0 +1,390 @@
+/* The desk. Two regions and nothing else: the hardware, which sits on the left
+   and never moves, and the stage, which carries whatever part you are playing.
+   That split is the whole layout, and it is why opening "New song" can leave
+   the faceplate lit and playing beside it.
+
+   One composition rule runs through every block below: a region is bounded, a
+   gap is a rung on the spacing scale, and nothing floats. Where a panel has
+   more height than its contents need, exactly one element claims the surplus
+   with auto margins — the desk used to spend it as an unclaimed hole under the
+   last thing in the box, which is why three well-made objects still read as
+   three objects on a page rather than one machined panel.
+
+   §4.6's guardrails bind this file harder than any other, because bevels plus
+   gradients plus casts plus milled wells is one bad decision from 2008. All
+   nine hold here: one light source, fixed top-centre, and no rule implying a
+   second; one bevel recipe, --bevel or --bevel-in, with no variants; no bevel
+   thicker than 1px; --sheen is the only gradient in the file and it has two
+   stops; no bitmap texture; no text-shadow on any UI text; no gloss arc, sweep
+   or reflection; no CSS screwheads or rivets — the spec plate does that job
+   with type; and every radius below is one of the five role tokens. */
+@layer layout {
+  /* ------------------------------------------------------------- register
+     Silkscreen goes on the metal, not in the recess: a legend sits 8px above
+     the region it names, on the panel face, never inside the well. The 8px
+     lives on the legend rather than in the container, because every column it
+     appears in needs two distances out of one stack — a rung between regions
+     and this half-rung between a label and the thing it labels — and a gap can
+     only ever spell one of them. Each container below reconciles the two. */
+  .legend { display:block; margin-bottom:var(--sp-2); }
+
+  /* The engraved asset tag. It is the only number on screen nobody needs, and
+     it is the thing that makes a screenshot look like a photograph of
+     equipment rather than a layout, so it is stamped where a real one is: hard
+     into the bottom-right corner of the panel. */
+  .plate { display:block; }
+
+  /* ---------------------------------------------------------------- bar
+     The bar sits under the status bar and, rotated, under the camera housing —
+     so it carries the top inset as padding and the side insets as gutters.
+     --bar-h is measured from the element in ui.js, so it picks the inset up.
+
+     Three tiers, not one row of interchangeable lozenges: who this is, what
+     the song is, and what you can do to it. The 1px rules between them are
+     what make the grouping legible without inventing a second background.
+
+     The container context is for the wordmark and the position readout below.
+     A width media query would put that decision in responsive.css, two files
+     away from the only two rules that read it, and the bar is not the viewport
+     anyway — in performance mode it is replaced by a different element. */
+  /* 56px is the bar's own height rather than a spacing rung: --tap plus --sp-3
+     of air for the controls it seats, and — the load-bearing half — the exact
+     fallback baked into --bar-h in tokens.css, so the desk reserves the right
+     height on the first paint, before ui.js has measured the element. The two
+     numbers are one number and must be changed together. */
+  .bar {
+    align-items:center; background:var(--material);
+    backdrop-filter:blur(28px) saturate(170%); -webkit-backdrop-filter:blur(28px) saturate(170%);
+    border-bottom:1px solid var(--edge); container:bar / inline-size;
+    display:flex; gap:var(--sp-2);
+    min-height:56px; left:0; position:fixed; right:0; top:0; z-index:40;
+    padding:var(--safe-t) calc(var(--gutter) + var(--safe-r)) 0 calc(var(--gutter) + var(--safe-l));
+  }
+
+  /* Identity, drawn once in src/mark.js. Four strokes on a hairline baseline is
+     the word downbeat drawn, and it is the reason the app is recognisable in a
+     200px thumbnail — which the build without it was not. */
+  .wordmark { align-items:center; display:flex; flex:none; gap:var(--sp-2); }
+  /* Mark.render replaces the slot's contents, so the slot is a separate element
+     from the lockup — rendering into .wordmark itself would delete the word. */
+  .wordmark .mark-slot { display:flex; flex:none; }
+  .wordmark .mark { display:block; height:var(--sp-4); width:auto; }
+  .wordmark b {
+    color:var(--ink); font-size:var(--fs-ui);
+    font-variation-settings:'wdth' 118, 'wght' 700;
+    letter-spacing:var(--tr-caps); line-height:var(--lh-data); text-transform:uppercase;
+  }
+
+  /* A tier boundary, not a divider between every control. */
+  .bar-rule { align-self:center; background:var(--edge); flex:none; height:var(--sp-5); width:1px; }
+
+  /* 1px, not --sp-0. The title and the meta strip are one lockup, not two
+     stacked blocks: this is the hairline that stops their leading colliding and
+     nothing more, and at 2px the spec strip starts reading as a second line of
+     copy under a heading rather than as part of it. */
+  .bar-song {
+    display:flex; flex-direction:column; gap:1px; justify-content:center;
+    margin-left:var(--sp-2); min-width:0;
+  }
+  /* #songTitle is an <h2> now that the page has a real <h1>, so the rule has to
+     match both until every consumer has moved. */
+  .bar-song b, .bar-song h2 {
+    font-size:var(--fs-title); font-variation-settings:'wdth' 106, 'wght' 720;
+    letter-spacing:var(--tr-tight); line-height:var(--lh-heading);
+    overflow:hidden; text-overflow:ellipsis; white-space:nowrap;
+  }
+  /* The meta line is data, not language: genre, key and tempo set in the mono
+     at the legend register, so it reads as a printed spec strip under the title
+     rather than as a second sentence competing with it.
+
+     The child combinator is load-bearing. Motion.slot wraps every word of the
+     title in two nested <span>s to run the slot cut, so a descendant selector
+     here re-set the <h2> above it in 10px muted mono the first time the title
+     ever changed — the largest piece of type in the chrome, silently demoted to
+     a second copy of the line beneath it. Only the meta line is a direct child;
+     the title's masks are inside the heading and must inherit its type. */
+  .bar-song > span {
+    color:var(--muted); font-family:var(--mono); font-size:var(--fd-xs);
+    letter-spacing:var(--tr-caps); line-height:var(--lh-data);
+    overflow:hidden; text-overflow:ellipsis; text-transform:uppercase; white-space:nowrap;
+  }
+
+  /* The readout reserves its width from first paint. It used to be display:none
+     until the transport started, so pressing Play shoved every control in the
+     bar sideways at the exact moment you were looking at them. Ten characters
+     is `bar 88/88`, the widest string it can hold.
+
+     --t-least, not a rung off §5.2's ladder, and the distinction is the whole
+     reason it has its own token: this is not a mass, it is the shortest fade
+     that reads as a fade at all on a readout that appears and disappears with
+     the transport. The ladder steps 110 → 130 around it because the ladder
+     measures weight, and there is no object here to weigh. css/a11y.css spends
+     the same token on the house reduced-motion reveal for the same reason. */
+  .bar-pos {
+    background:color-mix(in srgb, var(--part) 12%, transparent); border-radius:var(--r-pill);
+    color:var(--part-ink); flex:none; font-family:var(--mono); font-size:var(--fd-sm);
+    letter-spacing:var(--tr-data); line-height:var(--lh-data);
+    min-width:calc(10ch + var(--sp-4)); padding:var(--sp-1) var(--sp-2); text-align:center;
+    transition:opacity var(--t-least) var(--e-throw);
+  }
+  .bar-pos:empty { opacity:0; }
+
+  /* Below this the bar has to choose between the word and the song, and the
+     song wins — the mark on its own still carries the identity, which is the
+     whole reason it was drawn as strokes and not as a letterform. The readout
+     gives its reservation back at the same point, because on a phone the
+     transport lives in the thumb bar and there is nothing left up here to
+     shove. */
+  @container bar (max-width: 560px) {
+    .wordmark b { display:none; }
+    .bar-pos { min-width:0; }
+    .bar-pos:empty { padding-left:0; padding-right:0; }
+  }
+
+  .bar-actions { align-items:center; display:flex; gap:var(--sp-2); margin-left:auto; }
+
+  /* A 3px slot milled along the bar's bottom edge. The transport reads as
+     something cut into the metal that light comes out of, rather than a
+     progress bar laid on top of it — which is also why the housing carries the
+     inverted bevel and the fill carries the lamp. */
+  .bar-progress {
+    background:var(--inset); border-radius:var(--r-chip); bottom:0; box-shadow:var(--bevel-in);
+    height:3px; left:0; overflow:hidden; position:absolute; right:0;
+  }
+  /* Full width and scaled, never a width tween. The transport writes this every
+     frame, and a 100ms transition restarted on every frame never reaches its
+     target — the bar simply trails the audio by 100ms forever. scaleX is also
+     the version the compositor can run without laying the bar out again. */
+  .bar-progress i {
+    background:var(--lamp); border-radius:inherit; display:block; height:100%; width:100%;
+    transform:scaleX(0); transform-origin:left center; transition:none;
+  }
+
+  /* One group of controls, placed by the screen. Wide: in the bar. Phone: moved
+     bodily into #thumb by ui.js.
+
+     flex-shrink is 0, and the row does not work without it. Every control in
+     here is rigid — a cap is its label plus its housing — so shrinking the
+     GROUP does not shrink anything inside it; it just moves the last opener
+     out past the right edge. Measured at 1024x900: the group was squeezed from
+     619px to 484px and #structureButton ended up at x=997 in a 1024 viewport,
+     clipped and unreachable, which is §9.7's own line. The title beside it is
+     the one thing here designed to give — it is already `min-width:0` with an
+     ellipsis — so the deficit is sent there instead. */
+  .bar-controls { align-items:center; display:flex; flex:1 0 auto; gap:var(--sp-2); min-width:0; }
+  .bar-controls .spacer { flex:1 1 auto; }
+  body.has-thumb #themeButton { margin-left:auto; }
+
+  /* --------------------------------------------------------------- desk
+     A percentage rather than a viewport unit for the rig column: percentages
+     resolve against the grid container, so the ratio holds at every width
+     instead of the rig eating 46% of the desk at 2560px and 91% at 5120px.
+
+     The percentage is 34, not 30. The column is drawn around the instrument
+     standing in it, and 30% was drawn around nothing in particular: measured at
+     1440x900 it gave the EP-133 a 387px box in a 661px opening, so the faceplate
+     was bound by the column's *width* and 117px of the panel's height had
+     nowhere to go but around it. At 34% the plate is height-bound instead —
+     it fills the opening top to bottom and the few pixels left over are
+     horizontal, where a couple of them read as margin rather than as a hole.
+     §V3 in one number.
+
+     --desk-rig is the column, named because the device-dependent band in
+     css/responsive.css has to override exactly this and nothing else. */
+  .desk {
+    --desk-rig:minmax(340px, clamp(340px, 34%, 560px));
+    display:grid; gap:var(--sp-3);
+    height:calc(100vh - var(--bar-h) - var(--thumb-h, 0px));
+    height:calc(100dvh - var(--bar-h) - var(--thumb-h, 0px));
+    margin:0 auto; max-width:var(--shell);
+    padding:var(--sp-3) calc(var(--gutter) + var(--safe-r)) calc(var(--sp-3) + var(--safe-b)) calc(var(--gutter) + var(--safe-l));
+    grid-template-columns:var(--desk-rig) minmax(0,1fr);
+    /* Entering performance mode re-grids the desk. At --t-lift — the rung §5.2
+       names for "the desk regrids" — that is a reflow you can follow rather
+       than a jump cut, and it is the one layout property in the app allowed to
+       animate: it happens between takes, never during one.
+
+       This declaration does not win, and it is kept anyway. css/motion.css
+       states the same leg on #desk, in a later layer, inside the shorthand that
+       also carries the --part cross-fade — one element cannot have two owners
+       of one property, so that rule is the live one. What survives here is the
+       pairing of the number with the region it belongs to, which is where
+       anyone looking for it will look. Change both or neither. */
+    transition:grid-template-rows var(--t-lift) var(--e-detent);
+  }
+  /* The thumb bar has already paid the home indicator out of its own padding.
+     Paying it a second time here is 34px of dead panel above the gesture area
+     on every notched phone, and it is the same inset counted twice. */
+  body.has-thumb .desk { padding-bottom:var(--sp-3); }
+
+  /* One material for every region of the desk, .bay included: the moment a
+     panel is machined differently from the panel beside it the desk stops being
+     one object and becomes a page with cards on it. */
+  .rig, .stage, .bay {
+    background:var(--sheen), var(--panel);
+    border:1px solid var(--edge); border-radius:var(--r-panel);
+    box-shadow:var(--bevel), var(--cast-2);
+  }
+
+  /* ---------------------------------------------------------------- rig
+     The hardware, in four bands top to bottom: the legend printed on the metal,
+     the instrument, the device well, the asset tag. Only the instrument has
+     auto margins, so every pixel the panel has spare is spent centring it
+     rather than pooling underneath — the panel used to pin the faceplate to the
+     top of a full-height flex line and leave two hundred pixels of nothing
+     below it, which is most of why the desk read as objects on a page. */
+  .rig {
+    display:flex; flex-direction:column; gap:var(--sp-3);
+    min-height:0; min-width:0; padding:var(--sp-4);
+  }
+  /* HARDWARE labels the panel, not the drawing. It is stamped in the top-left
+     corner and the instrument floats free below it, so the 8px coupling the
+     register uses elsewhere would read as a caption here. */
+  .rig > .legend { margin-bottom:0; }
+  .rig > .devices { flex:none; }
+  /* Four pixels back out of the column gap, so the tag sits 8px off the well
+     above it rather than a full rung — it is stamped into the panel, not
+     another band in the stack. */
+  .rig > .plate {
+    align-self:flex-end; margin-top:calc(var(--sp-2) - var(--sp-3)); text-align:right;
+  }
+
+  /* The box is the instrument's own proportion, emitted with the view, so a
+     682x366 FM-1 is not hung in a 356x540 hole at a third of the EP-133's
+     visual weight. margin:auto is what claims the panel's surplus height and
+     spends it centring the instrument instead of pooling it underneath.
+
+     The two clamps are for the layouts responsive.css turns this column into.
+     flex-shrink lets a short landscape panel compress the box; max-height stops
+     the ratio driving the box taller than the panel when the rig lays out as a
+     row and the main axis stops policing height. In both cases the ratio gives
+     way, the SVG's own preserveAspectRatio catches the drawing, and nothing
+     escapes the panel. */
+  /* min-height:120px is a floor on the drawing, not spacing. Everything else
+     about this box gives way — the ratio yields to the row, flex-shrink lets a
+     short panel compress it — and without a floor the sequence ends at zero and
+     the hero silently disappears rather than being small. It sits below every
+     band's own row height on purpose, so it binds only on a window dragged past
+     the point where the plate was going to be usable anyway. */
+  .rig-stage {
+    aspect-ratio:var(--dev-ar, 356 / 540);
+    flex:0 1 auto; margin:auto; max-height:100%; min-height:120px; position:relative;
+    transition:aspect-ratio var(--t-grow) var(--e-detent); width:100%;
+  }
+  .rig-stage svg { height:100%; inset:0; position:absolute; width:100%; }
+
+  /* A landscape instrument cannot fill a portrait column and no amount of
+     centring changes that: the FM-1 is 682x366, so filling a 661px opening
+     would take a 1231px column and leave the stage 150px. Measured at 1440x900
+     it drew 387x204 in an 808px panel — 25% instrument, 75% panel. ui.js writes
+     data-instrument on #desk off the viewBox actually being drawn, the same
+     source --dev-ar comes from, and css/responsive.css spends it at the one
+     band wide enough to have two desk columns to trade between. It is not
+     stated here because it is only true above 900px: stacked, the rig is a
+     row of the desk and a panel that stops short of its row is the fault it
+     was written to fix. */
+
+  /* ---------------------------------------------------------------- bay
+     The second region of the left column, and it only exists when a landscape
+     instrument is mounted. src/ui.js builds it and moves the SET-UP disclosure
+     into it; css/responsive.css decides when, because "is there a second cell
+     to fill" is a question about the band. Everything here is what the panel is
+     rather than when it appears.
+
+     A flex column with one child that takes all of it: the disclosure is the
+     region, not a strip inside one. min-height:0 is what lets that child
+     actually be bounded by the cell instead of growing the grid row — without
+     it a 485px recipe in a 374px cell pushes the desk taller than the viewport
+     and the whole page scrolls. */
+  .bay { display:flex; flex-direction:column; min-height:0; min-width:0; padding:var(--sp-4); }
+
+  /* -------------------------------------------------------------- stage
+     position:relative is load-bearing: both sheets are children of the stage,
+     which is what keeps the hardware visible while one is open.
+
+     The container is for the run. How many bars fit across a system is a
+     question about the stage's width and nothing else, and since the rig column
+     is now device-dependent the viewport can no longer answer it: at 1440 the
+     stage is 968px wide with the EP-133 mounted and 740px with the FM-1, and a
+     media query would give both the same answer. Declared on .stage rather than
+     on .stage-body because .stage is already the containing block for the two
+     sheets — it is `position:relative` — so inline-size containment adds
+     nothing here that was not already true. */
+  .stage { container:stage / inline-size; min-height:0; min-width:0; overflow:hidden; position:relative; }
+
+  .stage-body {
+    display:flex; flex-direction:column; gap:var(--sp-4); height:100%;
+    overflow:auto; padding:var(--sp-4);
+  }
+  /* The register needs 8px and the column runs on 16, so the legend takes half
+     a rung back out of the gap. Written as a difference rather than as -8px
+     because responsive.css tightens this column to 12 and then 8 on small
+     screens, and the coupling should tighten with it rather than snap negative
+     — at the phone rung the label simply sits on its region, which is what a
+     printed one does anyway. */
+  .stage-body > .legend { margin-bottom:calc(var(--sp-2) - var(--sp-4)); }
+  /* The run takes the slack, so a short song is a taller run rather than a hole
+     under the setup disclosure, and opening the disclosure borrows from the run
+     instead of pushing itself off the bottom of the panel. */
+  .stage-body > .run { flex:1 1 auto; min-height:0; }
+
+  /* -------------------------------------------------------------- thumb
+     The bottom of a phone is the only place a thumb reaches without shifting
+     your grip, which is why Safari's own address bar lives down here. Play and
+     the part switcher are what you touch while the other hand is on the pads,
+     so that is where they go. */
+  .thumb {
+    background:var(--material);
+    backdrop-filter:blur(28px) saturate(170%); -webkit-backdrop-filter:blur(28px) saturate(170%);
+    border-top:1px solid var(--edge); bottom:0; display:flex; flex-direction:column;
+    gap:var(--sp-2); left:0; position:fixed; right:0; z-index:40;
+    padding:var(--sp-2) calc(var(--gutter) + var(--safe-r)) calc(var(--sp-2) + var(--safe-b)) calc(var(--gutter) + var(--safe-l));
+    transition:opacity var(--t-throw) var(--e-throw), translate var(--t-throw) var(--e-throw);
+  }
+  .thumb[hidden] { display:none; }
+  /* Nothing in the app vanishes in a frame. The exit is 55% of the arrival and
+     it accelerates away, which is what tells you the bar left rather than that
+     the browser dropped it.
+
+     Written as --t-least rather than as §5.3's calc, and the arithmetic is why:
+     the arrival above is --t-throw, 55% of which is 121ms, and this ships the
+     120ms floor. One millisecond is a fourteenth of a frame, so the ratio is
+     satisfied to well inside the "~55%" §9.4 actually asks for — and taking the
+     token instead of the calc costs nothing rendered while removing the last
+     literal from this file. If --t-throw is ever retuned, re-check this line:
+     the floor does not follow the entrance, so a much slower arrival would want
+     the calc back. */
+  .thumb.is-leaving {
+    opacity:0; transition-duration:var(--t-least); transition-timing-function:var(--e-close);
+    translate:0 var(--sp-2);
+  }
+  /* The column gap is already the 8px the register asks for, so the legend must
+     not add its own on top of it. */
+  .thumb .legend { margin-bottom:0; }
+  .thumb .parts { flex:none; }
+
+  /* Row two. It wraps, and until the overflow control exists that wrap is the
+     whole difference between a Structure button eighteen pixels off the right
+     of a 390px screen and one you can actually press. The spacer is hidden
+     because a growing spacer in a wrapping row is a line break with extra
+     steps. */
+  .thumb .bar-controls { background:transparent; flex-wrap:wrap; gap:var(--sp-2); }
+  .thumb .bar-controls .spacer { display:none; }
+  .thumb .play { flex:1 1 auto; }
+  /* The collapse used to be stated here and could never win: this is @layer
+     layout and `.pill { display:flex }` is @layer components, which the cascade
+     puts after it, so specificity never got a say. It lives in controls.css
+     now, beside the .pill it has to beat. */
+  /* min-width because this is the one .pill in the app with no label: it draws a
+     glyph, so the horizontal padding every other pill shares with its text is all
+     the width it gets, and it measured 40x44 on a phone. The pill's min-height
+     already floors the other axis. `flex:none` so the row's wrap never shaves it
+     back below the floor. */
+  .thumb-more { flex:none; min-width:var(--tap); }
+
+  /* Scroll chaining: without this, reaching the end of the run or a sheet
+     rubber-bands the whole page on iOS and visibly detaches the fixed bar. */
+  .stage-body, .run, .sheet-body, .map-wrap, .parts, .lane-wrap, .bay > .recipe {
+    overscroll-behavior:contain; -webkit-overflow-scrolling:touch;
+  }
+}

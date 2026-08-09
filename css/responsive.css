@@ -1,0 +1,653 @@
+/* Every breakpoint in the app, in one file. Capability queries —
+   @media (hover:hover) and the prefers-* set — deliberately do not live here:
+   hover belongs beside the component it modifies, and the accessibility
+   preferences have to win over everything, so they are the last layer instead
+   of this one.
+
+   Order is broadest first, narrowest last, because these are max-width queries
+   and the cascade, not specificity, is what decides between two blocks that
+   both match. The min-width band at the foot cannot collide with any of them.
+
+   Two rules this file used to break are worth naming, because both were the
+   same mistake — a component decision written at a breakpoint:
+
+   1. `.lane.is-pitched { grid-template-rows }` was pinned here. A responsive
+      declaration outranks every components declaration no matter how specific,
+      so the collapsed 36px phone lane kept its full-pitch rows and clipped
+      everything below the second semitone. The rows belong to css/lane.css,
+      which states them in both the open and the slim case, and this file no
+      longer has an opinion.
+   2. `#loopButton { display:none }` deleted a control at a width. §9.5 is
+      explicit that a feature hidden at a breakpoint is a feature that was not
+      designed; Loop is now seated in the transport bezel where it costs 55px
+      and reads as a property of the transport, which is what it is.
+
+   Where a width appears below without a token behind it, it is a device class
+   and not a measurement: 359 is the small Android floor, 699 is the phone
+   ceiling, 899 is where two desk columns stop being useful, 1199 is the laptop
+   floor and 1600 is §3.9's wide band. Heights are 500 (a phone on its side)
+   and 501 (everything else). */
+@layer responsive {
+  /* ------------------------------------------------------- the lane budget
+     §3.9 asks for the lane's height target to step with the band. It used to
+     be a ternary inside renderLane, which is the one place in the app that
+     cannot see a breakpoint — so it is published here instead, as a property
+     the renderer divides by the row count to get --row-h. The band that knows
+     how much room there is is the thing that states how much room there is. */
+  :root { --lane-target:210px; }
+
+  /* ------------------------------------------------------- the SET-UP row
+     A placement, and it is here for the same reason the thumb's order is: it
+     has to beat the components layer, and only this file and a11y.css do.
+     `justify-content:space-between` is right for a sheet header and wrong for
+     this one — measured at 1440 it put the label hard against the left of an
+     868px bar and the plus hard against the right, with 800px of nothing
+     between two halves of the same control. Nothing in that gap belongs to
+     either of them, and a lone glyph at the far end of a wide bar reads as an
+     orphan rather than as an affordance. The two travel together; the row's
+     width is not information.
+
+     Unqualified by parent on purpose. It used to read `.stage-body > .recipe`,
+     and the disclosure now moves between the stage and the desk's set-up bay —
+     a placement rule that only holds in one of the two places the element lives
+     is a rule that silently stops holding the first time it is moved. */
+  .recipe > summary { justify-content:flex-start; }
+
+  /* On a phone the scrollbars are already invisible and the gutter they reserve
+     is a fifth of a chip. */
+  body.has-thumb .stage-body, body.has-thumb .run { scrollbar-width:none; scrollbar-gutter:auto; }
+  body.has-thumb .stage-body::-webkit-scrollbar, body.has-thumb .run::-webkit-scrollbar { display:none; }
+
+  /* ------------------------------------------------------- the thumb's order
+     ui.js prepends the TRANSPORT legend into #thumb, which puts it above the
+     part switcher — a silkscreen calling the parts the transport. §3.5 places
+     it over .thumb .bar-controls, so it is ordered there rather than moved:
+     order is a property of the layout, and the layout is what this file is.
+     It reads the same in both orientations, which is why it is stated once
+     outside the queries — the thumb only exists under body.has-thumb anyway. */
+  .thumb .legend { order:1; }
+  .thumb .bar-controls { order:2; }
+  /* PART is the one register the phone currently loses: #partsLegend stays
+     behind in the stage while #parts moves down here, so a labelled region and
+     its label end up in two different surfaces. The move belongs to ui.js, but
+     the placement belongs to this file, and stating it now means the legend
+     lands over its own switcher the moment it is moved rather than joining the
+     transport's label in the middle of the bar. */
+  .thumb #partsLegend { order:-1; }
+
+  /* ------------------------------------------------- the device-dependent desk
+     Broadest band first, and this one is a shape rather than a width: above
+     900px the desk has two columns to trade between, and which trade is right
+     depends on what is bolted into the left one. ui.js writes data-instrument
+     from the viewBox actually being drawn, so the desk and the faceplate can
+     never disagree about which unit is mounted.
+
+     A portrait instrument keeps the tall column layout.css states, because a
+     356x540 plate fills it. A landscape one cannot: measured at 1440x900 the
+     FM-1 drew 387x204 inside an 808px panel, so three quarters of the largest
+     region on the screen was empty panel and `margin:auto` was centring the
+     emptiness rather than removing it. Two moves, and they only work together.
+
+     The column widens to 42%. 46% was set against the wrong constraint: the
+     run stops packing two bars across at a 600px stage, but a stage that is
+     merely wide enough for two columns is not wide enough for two USEFUL ones.
+     Measured at 1440x900 on a funk bass — six notes and four rests to the bar,
+     the densest thing the composer emits — 46% left the stage 744px, the bar
+     cell 300px, and a bar that needs 332px to seat its chips at the 44px
+     target wrapped every one of its eight bars and overflowed the well by
+     101px. 42% leaves the stage 800px and the cell 340px, which seats it. The
+     FM-1 goes from 387x204 to roughly 556x298: still two and a half times the
+     drawn area the critique measured, and now beside a score you can read.
+
+     The panel then stops at its contents. There is no arrangement of a 1.86:1
+     object that fills an 808px column, so the honest answer is a panel the
+     height of what is in it, sharing the desk's top edge with the stage and
+     letting the desk's own surface show below it — a short instrument on a desk
+     rather than a tall box with an instrument lost in the middle of it.
+
+     The height guard is the landscape-phone band: lying down the rig column is
+     deliberately narrow and already short, and a panel that stops at its
+     contents there is a stub floating over the room. */
+  @media (min-width:900px) and (min-height:501px) {
+    .desk[data-instrument='wide'] { --desk-rig:minmax(400px, clamp(400px, 42%, 700px)); }
+    .desk[data-instrument='wide'] .rig { align-self:start; }
+    /* With nothing left to pool there is nothing for auto margins to centre,
+       and leaving them on would fight the panel's own padding for the last
+       pixel. The horizontal auto margins stay: those still centre the drawing
+       in whatever the column rounds to. */
+    .desk[data-instrument='wide'] .rig-stage { margin-block:0; }
+
+    /* --------------------------------------------------- the 2x2 desk
+       And the half that was missing. Stopping the panel at its contents moved
+       the emptiness out of the rig and onto the desk underneath it: measured at
+       1440x900 the FM-1's panel was 100% full and there were still 383px of
+       bare surface below it, which is 47% of the left column — 481px and 49% at
+       1920x1080. A crisp panel floating over a hole reads harder than a soft
+       one with a hole inside it, because a hard edge is what the eye goes to.
+
+       So the left column becomes two cells and the second one is given
+       content. src/ui.js moves the SET-UP disclosure into a bay it builds under
+       the rig and writes data-bay, which is the one flag this block reads — no
+       flag, no second row, and the desk is exactly the two-column desk it was.
+       The stage spans both rows, so it neither gains nor loses width, and it
+       gets the 44px strip and its rung of gap back: measured at 1440x900 the
+       lane took 45px of that and the run 15.
+
+       SET-UP is the right occupant three times over: it is the largest block of
+       prose in the app, it is about the hardware and therefore belongs in the
+       hardware column, and it wants vertical room — measured, the steps run
+       340-485px at this column width against a cell of 273-411px, so the cell
+       is full at 1280x800, 1440x900 and 1920x1080 alike and the overflow
+       scrolls inside the well rather than pushing the desk taller. The one part
+       that does not overflow is the chords set-up at 1920x1080: 403px of prose
+       in a 411px port, which is the worst case in the matrix at 98% full.
+
+       Rows are `auto` then `1fr`: the rig is sized by the instrument in it and
+       the bay takes everything left, which is the only ordering where neither
+       region can pool slack. */
+    .desk[data-bay='on'] { grid-template-rows:auto minmax(0,1fr); }
+    .desk[data-bay='on'] > .rig { grid-area:1 / 1 / 2 / 2; }
+    .desk[data-bay='on'] > .bay { grid-area:2 / 1 / 3 / 2; }
+    .desk[data-bay='on'] > .stage { grid-area:1 / 2 / 3 / 3; }
+
+    /* Shut, the bay is a 44px silkscreen strip, and a 44px strip does not
+       justify a 374px cell. So the rows swap and the rig takes the column back,
+       centring its instrument the way the tall panel does — collapsing SET-UP
+       is a choice the player made, and the desk should answer it rather than
+       leave a hole where the prose was. */
+    .desk[data-bay='on']:has(> .bay > .recipe:not([open])) {
+      grid-template-rows:minmax(0,1fr) auto;
+    }
+    .desk[data-bay='on']:has(> .bay > .recipe:not([open])) .rig { align-self:stretch; }
+    .desk[data-bay='on']:has(> .bay > .recipe:not([open])) .rig-stage { margin-block:auto; }
+
+    /* css/overlays.css deletes SET-UP in performance mode and is right to: in
+       the stage it is a strip standing between you and the run. In the bay it
+       IS the lower half of the left column, and deleting it there opens the
+       exact hole this block exists to close. The stage is unaffected either
+       way, so the mode still gets everything it was asking for. */
+    body.is-performing .desk[data-bay='on'] > .bay > .recipe { display:block; }
+  }
+
+  /* The complement of the block above, and filed next to it rather than in this
+     file's usual broadest-to-narrowest order, because on its own it reads as a
+     rule about nothing.
+
+     Three separate things put the disclosure back in the stage when the band is
+     left — the resize listener, the media-query listener and the next part
+     render — and any one of them is enough. This is what happens if a viewport
+     ever changes without any of the three: the bay's own rules in
+     css/sheets.css size the disclosure to a grid row that only the block above
+     declares, so a stranded bay would collapse SET-UP to nothing rather than
+     merely being in the wrong place. Sized by its contents instead, a stranded
+     bay is an ordinary panel with the instructions legibly in it, which is a
+     layout mistake rather than a disappearance. */
+  @media (max-width:899px), (max-height:500px) {
+    .bay > .recipe { flex:0 0 auto; min-height:auto; overflow:visible; }
+  }
+
+  /* ------------------------------------------------------------- laptop
+     A percentage rather than a viewport unit, for the reason §3.9 gives for
+     the wide band: it resolves against the desk, so the ratio survives the
+     safe areas and the browser's own chrome instead of being measured against
+     a screen the desk does not occupy all of. */
+  @media (max-width:1199px) {
+    .desk { --desk-rig:minmax(290px, clamp(290px, 34%, 420px)); }
+    /* A narrower desk cannot pay 42% and still leave the stage two bars across,
+       so the landscape column takes what is left over instead of a share. */
+    .desk[data-instrument='wide'] { --desk-rig:minmax(290px, clamp(290px, 42%, 520px)); }
+  }
+
+  /* ------------------------------------------------------- the bar's own band
+     The bar wraps where the bar runs out of room, which is not where the desk
+     changes shape — and this rule used to be filed inside the tablet band, so
+     everything between 900 and 1199 kept the one-line row without being able
+     to hold it. Measured with the children at min-content: wordmark 142, rule
+     1, title 211, readout 100, controls 619, theme 44, five 8px gaps and two
+     20px gutters is 1196px, so at 1024x900 the Structure opener sat at x=997
+     in a 1024 viewport — clipped, unreachable, and at the one band with no
+     thumb bar to move it to (§9.7, §6.33).
+
+     Identity and readout keep the first line; the controls take the second as
+     one tier. Ordered last rather than left in DOM order: a full-width item in
+     the middle of a wrapping row pushes everything after it onto a third line,
+     which is how the theme button once ended up alone at the bottom of a 156px
+     bar. The growing spacer goes with them — in a wrapping row it is a line
+     break with extra steps, the same reason .thumb drops it. --bar-h is
+     measured off the element in ui.js, so the desk gives back exactly what the
+     second line takes at whatever width it appears. */
+  @media (max-width:1199px) and (min-height:501px) {
+    .bar { flex-wrap:wrap; padding-bottom:var(--sp-2); }
+    .bar-song { flex:1 1 auto; }
+    #barControls { flex:1 0 100%; justify-content:flex-end; order:1; }
+    #barControls .spacer { display:none; }
+  }
+
+  /* --------------------------------------------------------- the stack
+     Below this a column for the hardware and a column for the part cannot both
+     be useful, so the desk stacks: hardware across the top, part underneath.
+
+     The rig is laid out here rather than turned sideways. As a flex row the
+     panel put HARDWARE on its side of the instrument as a stray word and hung
+     the asset tag off the end of the line; as a grid the silkscreen stays
+     stamped in the corner it is printed in, the instrument owns the whole left
+     of the panel, the device well stands as a rack down the right, and the tag
+     is still struck into the bottom edge. Same four bands as the tall panel,
+     folded rather than reordered. */
+  @media (max-width:899px) and (min-height:501px) {
+    :root { --gutter:14px; }
+    .desk {
+      grid-template-columns:minmax(0,1fr);
+      grid-template-rows:minmax(0,42vh) minmax(0,1fr);
+      grid-template-rows:minmax(0,42dvh) minmax(0,1fr);
+    }
+    .rig {
+      display:grid; gap:var(--sp-2) var(--sp-3); padding:var(--sp-3);
+      grid-template-columns:minmax(0,1fr) auto;
+      grid-template-rows:auto minmax(0,1fr) auto;
+      grid-template-areas:
+        "legend  devices"
+        "stage   devices"
+        "plate   plate";
+    }
+    .rig > .legend { grid-area:legend; }
+    /* min-height:0 lets the ratio give way to the row rather than the row give
+       way to the ratio; the SVG's own preserveAspectRatio catches the drawing. */
+    .rig-stage { grid-area:stage; min-height:0; }
+    /* The rack. Centred against the instrument beside it, not top-aligned with
+       the legend above it — the two buttons are a control group, and a control
+       group hung from a label reads as a caption for the label. */
+    /* 132px is the rack's own width — the two device buttons stood in a column
+       beside the instrument — and it is fixed rather than a share of the panel
+       on purpose. Every pixel this column does not take is a pixel the plate
+       does, and the plate is the one thing in this band that wants width; a
+       fraction would hand it back the moment the viewport grew. */
+    .rig > .devices {
+      align-self:center; flex-direction:column; grid-area:devices; height:auto; width:132px;
+    }
+    /* The row gap is already the 8px the register asks for, so the tag must not
+       take a second bite out of it the way it does in the tall column. */
+    .rig > .plate { grid-area:plate; margin-top:0; }
+    .device { flex:none; }
+    .stage-body { gap:var(--sp-3); padding:var(--sp-3); }
+    .sheet { width:100%; }
+    /* §6.32: the mode gives the rig 55–65% of the viewport. This band was
+       taking it the other way — 42dvh down to 36 — which made the instrument
+       smaller in the one mode that exists to play it. In a stacked layout the
+       row height IS the instrument size, so the number goes where the bible
+       puts it. The run keeps the rest and is what performance mode reads. */
+    body.is-performing .desk {
+      grid-template-rows:minmax(0,58vh) minmax(0,1fr);
+      grid-template-rows:minmax(0,58dvh) minmax(0,1fr);
+    }
+  }
+
+  /* --------------------------------------------------------- the tablet
+     768x1024 is not a large phone and it should not be spaced like one. The
+     desktop gutter and the desktop panel padding come back, and the hardware
+     band grows: the instrument is height-bound in a stacked layout, so every
+     pixel of row height is a pixel and a half of instrument width and the
+     surplus the panel would otherwise centre round it shrinks with each one.
+     48dvh is where an EP-133 stops being a picture of an EP-133 in a field. */
+  @media (min-width:700px) and (max-width:899px) and (min-height:501px) {
+    /* --lane-target was still the desktop's 210px here, in a stage panel less
+       than half the height of the desktop's. Measured at 768x1024 that put a
+       269px lane above a 10px run: the panel's main content, the thing the
+       whole stage exists to show, squeezed to a sliver while the contour above
+       it took 48% of the panel. The contour is a glance; the run is read. */
+    :root { --gutter:20px; --lane-target:132px; }
+    .desk {
+      grid-template-rows:minmax(0,48vh) minmax(0,1fr);
+      grid-template-rows:minmax(0,48dvh) minmax(0,1fr);
+    }
+    .rig { gap:var(--sp-3) var(--sp-4); padding:var(--sp-4); }
+    .stage-body { gap:var(--sp-4); padding:var(--sp-4); }
+
+    /* §6.32, same correction as the band above: grow, do not shrink. At 48dvh
+       the plate is 273px wide inside a 546px box — the instrument is bound by
+       the row, not by the panel, so the row is the only thing that can give it
+       anything. 58dvh takes it to 340. */
+    body.is-performing .desk {
+      grid-template-rows:minmax(0,58vh) minmax(0,1fr);
+      grid-template-rows:minmax(0,58dvh) minmax(0,1fr);
+    }
+  }
+
+  /* ----------------------------------------------------------- the phone
+     The faceplate crops to the pads themselves — ui.js retargets the viewBox —
+     because at this size the display and the function rows are just pixels you
+     cannot press. */
+  @media (max-width:699px) {
+    :root { --lane-target:118px; }
+
+    .performance-chrome {
+      gap:var(--sp-2); min-height:52px;
+      padding-left:calc(var(--sp-3) + var(--safe-l)); padding-right:calc(var(--sp-3) + var(--safe-r));
+    }
+    .performance-chrome > div:first-child { min-width:0; }
+    .performance-chrome > span { margin-left:auto; }
+    /* The only display:none in this file that touches a control, and it is not
+       §9.5's case: prev / play / next are a second copy of the transport and the
+       part switcher, and on a phone the real ones are already under the thumb
+       in #thumb. Done stays, Escape still exits, and nothing here is the only
+       route to anything. */
+    .performance-actions { display:none; }
+    body.is-performing .thumb .bar-controls { justify-content:center; }
+    /* The hardware band is a ceiling now, not a fixed height — see the .desk
+       rule below, which is the one that wins in this block.
+
+       This is the only band where the plate is cropped to the controls you can
+       actually press, and the two crops are nothing like each other: the
+       K.O. II's pad grid is 336x272 and the FM-1's keybed is 662x126. A fixed
+       fraction cannot suit both. Measured at 390x844: the K.O. II fills 27dvh
+       and is still squeezed under its own ratio, while the FM-1 draws a 65px
+       strip in the same 228px band and leaves 51px of empty panel — under the
+       one region on the screen that has anything to scroll.
+
+       fit-content() keeps the ceiling exactly where it was and lets a short
+       instrument give the difference back. The ask comes from .rig-stage's own
+       aspect-ratio, which ui.js writes out of the viewBox actually being drawn,
+       so there is no second copy of either crop ratio to keep in step.
+
+       The numbers are unchanged on purpose. Plain `auto` was tried: the pad
+       grid then claims 392px and the run is left with ten. §6.32's 55dvh was
+       tried: the K.O. II reaches full size and the run still gets ten, and the
+       FM-1 sits in 287px of nothing. On a phone this band cannot be both, and
+       the run is the half you read while you play. */
+    .creation-details-body { padding:var(--sp-3); }
+    .tempo-actions .ghost { flex:1 1 0; }
+    .onboarding { align-items:flex-end; padding:0; }
+    .onboarding-card {
+      border-bottom:0; border-left:0; border-radius:var(--r-panel) var(--r-panel) 0 0; border-right:0;
+      max-width:none; min-height:min(72dvh,570px); padding:var(--sp-5) var(--sp-5) calc(var(--sp-5) + var(--safe-b));
+    }
+
+    /* The bar keeps the identity and the song and gives everything else to the
+       thumb, so it is allowed to be the shortest thing on the screen. Its 6px
+       gap and the song block's 7px of padding were both raw pixels written
+       round holes in the old spacing scale; the gap is simply the desk's rung
+       now and §4.1 absorbs the padding up to it. */
+    .bar { min-height:0; padding-left:calc(var(--sp-3) + var(--safe-l)); padding-right:calc(var(--sp-3) + var(--safe-r)); }
+    .bar-song { margin:0; padding:var(--sp-2) 0; }
+    .bar-pos { margin-left:auto; }
+
+    .desk {
+      gap:var(--sp-2); padding:var(--sp-2) var(--gutter);
+      grid-template-rows:fit-content(27vh) minmax(0,1fr);
+      grid-template-rows:fit-content(27dvh) minmax(0,1fr);
+    }
+    body.is-performing .desk {
+      grid-template-rows:fit-content(31vh) minmax(0,1fr);
+      grid-template-rows:fit-content(31dvh) minmax(0,1fr);
+    }
+    /* Back to a column: side by side, the two device buttons take a third of the
+       width off the faceplate, which is the one thing on this screen that needs
+       it. This unwinds the tablet grid rather than adding to it, so every
+       property that block set has to be named. */
+    .rig {
+      display:flex; flex-direction:column; gap:var(--sp-2); padding:var(--sp-2);
+      border-radius:var(--r-well);
+    }
+    .rig > .devices { align-self:stretch; flex-direction:row; width:auto; }
+    /* The panel's own gap is already the register's 8px here, so the tag stops
+       taking a second bite out of it the way it does in the 12px column. */
+    .rig > .plate { margin-top:0; }
+    .device { flex:1 1 0; font-size:var(--fs-meta); padding:var(--sp-1) var(--sp-2); }
+    .device small { display:none; }
+    .stage { border-radius:var(--r-well); }
+
+    /* A sheet slides in from the right on a wide screen because that is where
+       the space is. On a phone it rises from the bottom, where your thumb is
+       and where every other sheet on the device comes from — but only as far as
+       the top of the stage, so the invariant holds: it covers what you were
+       reading, never the hardware you were reading it for. */
+    /* --t-panel on --e-throw, not the hand-written curve that used to be here.
+       §9.4 allows seven easings and this was an eighth, and .26s was the one
+       duration in the app spelled in seconds — which also hid it from the
+       exit ledger, where css/motion.css pairs this entrance with its own
+       calc(var(--t-panel) * .55). Same number, and now the same token at both
+       ends, so retuning the rise retunes the fall in one edit. */
+    .sheet {
+      animation:sheet-up var(--t-panel) var(--e-throw);
+      border-left:0; border-top:1px solid var(--edge);
+      border-radius:var(--r-panel) var(--r-panel) 0 0; top:auto; height:100%; width:100%;
+    }
+    .sheet-head { padding-top:var(--sp-2); position:relative; }
+    /* The grabber says "this drags" before you try it.
+
+       None of its three numbers is a spacing rung and none should become one:
+       38x5 is the drawn geometry of the object itself — the platform grabber
+       every phone sheet in the world wears, and the size a thumb reads as a
+       handle rather than as a rule — and 6px is an optical placement inside the
+       head's 12px top pad (§9.3's documented-optical case).
+
+       6 rather than a rung, and the rungs either side are both wrong for
+       mechanical reasons. --sp-1 puts a 5px pill 4px under a 1px border, where
+       it reads as a printing fault rather than as a handle. --sp-2 is worse
+       than optical: 8 + 5 = 13 against a 12px pad, so the pill crosses out of
+       the padding box and into the heading's own lead. 6 leaves visible air
+       above the pill and lets the heading's 8px lead carry the separation
+       below it, which is the side the eye is not measuring. */
+    .sheet-head::before {
+      background:var(--edge-hot); border-radius:var(--r-pill); content:""; height:5px;
+      left:50%; position:absolute; top:6px; transform:translateX(-50%); width:38px;
+    }
+    .sheet-head h2 { padding-top:var(--sp-2); }
+    .sheet-head, .sheet-body { padding:var(--sp-3); }
+
+    .lane-wrap { position:relative; }
+    /* 44px is the drum-name gutter narrowed from css/lane.css's desktop 64, not
+       --tap: nothing in this column is a target, and a label column that
+       silently tracked the tap floor would move the score every time the floor
+       was reconsidered. The coincidence is arithmetic. */
+    .drum-row { grid-template-columns:44px minmax(0,1fr); }
+    /* A drawn height, not a gap — heights are not on the --sp scale. It fixes
+       the row where css/lane.css leaves a 20px floor and lets flex divide the
+       rest, because on a phone the four voices have to fit inside a 118px
+       --lane-target and still leave the run something to be read in. */
+    .drum-cell { height:16px; }
+    /* 9px was written round a chip that no longer has 7px of padding. §4.1
+       absorbs it to a rung and the chip keeps its own vertical rhythm. */
+    .seq-chip { padding:var(--sp-1) var(--sp-2); }
+    /* Collapsed, the disclosure is one line — it should not cost two. */
+    .recipe { padding-top:var(--sp-2); }
+    /* No `.run.is-chords` column override here. The run is a bar-keyed score at
+       every width now, and this rule sat in the responsive layer where nothing
+       in components could beat it — on a phone it silently replaced the score
+       grid with an auto-fill of equal boxes and threw the bar numbers away.
+
+       No `.lane.is-pitched` row override either, and no `.lane-toggle .chev`.
+       Both were component decisions written at a breakpoint; css/lane.css
+       states them now, in both the open and the collapsed case. */
+  }
+
+  /* -------------------------------------------------- the phone, upright
+     §6.33's two rows. Row one is the five parts as a tab bar; row two is the
+     transport and one overflow control.
+
+     The parts stack their shape token over their label rather than sitting it
+     beside them, and that is what makes five destinations fit at 374px without
+     deleting anything. Side by side, the glyph, its 8px of air and "Counter"
+     want 66px of a 56px chip — before the ON dot adds another 13 — so the row
+     either clipped a label or dropped the shape token, and the shape token is
+     the non-colour half of rule C10. Stacked, the widest label is 40px in a
+     56px chip at 374 and a 53px chip at 320, with the glyph on its own line
+     above it. This is also simply what a tab bar looks like, which is the
+     right reference for a row of five destinations under a thumb. */
+  @media (max-width:699px) and (min-height:501px) {
+    .thumb .parts {
+      display:grid; gap:var(--sp-1); grid-template-columns:repeat(5,minmax(0,1fr));
+      margin:0; overflow:visible; padding:var(--sp-1);
+    }
+    .thumb .part {
+      flex-direction:column; font-size:var(--fs-micro); gap:var(--sp-1);
+      min-width:0; padding:0 var(--sp-1); position:relative;
+    }
+    .thumb .part::after { margin-right:0; }
+    /* The ON dot becomes the printed bar the run chip already wears along its
+       bottom edge — same ink, same 2px, same idea, in the one geometry that
+       survives a 64px column. It still grows from zero on the same transition,
+       so the label never jumps. */
+    .thumb .part::before {
+      bottom:0; height:2px; left:50%; margin-right:0; position:absolute;
+      translate:-50% 0; width:0;
+    }
+    .thumb .part.is-on::before { margin-right:0; width:var(--sp-4); }
+
+    /* Row two, collapsed. The transport was pinned to its content width by its
+       own bezel, so a 374px row held a 210px hole between Play and the overflow
+       control — a thumb bar whose one two-handed control sat off to the left.
+       Play is `flex:1` in §6.33 and the bezel is what has to carry that, since
+       Play no longer sits in the row directly. Gated on the disclosure being
+       shut: expanded, the row has five more controls to place and a transport
+       that has eaten the first line places none of them. */
+    .thumb .bar-controls:has(.thumb-more[aria-expanded="false"]) .transport { flex:1 1 auto; }
+    /* Expanded, the row wraps by housing rather than by control, and the
+       housings keep their content width (controls.css gives them flex:none).
+       That is what guarantees nothing lands off the right of the screen: the
+       widest housing is the three openers at roughly 229px, which clears even
+       320px of content width on its own, so a housing that will not fit beside
+       its neighbour goes below it rather than past the edge. */
+  }
+
+  /* Small Android. The last 40px come out of the gaps and the chip padding, in
+     that order, because the tap targets are already at the 44px floor and the
+     labels are already at the smallest rung that holds "Counter" whole. */
+  @media (max-width:359px) and (min-height:501px) {
+    .thumb .parts { gap:var(--sp-0); }
+    .thumb .part { padding:0; }
+    .thumb .bar-controls { gap:var(--sp-1); }
+    .thumb .play { padding:0 var(--sp-3); }
+  }
+
+  /* ------------------------------------------------- the phone, on its side
+     A phone on its side is 390px tall, not a small tablet — stacking the
+     hardware above the part left the run of pads with literally zero height and
+     92px of them off-screen. Two columns is the right answer here for the same
+     reason it is on a desktop: the height is the scarce dimension, so nothing
+     may spend it twice.
+
+     The rig column is narrow on purpose. Lying down, the instrument is bound by
+     the panel's height and wants about 160px of width; a column sized off the
+     viewport gave it 287 and centred it in the difference, which is 130px of
+     empty panel taken off the only region that has anything to scroll. */
+  @media (max-height:500px) and (max-width:1199px) {
+    :root { --gutter:14px; --lane-target:96px; }
+    .desk {
+      grid-template-columns:minmax(160px, clamp(160px, 26%, 300px)) minmax(0,1fr);
+      grid-template-rows:minmax(0,1fr);
+      gap:var(--sp-2); padding:var(--sp-2) calc(var(--gutter) + var(--safe-r)) calc(var(--sp-2) + var(--safe-b)) calc(var(--gutter) + var(--safe-l));
+    }
+    .rig {
+      display:flex; border-radius:var(--r-well); flex-direction:column;
+      gap:var(--sp-2); padding:var(--sp-2);
+    }
+    .rig-stage { min-height:0; }
+    .rig > .devices { align-self:stretch; flex-direction:row; width:auto; }
+    .rig > .plate { margin-top:0; }
+    .device { flex:1 1 0; font-size:var(--fs-meta); padding:var(--sp-1) var(--sp-2); }
+    .device small { display:none; }
+    .stage { border-radius:var(--r-well); }
+    .stage-body { gap:var(--sp-2); padding:var(--sp-2); }
+    /* Narrower than the desktop's 448 because the stage itself is narrower here,
+       and a sheet that covers the whole of a landscape stage takes the run with
+       it — the invariant this file exists to protect is that the hardware stays
+       lit beside the sheet. min() keeps it honest below 360. */
+    .sheet { width:min(360px, 100%); }
+
+    /* One row across the foot: the parts take the slack and scroll if they must,
+       the controls keep their size so nothing is pushed off the edge. Stacked
+       tab-bar chips are wrong here — there is no vertical room for two lines of
+       anything — so the parts go back to glyph-beside-label. */
+    .thumb { flex-direction:row; align-items:center; }
+    .thumb .parts { flex:1 1 auto; min-width:0; overflow-x:auto; scrollbar-width:none; }
+    .thumb .parts::-webkit-scrollbar { display:none; }
+    .thumb .part { flex:none; padding:0 var(--sp-3); }
+    .thumb .bar-controls { flex:none; }
+    /* Lying down there is no "above", so the register is printed in the line
+       instead of over it. The order it already carries puts it between the
+       parts and the controls, which is exactly where a rack strip prints a
+       label: immediately before the group it names. */
+    .thumb .legend { align-self:center; flex:none; }
+    /* Keyed to height, not width: a phone on its side has the same scarce
+       dimension as a short laptop, and the bar is the first thing that should
+       give the height back. */
+    .bar { min-height:0; }
+  }
+
+  @media (min-width:620px) and (max-width:699px) and (max-height:500px) {
+    .thumb .part { padding-left:var(--sp-2); padding-right:var(--sp-2); }
+  }
+
+  /* A short screen that is also narrow matches both phone media queries. The
+     upright rule declares two rows, which would otherwise collapse the two
+     landscape columns into a 27dvh first row and leave the lower half empty. */
+  @media (max-width:699px) and (max-height:500px) {
+    .desk { grid-template-rows:minmax(0,1fr); }
+    body.is-performing .desk { grid-template-rows:minmax(0,1fr); }
+    .onboarding-card { min-height:100dvh; max-width:520px; border-radius:0; padding-top:calc(var(--sp-4) + var(--safe-t)); }
+    .onboarding-page { padding-top:var(--sp-4); }
+  }
+
+  /* -------------------------------------------------------- the wide band
+     §3.9. There was no media query above 1199px at all, so a 2560px desk was a
+     1280px desk with more air round it. The ladder steps one rung and the desk
+     breathes; nothing is re-laid-out. */
+  @media (min-width:1600px) {
+    :root {
+      --gutter:32px;
+      --fs-ui:14px;
+      --fs-body:16px;
+      --fd:16px;
+      --fs-title:clamp(19px, 1.1vw + 15px, 23px);
+      /* The extra vertical room becomes readable grid rather than empty panel. */
+      --lane-target:280px;
+    }
+    /* §3.9 names 20px here specifically. It is the one gap in the app that is
+       not a --sp rung: 16 is the desktop value and 24 opens a visible seam
+       between the two panels at this width. */
+    .desk { gap:20px; padding-top:var(--sp-4); padding-bottom:calc(var(--sp-4) + var(--safe-b)); }
+    /* One step of panel padding to go with one step of type. The stage's column
+       gap is deliberately left at 16, because .stage-body > .legend takes its
+       8px coupling out of that gap as a difference and changing one without the
+       other pushes every legend a rung away from the region it names. */
+    .rig, .stage-body, .bay { padding:var(--sp-5); }
+
+    /* The chrome shares the desk's measure. The desk is capped at --shell and
+       centred, so above about 1720px a full-bleed bar put the wordmark 400px
+       to the left of the panel it belongs to and the theme control 400px to the
+       right of the one it acts on — the two objects stopped being the same
+       machine. max() keeps the gutter as the floor, so this does nothing until
+       the desk actually starts leaving room at the sides, and because the
+       padding is on a fixed full-width element it can never produce a scroll.
+       100vw rather than 100% is correct here: body has overflow:hidden, so
+       there is no classic scrollbar for the two to disagree about. */
+    .bar, .thumb, .performance-chrome {
+      padding-left:max(calc(var(--gutter) + var(--safe-l)), calc((100vw - var(--shell)) / 2 + var(--gutter)));
+      padding-right:max(calc(var(--gutter) + var(--safe-r)), calc((100vw - var(--shell)) / 2 + var(--gutter)));
+    }
+    /* Two spacing rungs of chrome under a 32px gutter. At 56px the bar read as
+       a strip laid over the page rather than the top edge of the same object.
+       The performance strip keeps the two pixels it is deliberately taller by,
+       so entering the mode still costs the desk exactly what it costs at every
+       other width — the relationship is the point, not the number. */
+    .bar { min-height:calc(var(--sp-6) * 2); }
+    .performance-chrome { min-height:calc(var(--sp-6) * 2 + 2px); }
+  }
+
+  /* ------------------------------------------------- a wide window, dragged short
+     Last, so it can take the vertical rungs back off the wide band above it.
+     The landscape-phone block cannot cover this — its whole point is a narrow
+     rig column and a thumb bar, and neither is right on a 1920x600 window —
+     but the scarce dimension is the same one, and the answer is the same one:
+     the chrome and the padding give the height back before the two panels do. */
+  @media (min-width:1200px) and (max-height:620px) {
+    .desk {
+      gap:var(--sp-2);
+      padding-top:var(--sp-2); padding-bottom:calc(var(--sp-2) + var(--safe-b));
+    }
+    .rig, .bay { padding:var(--sp-3); }
+    .stage-body { gap:var(--sp-3); padding:var(--sp-3); }
+    .bar { min-height:0; }
+  }
+}

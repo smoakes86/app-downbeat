@@ -1,0 +1,228 @@
+@layer base {
+  /* The two faces, self-hosted. A Google Fonts link would be uncached — sw.js
+     returns early for cross-origin requests — so the installed PWA, which is
+     this app's primary form, would silently fall back to system faces offline.
+     That is exactly the case the app exists for, which makes self-hosting a
+     correctness requirement rather than a preference.
+
+     Both files are variable and both are split by unicode-range the way Google
+     Fonts splits them, so a page of English never downloads the 84KB of
+     accented Latin it will not draw. The weight and width *ranges* are declared
+     rather than a font-variation-settings block, which is what lets a rule say
+     font-weight:640 / font-stretch:118% and have the variable axes follow. */
+  @font-face {
+    font-family:"Archivo";
+    src:url("../fonts/archivo-latin.woff2") format("woff2");
+    font-weight:100 900; font-stretch:62% 125%; font-style:normal; font-display:swap;
+    unicode-range:U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA,
+      U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193,
+      U+2212, U+2215, U+FEFF, U+FFFD;
+  }
+  @font-face {
+    font-family:"Archivo";
+    src:url("../fonts/archivo-latin-ext.woff2") format("woff2");
+    font-weight:100 900; font-stretch:62% 125%; font-style:normal; font-display:swap;
+    unicode-range:U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF,
+      U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020,
+      U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF;
+  }
+  @font-face {
+    font-family:"Martian Mono";
+    src:url("../fonts/martianmono-latin.woff2") format("woff2");
+    font-weight:100 800; font-stretch:75% 112.5%; font-style:normal; font-display:swap;
+    unicode-range:U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA,
+      U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193,
+      U+2212, U+2215, U+FEFF, U+FFFD;
+  }
+  @font-face {
+    font-family:"Martian Mono";
+    src:url("../fonts/martianmono-latin-ext.woff2") format("woff2");
+    font-weight:100 800; font-stretch:75% 112.5%; font-style:normal; font-display:swap;
+    unicode-range:U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF,
+      U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020,
+      U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF;
+  }
+
+  /* Metric-matched fallbacks, so the panel laid out against the system face on
+     a cold cache does not jump when the real one arrives. font-display:swap
+     without these is a visible reflow of every legend on the desk. */
+  @font-face {
+    font-family:"Archivo Fallback";
+    src:local("Segoe UI"), local("Roboto"), local("Helvetica Neue"), local("Arial");
+    size-adjust:96%; ascent-override:92%; descent-override:24%; line-gap-override:0%;
+  }
+  @font-face {
+    font-family:"Mono Fallback";
+    src:local("Consolas"), local("Roboto Mono"), local("Menlo"), local("monospace");
+    size-adjust:94%; ascent-override:90%; descent-override:22%; line-gap-override:0%;
+  }
+
+  /* --ink-2 used to be declared here, in a second body{} block that §2.3
+     forbids outright — the file that owns the palette was not owned in the same
+     wave that discovered the rung was missing. It has moved to css/tokens.css
+     beside --muted, with its measurements, and this file is back to holding no
+     colour of its own. */
+
+  *, *::before, *::after { box-sizing:border-box; }
+  button { background:none; border:0; color:inherit; cursor:pointer; font:inherit; padding:0; }
+  select, input { font:inherit; }
+  h1, h2, h3, p, ol, ul { margin:0; }
+  ol, ul { list-style:none; padding:0; }
+
+  /* The disclosure triangle is the last piece of platform chrome left in the
+     app, and it is a different glyph in every browser. display:block is what
+     removes it in Chromium; the other two lines cover WebKit and Gecko, which
+     each expose it differently. The components that use <details> draw their
+     own chevron from the sprite. */
+  summary { cursor:pointer; display:block; list-style:none; }
+  summary::-webkit-details-marker { display:none; }
+  summary::marker { content:""; }
+
+  /* The floor. Every focusable thing gets a visible amber ring even if nobody
+     wrote a rule for it, and outline survives forced-colors mode where a
+     box-shadow does not. The five controls that can compose a shadow upgrade to
+     the full --focus-ring recipe in controls.css, which adds the outer 34% halo
+     the ring needs to read on the amber Play button itself. */
+  :focus-visible { outline:2px solid var(--lamp); outline-offset:2px; }
+  button:focus-visible, select:focus-visible, summary:focus-visible { outline-offset:3px; }
+
+  ::selection { background:color-mix(in srgb, var(--lamp) 30%, transparent); color:var(--ink); }
+
+  /* The parts you might genuinely want to copy. */
+  .bar-song, .sheet-body p, .recipe-steps, .sections { user-select:text; -webkit-user-select:text; }
+
+  /* The mono is for data only — note names, pad labels, read-outs and the
+     faceplate. Everything that is language is set in Archivo. The tracking is
+     positive here and zero on the body, because tabular columns want air
+     between glyphs and prose does not. */
+  .mono {
+    font-family:var(--mono);
+    letter-spacing:var(--tr-data);
+    font-variant-numeric:tabular-nums;
+  }
+
+  /* The signature register: a screen-printed legend on the metal above every
+     region, exactly the way a rack is labelled. Archivo's width axis is what
+     makes this possible — you cannot fake an expanded silkscreen cut with
+     letter-spacing alone on a normal-width grotesque. --label-tertiary is
+     validated for this register on --panel and --raised and is forbidden on
+     --high or on a cap. */
+  .legend {
+    font-family:var(--sans);
+    font-size:var(--fs-legend);
+    font-variation-settings:'wdth' 118, 'wght' 640;
+    letter-spacing:var(--tr-caps);
+    text-transform:uppercase;
+    line-height:var(--lh-data);
+    color:var(--label-tertiary);
+  }
+
+  /* The engraved asset tag. The only number on screen nobody needs, and the
+     thing that makes a screenshot look like a photograph of equipment.
+
+     The 16% ink measures 1.55:1 on --panel in the dark room and 1.38:1 in the
+     light one, and it stays. This is the one place in the app §9.1's 4.5:1 floor
+     does not apply, because the plate is decoration rather than text: it is
+     engraving, the effect *is* the low contrast, and every fact it prints is
+     carried in full by accessible text elsewhere on the desk. The element is
+     therefore aria-hidden in index.html, which is what makes the exemption
+     honest instead of merely convenient — a reader is not being asked to squint
+     at something it cannot see, it is being handed the same facts in a register
+     it can. §9.1 names the exemption so a later pass does not "fix" it, and
+     css/a11y.css lifts the ink to 40% under prefers-contrast for the sighted
+     readers who asked for more.
+
+     --tr-plate is narrower than --tr-caps on purpose: at 16% ink a wider track
+     dissolves into the panel instead of reading as engraving. */
+  .plate {
+    font-family:var(--sans);
+    font-size:var(--fs-legend);
+    font-variation-settings:'wdth' 112, 'wght' 500;
+    letter-spacing:var(--tr-plate);
+    text-transform:uppercase;
+    line-height:var(--lh-data);
+    color:color-mix(in srgb, var(--ink) 16%, transparent);
+  }
+
+  .sr-only {
+    border:0; clip:rect(0 0 0 0); clip-path:inset(50%); height:1px;
+    margin:-1px; overflow:hidden; padding:0; position:absolute; white-space:nowrap; width:1px;
+  }
+
+  /* The skip control. A keyboard user reaching the run of pads otherwise tabs
+     through sixty-plus chips to get to the setup instructions, and does it
+     again on every part switch. Out of flow in both states, so the surface it
+     sits in never reflows when it takes focus — the only thing that changes is
+     whether it is one pixel or a real control.
+
+     Its containing block is .stage, not the scrolling .stage-body, so it stays
+     pinned to the top of the panel rather than riding the scroll it is there to
+     let you skip. */
+  .skip {
+    border:0; clip:rect(0 0 0 0); clip-path:inset(50%); height:1px;
+    margin:-1px; overflow:hidden; padding:0; position:absolute; white-space:nowrap; width:1px;
+  }
+  .skip:focus-visible {
+    align-items:center; background:var(--high); border:1px solid var(--edge-hot);
+    border-radius:var(--r-cap); box-shadow:var(--focus-ring), var(--bevel), var(--cast-1);
+    clip:auto; clip-path:none; color:var(--ink); display:inline-flex;
+    font-size:var(--fs-ui); height:auto; left:var(--sp-3); line-height:var(--lh-ui);
+    margin:0; min-height:var(--tap); overflow:visible;
+    /* The transparent outline is not decoration: forced-colors mode discards
+       the box-shadow ring and keeps this, so the control is never unringed. */
+    outline:2px solid transparent; outline-offset:2px;
+    padding:0 var(--sp-3); text-decoration:none; top:var(--sp-3);
+    white-space:nowrap; width:auto; z-index:20;
+  }
+
+  /* One inline <symbol> sheet at the top of <body>, referenced with <use>. It
+     draws nothing itself, and it must not be display:none — a hidden subtree
+     still resolves references, but zero-sizing it is the form that survives
+     every engine. */
+  .sprite { height:0; overflow:hidden; position:absolute; width:0; }
+
+  /* Every icon in the app. The language used to be raw Unicode punctuation
+     rendered in whatever fallback the platform supplied, which is how a
+     crescent moon became a colour emoji on some Android builds and a fullwidth
+     CJK plus ended up sitting next to a Unicode minus. Sized in em so an icon
+     tracks the type of the control it sits in instead of needing a second
+     scale; the -.2em is the optical drop that puts a 24-grid glyph on the
+     cap-height line of the label beside it. */
+  .i {
+    display:inline-block; fill:currentColor; flex:none;
+    height:1.25em; vertical-align:-.2em; width:1.25em;
+  }
+
+  /* Four desktop scroll surfaces used to get a 17px OS scrollbar inside a
+     carefully lit dark card; the suppression that existed only ever applied
+     under body.has-thumb, which is phones — the one place the bar is already
+     invisible. */
+  .stage-body, .run, .sheet-body, .map-wrap {
+    scrollbar-width:thin; scrollbar-color:var(--edge-hot) transparent; scrollbar-gutter:stable;
+  }
+  ::-webkit-scrollbar { width:8px; height:8px; }
+  ::-webkit-scrollbar-track { background:transparent; }
+  ::-webkit-scrollbar-thumb {
+    background:var(--edge-hot); border-radius:var(--r-pill);
+    border:1px solid transparent; background-clip:padding-box;
+  }
+  ::-webkit-scrollbar-thumb:hover { background:var(--alu-edge); }
+  ::-webkit-scrollbar-thumb:active { background:var(--alu-edge); }
+  /* §6.34 writes the hover as --alu-edge, and on near-black that is right: the
+     thumb goes from a 3.7:1 hairline colour to the aluminium highlight and
+     visibly catches the light. In the putty room --alu-edge is #E6E1D4, which
+     measures 1.06:1 against the --panel these four surfaces sit on — so in the
+     light theme the thumb did not brighten under the cursor, it vanished, and a
+     control you lose while reaching for it is worse than one with no hover at
+     all. §9.1's instruction to re-measure after a palette change is exactly this
+     case. A lit room has no headroom above the surface, so the thumb deepens
+     instead: the 68% ink derivation prefers-contrast already uses for --edge-hot,
+     one clear rung past the 50% it rests at. */
+  body.light ::-webkit-scrollbar-thumb:hover,
+  body.light ::-webkit-scrollbar-thumb:active {
+    background:color-mix(in srgb, var(--ink) 68%, transparent);
+  }
+  /* Where a surface scrolls both ways the corner is the one piece WebKit still
+     paints in its own grey. */
+  ::-webkit-scrollbar-corner { background:transparent; }
+}
