@@ -348,7 +348,9 @@
 
     --bloom-lamp:0 0 0 1px color-mix(in srgb,var(--lamp) 40%,transparent),
                  0 4px 18px color-mix(in srgb,var(--lamp) 38%,transparent);
-    --bloom-part:0 0 14px color-mix(in srgb,var(--part) calc(var(--lit,0) * 62%),transparent);
+    /* --bloom-part is not here. It cannot be — see the rule at the foot of this
+       file. --bloom-lamp survives on body only because both of its inputs are
+       constants at body scope; the part bloom's two inputs are not. */
 
     /* One hairline of specular along the top edge of a panel. This replaces a
        145-degree wash of 1% white, which did two very different things in the
@@ -464,4 +466,31 @@
   .part[data-part=chords]  { --tint:var(--t-chords);  --tint-ink:var(--t-chords-ink); }
   .part[data-part=bass]    { --tint:var(--t-bass);    --tint-ink:var(--t-bass-ink); }
   .part[data-part=drums]   { --tint:var(--t-drums);   --tint-ink:var(--t-drums-ink); }
+
+  /* The part bloom, declared on the surface that emits it rather than on body
+     with the other two shadow families. That is a language constraint, not a
+     preference, and it is worth the paragraph because the failure is silent.
+
+     A custom property's var()s are substituted at the computed-value time of
+     the element that DECLARES it, and the already-substituted string is what
+     inherits (CSS Variables 1). Written in the body block above, this token
+     baked in body's --lit — registered `inherits:false`, so body's own value is
+     the initial 0 — and body's --part, which is the melody blue whatever the
+     desk is mounted to. Every reader in the app therefore received
+     `color(srgb 0 0 0 / 0) 0px 0px 14px 0px`: a fully transparent bloom, on a
+     .now chip whose own --lit computes to 1 and whose inherited --part is the
+     mounted part's. It had never once bloomed. --bloom-lamp has the same shape
+     and is safe, because --lamp is a literal that never varies by scope and is
+     the same colour in both themes.
+
+     Declared here the substitution happens on the pseudo instead: its own --lit
+     — 1 only under .now, set in css/run.css — and the --part it inherits down
+     from #desk[data-part]. The consequence is that this token cannot travel, so
+     every consumer has to be named in this selector. Today there is exactly
+     one. §6.12 also specifies the lane playhead in this token, but css/lane.css
+     ships it on --bloom-lamp; if that is ever brought into line, .lane-head
+     belongs in this selector and not in a second declaration. */
+  .seq-chip::before, .seq-chord::before {
+    --bloom-part:0 0 14px color-mix(in srgb,var(--part) calc(var(--lit,0) * 62%),transparent);
+  }
 }

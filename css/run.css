@@ -281,26 +281,40 @@
      §7.5: hover, .is-linked and .now all set it, and here it is simply the
      opacity of the cast rather than a fourth thing to remember to add.
 
-     No background, and that is the whole of the stacking question. An outer
-     box-shadow is clipped to the region OUTSIDE its own border box, so a box
-     with no fill and nothing but a cast paints exactly nothing where the chip's
-     content is. That is what lets this sit in ordinary paint order — after the
-     chip, before the printed bar on ::after — with z-index left alone. The
-     obvious alternative, z-index:-1, is a trap here: the chip is position
-     relative with z-index auto and therefore is NOT a stacking context, so a
-     negative layer inside it does not go behind the chip, it goes behind
-     .run's own opaque --inset fill and the elevation vanishes outright.
-     Promoting the chip to fix that would have been a stacking-context change to
-     the rule §7.5 depends on, for no gain over a box that cannot occlude
-     anything in the first place.
+     No background, and that is the whole of the stacking question. This box has
+     no background, no border, no outline and empty content, and an outer
+     box-shadow is clipped to the region OUTSIDE its own border box (CSS
+     Backgrounds 3, box-shadow) — so it owns no paint operation anywhere
+     inside the chip's content area and cannot occlude the label at any z-index.
+     That is what lets it sit in ordinary paint order, after the chip and before
+     the printed bar on ::after, with z-index left alone.
 
-     inset is -1px against the chip's 1px hairline and the radius is --r-cap
-     plus that pixel, so the pseudo's border box lands exactly on the chip's and
-     the cast starts where it always started — the same concentric arithmetic
-     the well and its caps use. pointer-events:none because this covers the
-     whole cap and a shadow is not a target. */
+     z-index:-1 would have worked too, and the comment that used to sit here
+     said it would not: it claimed the chip is position relative with z-index
+     auto and therefore not a stacking context, so a negative layer would sink
+     behind .run's opaque --inset fill. That is false, and measured false. The
+     chip's computed transform is matrix(1,0,0,1,0,0) at rest and
+     matrix(1,0,0,1,0,-2) lit — never `none`, because the declaration below is
+     translateY(calc(var(--link) * var(--lift,1) * -2px)) and translateY(0px) is
+     a transform, not the absence of one. Any non-none transform creates a
+     stacking context (CSS Transforms 1 §3), so the chip always is one and a
+     negative layer stays inside it. The route is not a trap; it is only the
+     weaker of the two, because it would depend on the chip keeping a property
+     it happens to have today, while a box that cannot paint inside the chip
+     depends on nothing.
+
+     inset is -1px against the chip's 1px hairline: an absolutely positioned box
+     is inset from its containing block's PADDING box, so -1px puts this border
+     box exactly on the chip's border box — measured coincident on all four
+     edges, at 94px wide on the EP-133 and 323px on the FM-1.
+     Delta 0 is also why the radius is a plain --r-cap. Concentric arithmetic
+     adds the gap between the two boxes, and there is no gap; the +1px this
+     carried until now drew the cast's corners a pixel rounder than the corner
+     they trace. The 2px-border case lives in css/a11y.css, where the inset has
+     to follow the border out. pointer-events:none because this covers the whole
+     cap and a shadow is not a target. */
   .seq-chip::before, .seq-chord::before {
-    border-radius:calc(var(--r-cap) + 1px);
+    border-radius:var(--r-cap);
     box-shadow:var(--cast-1), var(--bloom-part);
     content:''; inset:-1px; opacity:var(--link); pointer-events:none; position:absolute;
     transition:opacity var(--t-lift) var(--e-decay);
@@ -436,19 +450,24 @@
      strength, so the two never drift apart. The ring the old hand-rolled shadow
      carried is now the border, which was already going to --part anyway.
 
-     One measured caveat for whoever tunes the emission next, because it is not
-     visible from this file. --bloom-part is declared on body and its
-     var(--lit) is substituted there, at that element's computed-value time,
-     before the token inherits — so every element reading it gets body's --lit,
-     which is the registered initial 0, and body's --part rather than the desk's.
-     On a .now chip the slot resolves to `color(srgb 0 0 0 / 0) 0 0 14px`: the
-     bloom is already fully transparent and was before this rule moved. It is
-     carried through unchanged rather than re-authored locally, because the
-     token lives in css/tokens.css and a component is not the place to redefine
-     one. When it is fixed there, this is where it will light.
+     For a long time this line set nothing. --bloom-part was declared on body,
+     and a custom property's var()s are substituted at the computed-value time
+     of the element that DECLARES it — the already-substituted string is what
+     inherits. So every reader got body's --lit, which is the registered initial
+     0 because --lit is inherits:false, and body's --part rather than the desk's;
+     on a .now chip the slot resolved to `color(srgb 0 0 0 / 0) 0 0 14px` no
+     matter what this rule did. The declaration has moved to the point of use in
+     css/tokens.css, where the substitution happens against this pseudo's own
+     --lit and the --part it inherits from #desk[data-part]. The --lit below is
+     now the one that is read.
 
      The pseudo takes its own 0ms because arrival is instant on both surfaces or
-     the cast fades in behind a fill that has already snapped. */
+     the cast fades in behind a fill that has already snapped. --lit is NOT in
+     the pseudo's transition list and must not be added to it: interpolating
+     --lit interpolates box-shadow, which is the exact §9.4 cost the cast was
+     moved onto this surface to escape. It steps 0→1 and 1→0 instead — one
+     repaint at each end of a pass, against a 14px blur re-rasterised for 340ms
+     — and the cast still fades out behind it on opacity. */
   .seq-chip.now::before, .seq-chord.now::before {
     --lit:1;
     transition-duration:0ms;

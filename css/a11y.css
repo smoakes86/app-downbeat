@@ -292,6 +292,23 @@
     .creation-details, .landing, .onboarding-card, .toast,
     .bar, .thumb, .performance-chrome { border-width:2px; }
 
+    /* Thickening the chip's border moves its border box out from under the
+       pseudo that casts its elevation, and the pseudo has to follow. An
+       absolutely positioned box is inset from its containing block's PADDING
+       box, so css/run.css's inset:-1px lands on the outer edge of a 1px border
+       and 1.0px INSIDE a 2px one: measured a 94x62 pseudo against a 96x64 chip,
+       the cast originating from behind the chip's own hairline on all four
+       edges. -2px puts it back on the border box, 96x64 against 96x64.
+
+       No border-radius override, and that is deliberate rather than forgotten.
+       border-radius is the radius of the BORDER box, so the chip's corner is
+       --r-cap at either border weight, and at -2px the pseudo's border box
+       coincides with it exactly — the concentric gap is 0, which is the case
+       run.css's plain var(--r-cap) already states. Adding a pixel here for each
+       pixel of border would draw the cast's corners rounder than the corner
+       they trace, which is the bug that rule was just corrected for. */
+    .seq-chip::before, .seq-chord::before { inset:-2px; }
+
     /* .42 is a legible dimming against a lit panel and an illegible one against
        a preference that exists because the reader has no headroom to spare. An
        unavailable control still has to be readable — under §9.6 it stays

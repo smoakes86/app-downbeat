@@ -554,6 +554,13 @@ which way is up.
 --bloom-part: 0 0 14px color-mix(in srgb,var(--part) calc(var(--lit,0) * 62%),transparent);
 ```
 
+`--bloom-part` is the one shadow token that **must be declared on the element that reads it**, not
+on `body` with the rest. A custom property's `var()`s are substituted at the computed-value time of
+the element that *declares* it, and the substituted string is what inherits — on `body` it bakes in
+`body`'s `--lit` (registered `inherits:false`, so the initial `0`) and `body`'s `--part`, and every
+reader downstream gets a fully transparent bloom in the melody blue. `--bloom-lamp` has the same
+shape and is safe only because both of its inputs are constants at `body` scope.
+
 Light theme overrides every cast to a **warm grey** (`rgba(120,112,94,α)`) at roughly 0.6× the
 dark alpha, because a black shadow on putty reads as dirt. Per rule C8, light theme's casts do
 proportionally more work than its bevels.
@@ -1237,8 +1244,14 @@ lead sheet.
 - **Focus** `--focus-ring`, `--r-cap`.
 - **`.now`** *asymmetric by design*: arrives instantly (`transition-duration: 0ms` —
   it marks *now*) and fades off over 340ms `--e-decay`, so the eye can track where it just was.
-  Fill, border **and box-shadow** are all in the transition list; today `background-color` is
-  omitted and snaps while the other two fade.
+  `background-color` and `border-color` are the transitioned pair on the chip itself.
+  **`box-shadow` is deliberately not**, and that is §9.4 rather than an omission: the chip is the
+  one element in the app that changes state twice a beat for the length of a song, and a lit chip's
+  resolved shadow was five slots that interpolated down to two over 340ms on every departure —
+  a blur re-rasterised on a timer. The elevation (`--cast-1` plus the `--part` bloom) therefore
+  lives on `.seq-chip::before` and cross-fades on that pseudo's `opacity`, which is what
+  `--link` drives. Same 340ms, same `--e-decay`, so the phosphor trail is intact in every channel
+  that carries it — it is a falloff, and a falloff is what opacity is for.
   Add `transform: translateY(-2px)` so the current chip physically lifts out of the run.
 - **Auto-scroll** *(functional bug fix)*: on the `key !== lastKey` branch that already exists, call
   `chip.scrollIntoView({ block:'nearest', inline:'nearest', behavior: Motion.reduced() ? 'auto' :
