@@ -63,14 +63,14 @@
      voicing lit unevenly — the low note snapped on while the top of the stack
      faded in behind it.
 
-     Attack rides [data-struck] at 40ms. Decay is beat-relative, so at 76 BPM a
-     struck pad smears like a long-persistence scope and at 158 BPM it
+     Attack rides [data-struck] at --t-lamp. Decay is beat-relative, so at
+     76 BPM a struck pad smears like a long-persistence scope and at 158 BPM it
      machine-guns: the interface gets faster when the music does. */
   /* The transform is declared here rather than only inside the hover query so
      the [data-struck] / [data-preview] duration lists below have two properties
      to line up against: a duration list is matched to transition-property in
-     order, and a single value would have put the 40ms attack on the cap travel
-     as well. Nothing moves on a touch device, so carrying the transition there
+     order, and a single value would have put the --t-lamp attack on the cap
+     travel as well. Nothing moves on a touch device, so carrying the transition there
      costs a property nobody transitions. */
   .dev-pad, .dev-wkey, .dev-bkey {
     transition:--lit var(--t-decay) var(--e-decay),
@@ -79,9 +79,9 @@
   .pad-glow, .wkey-glow, .bkey-glow, .pad-glow-b, .key-glow-b {
     transition:--lit var(--t-decay) var(--e-decay);
   }
-  /* Three speeds, and they are three different events. A strike attacks in 40ms
-     and decays on the beat. A preview (§7.5) is not a strike — it arrives on the
-     cap-travel curve, because it is the pad showing you what it would do rather
+  /* Three speeds, and they are three different events. A strike attacks in
+     --t-lamp and decays on the beat. A preview (§7.5) is not a strike — it
+     arrives on the cap-travel curve, because it is the pad showing you what it would do rather
      than doing it, and it stays until the pointer leaves. Release, either way,
      is the beat-relative phosphor falloff above. */
   .dev-svg [data-struck] { transition-duration:var(--t-lamp), var(--t-click); }
@@ -118,7 +118,7 @@
   .pad-tint, .pad-bar, .wkey-tint, .wkey-bar, .bkey-tint {
     opacity:0;
     transition:opacity var(--t-throw) var(--e-detent)
-               calc(3 * var(--hop) + var(--pad-i, 0) * 14ms);
+               calc(3 * var(--hop) + var(--pad-i, 0) * var(--s-pad));
   }
   .dev-pad.used .pad-tint, .dev-pad.used .pad-bar,
   .dev-wkey.used .wkey-tint, .dev-wkey.used .wkey-bar,
@@ -196,7 +196,7 @@
      press of play. No fill mode either way, so a display whose boot class never
      arrives is simply on. */
   @keyframes lcd-bloom-in { from { opacity:0 } to { opacity:.55 } }
-  body.is-powered .lcd-bloom { animation:lcd-bloom-in 340ms var(--e-throw) backwards; }
+  body.is-powered .lcd-bloom { animation:lcd-bloom-in var(--t-lift) var(--e-throw) backwards; }
 
   /* ------------------------------------------------- EP-133 K.O. II */
 
@@ -256,6 +256,44 @@
   .pad-id { font-size:9px; fill:var(--ep-id); text-anchor:start; letter-spacing:var(--tr-data); }
   .pad-main { font-size:14px; fill:var(--ep-label); text-anchor:middle; letter-spacing:var(--tr-0); }
   .pad-sub { font-size:9px; fill:var(--ep-legend); text-anchor:middle; letter-spacing:var(--tr-data); }
+
+  /* The EP-133 has the same unit-density problem as the FM-1 below it, in the
+     other direction, and only at some widths — which is exactly why it survived
+     the pass that found the FM's.
+
+     The plate is height-bound, not width-bound: 356 units across against 540
+     down, in a rig column whose height is whatever the desk has left. Measured
+     on the real page, the SVG's box is 388x432 at 1280x720 and about 444x673 at
+     1440x900, so --dev-u — min(w/356, h/540) — is 0.80 and 1.25 respectively.
+     The identical 9-unit rung therefore renders at 11.2px on the larger desk and
+     at 7.2px on the smaller one, and 7px on a faceplate is the precise thing
+     §3.8's table was written to abolish.
+
+     A floor rather than the FM's symmetric clamp, and the asymmetry is the whole
+     design of this rule. Clamping both ways would pull the 1440 plate's legends
+     back down to a rendered 9px, and at 1440 this object currently reads well;
+     nothing about it should move. `clamp(9px, …)` means the middle term can only
+     ever *win upward* — at any --dev-u of 1 or more the answer is the literal 9
+     units this file already declared, byte for byte, and the correction exists
+     only on the desks where the plate has been squeezed.
+
+     The ceilings are the plate's own geometry, not taste. 11 units is where
+     "teenage engineering" and "EP-133 K.O. II" — one baseline, opposite anchors,
+     316 units between them — stop clearing each other, and where a 7-glyph
+     "GROUP A" still sits clear of the pad's edges and of the note name's
+     descenders 12 units above it. 12 is the looser rung: a 5-glyph "ENTER"
+     start-anchored 8 units into a 98.67-unit cap, a "sample" centred on the same
+     module, and two single-letter knob captions have room to spare.
+
+     Everything at 12 units or above already clears the floor at --dev-u 0.8 —
+     .pad-main renders at 11.2, .seg at 9.6, .dev-group-id at 10.4 — so the 9-unit
+     rung is the entire fault and the entire fix. */
+  .dev-ep .dev-brand, .dev-ep .dev-model, .dev-ep .pad-sub {
+    font-size:clamp(9px, calc(9px / var(--dev-u, 1)), 11px);
+  }
+  .dev-ep .dev-hintline, .dev-ep .dev-knob-cap, .dev-ep .dev-fn, .dev-ep .pad-id {
+    font-size:clamp(9px, calc(9px / var(--dev-u, 1)), 12px);
+  }
 
   /* ------------------------------------------------------- M-VAVE FM-1 */
 
@@ -448,8 +486,11 @@
        second copy of this on .rig-stage, the SVG's own parent, so the effect
        compounded to saturate(1.06) through two nested filter surfaces — the
        precise nesting §5.7 rejects for the per-pad blooms. That copy is gone;
-       this is the survivor because it names a token duration rather than the
-       literal 180ms §6.9 asks for, which is not on the scale (§9.4). */
+       this is the survivor because it names a token duration. §6.9 asks for
+       180ms, which is now --t-bloom and is a rung — but --t-throw is what this
+       filter has actually been tuned at and shipped at, and the two are 40ms
+       apart on a saturation nudge of three percent. Named either way; moving it
+       to --t-bloom is a retune and belongs to a pass that can watch the plate. */
     body:not(.is-live) .rig:has(.device:hover) .dev-svg { filter:saturate(1.03); }
     .dev-svg { transition:filter var(--t-throw) var(--e-travel); }
   }

@@ -42,20 +42,25 @@
 
      So 0fr is the resting state now and 1fr is what [open] does to it, which
      gives the transition below a real pair of values in both directions. The
-     content fades 60ms behind the box on the way in so it is never seen inside
-     a collapsed one, and leads it out on the way back. Keyframes live in
+     content fades one --s-lead behind the box on the way in so it is never seen
+     inside a collapsed one, and leads it out on the way back. Keyframes live in
      css/motion.css; if they are missing the content simply appears, which is
-     the correct degradation. */
+     the correct degradation.
+
+     --t-open is the rung by name as well as by number: §5.2 defines it as "a
+     housing changes shape: a disclosure, a knob's track", and this is the
+     disclosure it is named after. Both closes are §5.3 exits written as the
+     relationship rather than as the answer. */
   .disclose {
     display:grid; grid-template-rows:0fr;
-    transition:grid-template-rows calc(280ms * .55) var(--e-close);
+    transition:grid-template-rows calc(var(--t-open) * .55) var(--e-close);
   }
   .disclose > * {
     min-height:0; opacity:0; overflow:hidden;
-    transition:opacity calc(220ms * .55) var(--e-close);
+    transition:opacity calc(var(--t-throw) * .55) var(--e-close);
   }
-  [open] > .disclose { grid-template-rows:1fr; animation:disclose 280ms var(--e-throw); }
-  [open] > .disclose > * { opacity:1; animation:disclose-fade 220ms var(--e-throw) 60ms backwards; }
+  [open] > .disclose { grid-template-rows:1fr; animation:disclose var(--t-open) var(--e-throw); }
+  [open] > .disclose > * { opacity:1; animation:disclose-fade var(--t-throw) var(--e-throw) var(--s-lead) backwards; }
 
   /* And the half a stylesheet cannot do on its own: the UA yanks the body out
      of the render tree in the same frame the attribute drops, so a collapse has
@@ -67,7 +72,7 @@
      to leaving in one frame, and that is the same behaviour every engine had
      before this block — degradation, not breakage. */
   details:has(> .disclose)::details-content {
-    transition:content-visibility calc(280ms * .55) var(--e-close) allow-discrete;
+    transition:content-visibility calc(var(--t-open) * .55) var(--e-close) allow-discrete;
   }
   details[open]:has(> .disclose)::details-content { content-visibility:visible; }
 
@@ -96,16 +101,30 @@
     border-top:1px solid var(--edge); display:grid; gap:var(--sp-3);
     padding:var(--sp-3) var(--sp-0) var(--sp-4);
     /* The in half of the content swap below. */
-    transition:opacity 160ms var(--e-throw), transform 160ms var(--e-throw);
+    transition:opacity var(--t-fade) var(--e-throw), transform var(--t-fade) var(--e-throw);
   }
   /* Content changing silently under an open disclosure is the classic "did that
      just change?" failure: switch the part or the device with SET-UP open and
      three paragraphs of instructions used to be replaced between frames. Out at
-     100ms, in at 160ms, over a 6px rise (§6.15's numbers, not the spacing
-     scale's — this is a travel distance, not a gap). */
+     100ms, in at --t-fade, over a 6px rise (§6.15's numbers, not the spacing
+     scale's — this is a travel distance, not a gap).
+
+     This is §5.3's exit, written as the ratio: 55% of the --t-fade it comes back
+     on, which is 88ms. It used to be a hand-picked 100ms literal — the last
+     duration in this file that was not a token — and the reconciliation is now
+     done in both places, here and in §6.15.
+
+     88 rather than a rung, because there is a hard ceiling above it that a rung
+     would breach. src/ui.js:727 removes `is-swapping` on a 120ms timeout, so the
+     out has to finish inside 120ms or the swap is cut mid-fade and the old copy
+     snaps back before the new one lands. --t-cut (130ms) is the rung whose *name*
+     fits this exactly — "the outgoing copy of something being replaced" — and it
+     would overrun the teardown by 10ms. The ratio both satisfies §5.3 and widens
+     the margin from 20ms to 32ms. If that timeout ever moves, this is its twin. */
   .recipe-steps.is-swapping {
     opacity:0; transform:translateY(6px);
-    transition:opacity 100ms var(--e-close), transform 100ms var(--e-close);
+    transition:opacity calc(var(--t-fade) * .55) var(--e-close),
+               transform calc(var(--t-fade) * .55) var(--e-close);
   }
   /* The first column is the step disc's own 20px, not a spacing rung: a 24px
      column round a 20px circle reads as a misaligned bullet. */
@@ -124,6 +143,31 @@
     transition:background-color var(--t-throw) var(--e-detent), color var(--t-throw) var(--e-detent);
   }
 
+  /* ------------------------------------------------ the recipe, in the bay
+     Same disclosure, different job. In the stage it is a strip at the foot of
+     the panel and `flex:none` is right — it must not take height off the run.
+     In the desk's set-up bay it IS the region, so it takes the whole cell and
+     the prose scrolls inside the well rather than the well growing to hold it.
+     min-height:0 is the half that makes that true: without it the flex item's
+     automatic minimum size is its content, the 44px cell floor becomes 485px,
+     and the desk grows past the viewport.
+
+     Scrolling the disclosure rather than the ol keeps every engine on the same
+     path. The reveal is a 0fr/1fr grid on .disclose, and in Chromium that grid
+     is inside the ::details-content box rather than being a direct child of the
+     <details> — so a flex chain that reaches the list has to be authored twice,
+     once through a pseudo-element that not every engine has. The scroll port is
+     the one box both structures agree on. */
+  .bay > .recipe { flex:1 1 auto; min-height:0; overflow:auto; }
+  /* The silkscreen stays printed at the top of the panel while the steps run
+     under it. The colour is the composite the well already draws — --raised at
+     48% over --panel — rather than a new surface, because a sticky header that
+     is a different value from the thing it is stuck to is a second material. */
+  .bay > .recipe > summary {
+    background:color-mix(in srgb, var(--raised) 48%, var(--panel));
+    position:sticky; top:0; z-index:1;
+  }
+
   /* ================================================================ sheets */
   .sheet-host { inset:0; position:absolute; z-index:20; }
   .sheet-host[hidden] { display:none; }
@@ -132,10 +176,14 @@
     background:color-mix(in srgb, var(--room) 62%, transparent);
     backdrop-filter:blur(8px); -webkit-backdrop-filter:blur(8px);
     inset:0; position:absolute;
-    animation:scrim-in 280ms var(--e-throw);
+    /* --t-open, and §5.2 names this exact consumer: "the scrim's blur". The
+       count-in's scrim is --t-veil and the onboarding's is --t-cue — three
+       dimmed rooms on three rungs, because the thing arriving behind each one
+       has a different mass. */
+    animation:scrim-in var(--t-open) var(--e-throw);
     /* The resting transition the drag code assumes exists — see the note on
-       .sheet below. ease is not one of the six curves, so this is --e-travel at
-       the nearest rung above 300ms. */
+       .sheet below. ease is not one of the seven curves, so this is --e-travel
+       at the nearest rung above 300ms. */
     transition:opacity var(--t-slide) var(--e-travel);
   }
 
@@ -150,8 +198,9 @@
        and clears it on release, which was a no-op until now — under the
        threshold the sheet teleported back to zero instead of springing. This is
        the one place --e-rubber is allowed outside the .check knob, because it
-       is the one place real elasticity exists: a finger letting go. */
-    transition:transform 340ms var(--e-rubber);
+       is the one place real elasticity exists: a finger letting go. --t-lift is
+       the rung §5.2 assigns to "sheet drag release" by name. */
+    transition:transform var(--t-lift) var(--e-rubber);
   }
   .sheet[hidden] { display:none; }
   /* Kept deliberately: the dialog itself takes focus so the title is announced,
@@ -165,6 +214,10 @@
      eyebrow, and only the song sheet carries a footer — the one action its live
      fields cannot express is pinned there, so the sheet you configure and the
      sheet you commit from are visibly different objects. */
+  /* 62px is a floor on a two-line lockup, not a rung: the head stacks an
+     eyebrow over an --fs-title heading and seats a 44px close button beside
+     them, and it is the taller of those two that sets the number. Stated as a
+     minimum so the head still grows if a title wraps, rather than clipping. */
   .sheet-head {
     align-items:center; background:var(--raised); border-bottom:1px solid var(--edge);
     box-shadow:var(--bevel); display:flex; flex:none; gap:var(--sp-3);
@@ -195,13 +248,18 @@
      fully dead under the user's thumb; on a desktop the rig is marked inert the
      moment a sheet opens, so leaving it at full strength was a lie either way.
      It dims rather than disappearing, because the whole point of putting the
-     sheet inside the stage is that the hardware is still there. */
+     sheet inside the stage is that the hardware is still there.
+
+     The two directions are two rungs, not one: --t-open going down, because a
+     region the size of the rig is a housing changing state, and --t-bloom
+     coming back, which §5.2 names as "the performance dim returning" — light
+     and colour settling on a face that never moved. */
   body:not(.sheet-open) .thumb, body:not(.sheet-open) .rig {
-    transition:opacity 180ms var(--e-close), filter 180ms var(--e-close);
+    transition:opacity var(--t-bloom) var(--e-close), filter var(--t-bloom) var(--e-close);
   }
   body.sheet-open .thumb, body.sheet-open .rig {
     filter:saturate(.4); opacity:.38;
-    transition:opacity 280ms var(--e-throw), filter 280ms var(--e-throw);
+    transition:opacity var(--t-open) var(--e-throw), filter var(--t-open) var(--e-throw);
   }
 
   [data-close-sheet] { min-height:var(--tap); min-width:var(--tap); }
@@ -246,10 +304,14 @@
     border:1px solid var(--edge); border-radius:var(--r-well); box-shadow:var(--bevel-in);
     overflow:hidden;
   }
+  /* --tap plus a rung, written as the sum rather than as 48px so the tap floor
+     and this row can never drift apart. A full-width disclosure sitting at
+     exactly --tap reads as a list item; the extra rung is what makes it a
+     housing you open. */
   .creation-details > summary {
     align-items:center; cursor:pointer; display:flex; font-size:var(--fs-ui);
     font-variation-settings:'wght' 620; gap:var(--sp-3); justify-content:space-between;
-    list-style:none; min-height:48px; padding:0 var(--sp-4);
+    list-style:none; min-height:calc(var(--tap) + var(--sp-1)); padding:0 var(--sp-4);
     transition:color var(--t-click) var(--e-travel);
   }
   .creation-details > summary::-webkit-details-marker { display:none; }
@@ -298,6 +360,11 @@
      even 13px would read as a lopsided card. */
   .lib-card {
     align-items:center; background:var(--inset); border:1px solid var(--edge-hot);
+    /* 56px is a floor on the card, not a rung: two lines of type on the left
+       against a 44px icon cluster on the right, plus the card's own 8px of
+       vertical padding. It rarely binds — the cluster usually sets the height —
+       and it is here so a one-line card in a list of two-line ones does not
+       collapse and break the rhythm of the stack. */
     border-radius:var(--r-cap); box-shadow:var(--bevel-in); display:flex; gap:var(--sp-2);
     min-height:56px; padding:8px 10px 8px 13px;
     transition:border-color var(--t-click) var(--e-travel),
@@ -320,9 +387,14 @@
   .lib-card.is-removing {
     border-width:0; height:0; margin:0; min-height:0; opacity:0; overflow:hidden;
     padding-bottom:0; padding-top:0; transform:translateX(calc(var(--sp-3) * -1));
-    transition:height 200ms var(--e-close), min-height 200ms var(--e-close),
-               opacity 200ms var(--e-close), padding-bottom 200ms var(--e-close),
-               padding-top 200ms var(--e-close), transform 200ms var(--e-close);
+    /* --t-notice, and §5.2 names this consumer: "a library card collapsing on
+       delete". It is not written as a §5.3 exit because there is no entrance to
+       take 55% of — .lib-card.is-staged arrives on card-in at --t-throw, and a
+       collapse that removed itself in 121ms would beat the FLIP walking the
+       survivors up behind it. */
+    transition:height var(--t-notice) var(--e-close), min-height var(--t-notice) var(--e-close),
+               opacity var(--t-notice) var(--e-close), padding-bottom var(--t-notice) var(--e-close),
+               padding-top var(--t-notice) var(--e-close), transform var(--t-notice) var(--e-close);
   }
 
   .lib-load { flex:1 1 auto; min-width:0; text-align:left; }
@@ -352,13 +424,20 @@
      counter hue used to do this job, which made a delete button look like a
      musical part. Armed, the icon grows into a labelled pill on a min-width
      transition so the row does not reflow, and the hairline underneath depletes
-     over exactly the 3.2s window ui.js gives you to change your mind. */
+     over exactly the 3.2s window ui.js gives you to change your mind.
+
+     3200ms IS NOT A RUNG AND MUST NOT BECOME ONE. It is §5.2's second named
+     carve-out: a duration that has to equal a JS timeout is that timeout's
+     number rather than a judgement about mass, so the two are changed together
+     or not at all. --e-linear for the reason §5.1 gives — this is a clock you
+     are watching run out, and a rate that eased would be lying about how much
+     time is left. Nothing here travels. */
   .lib-icon.is-armed {
     background:var(--rec); color:var(--on-lamp); font-size:var(--fs-micro);
     font-variation-settings:'wght' 620; min-width:calc(var(--tap) * 2);
   }
   .lib-icon.is-armed::after {
-    animation:arm-deplete 3200ms linear forwards;
+    animation:arm-deplete 3200ms var(--e-linear) forwards;
     background:var(--on-lamp); bottom:var(--sp-2); content:""; height:1px;
     left:var(--sp-2); position:absolute; right:var(--sp-2); transform-origin:left center;
   }
@@ -371,7 +450,7 @@
   .empty {
     align-items:center; display:grid; gap:var(--sp-3); justify-items:center;
     padding:var(--sp-5) var(--sp-4); text-align:center;
-    animation:empty-in 240ms var(--e-throw);
+    animation:empty-in var(--t-cue) var(--e-throw);
   }
   .empty[hidden] { display:none; }
   .empty-mark { line-height:var(--lh-data); max-width:100%; opacity:.15; width:var(--fs-readout); }
@@ -421,8 +500,11 @@
   .map-head {
     background:var(--high); border-radius:var(--r-cap); box-shadow:var(--bevel);
     min-height:var(--tap); min-width:0; padding:var(--sp-2); text-align:left;
-    transition:background-color 180ms var(--e-travel), color 180ms var(--e-travel),
-               box-shadow 180ms var(--e-travel), transform var(--t-click) var(--e-travel);
+    /* --t-bloom on the three colour legs — §5.2 spends that rung on ".map-step
+       colour", which is this button — and --t-click on the press, because the
+       cap travelling is a different event from the light landing on it. */
+    transition:background-color var(--t-bloom) var(--e-travel), color var(--t-bloom) var(--e-travel),
+               box-shadow var(--t-bloom) var(--e-travel), transform var(--t-click) var(--e-travel);
   }
   /* Auditioning is a fill *and* a machined bar down the leading edge, so the
      state survives a monochrome screenshot and deuteranopia alike. */
@@ -448,9 +530,16 @@
   }
   /* The energy profile draws itself once, on sheet open, left to right. It does
      not replay on every regenerate — the class is only applied by the open
-     handler, and renderStructure() rebuilds the row without it. */
+     handler, and renderStructure() rebuilds the row without it.
+
+     --t-grow is the rung §5.2 names for exactly this — "a bar grows out of
+     nothing" — and this is now its only consumer. The step is deliberately
+     still --hop and not --s-bar: --hop is beat-relative (28-64ms) and --s-bar
+     is a fixed 25ms, so swapping it would retune the sweep rather than name it.
+     §5.2 lists --s-bar as unconsumed pending §6.26's growth-from-height:0, and
+     that is the change that should adopt it. */
   .map-energy.is-staged i {
-    animation:energy-rise 400ms var(--e-throw) backwards;
+    animation:energy-rise var(--t-grow) var(--e-throw) backwards;
     animation-delay:calc(var(--enter-i, 0) * var(--hop));
   }
   /* Filled versus hollow, not light hue versus dark hue: a light-theme track

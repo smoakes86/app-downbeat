@@ -49,16 +49,93 @@
      hairline you had to scroll to find. Two taps' worth is the least that can
      hold a chip and say there is more below it; past that the stage-body
      scrolls, which it is already built to do. */
+
+  /* align-content is stretch, not start, and that is the last of §V1. The well
+     takes the stage's slack, so whatever the stage does not spend arrives here
+     — and packed to the top it arrived as a hole under the final system.
+     Measured at 1440x900 with the whole song in it: 256px of score in a 282px
+     well, 260 in 304 at 1920x1080, and the desk's set-up bay hands the well
+     another 15px on top of that when a landscape instrument is mounted and the
+     disclosure leaves the stage. Stretched, the systems share
+     the surplus and the chips grow into it, which is a score set with generous
+     leading rather than a score with a gap after it — and a taller chip is a
+     bigger target for the hand that is not on the hardware. Nothing moves when
+     the content genuinely fills the well, because there is then no free space
+     to distribute. */
   .run {
     --run-step:7px;
     --run-cols:1;
-    align-content:start; background:var(--inset); border:1px solid var(--edge);
+    align-content:stretch; background:var(--inset); border:1px solid var(--edge);
     border-radius:var(--r-well); box-shadow:var(--bevel-in); display:grid;
     flex:1 1 auto; gap:var(--sp-2) var(--sp-4);
     grid-template-columns:repeat(var(--run-cols), minmax(0,1fr));
     min-height:calc(var(--tap) * 2); overflow:auto; padding:var(--sp-1); position:relative;
     scrollbar-gutter:stable;
   }
+
+  /* WHEN THE WELL IS DEEPER THAN IT LOOKS, IT HAS TO SAY SO.
+     Everything below about density is an argument for making the score fit. At
+     the densest tier it still does not, and that is arithmetic rather than a
+     layout fault: eight items at the --tap floor plus their gaps need about
+     380px, and a bar cell at 1280x800 and under has 318-342px. The bar wraps,
+     the system costs a second line, and the run scrolls. That much is accepted.
+     What cannot be accepted is a score whose last visible row looks like the
+     last row there is — a player glancing down mid-take has to be able to tell
+     "that is the end of the bar" from "that is the edge of the box", and a
+     milled well with a hard lip is exactly the shape that reads as the second
+     when it means the first.
+
+     So the channel is machined rather than faded. `scrollbar-gutter:stable`
+     already reserves the column at every density, which is what stops the bar
+     losing width at the exact moment the score got tight; these rules make what
+     sits in it the app's own material — a cap of --alu, the ON metal of every
+     capped control in the interface, inset into its slot by a --sp-0 transparent
+     border so it reads as a part in a groove rather than a bar painted on glass.
+     The channel is --sp-3 and the cap is therefore --sp-2 across, which is the
+     same 12 - 4 = 8 nesting every well in the app uses; neither number is a
+     scrollbar convention, they are the two rungs that were already here. It is
+     present exactly when there is somewhere to go, its
+     length is how much score there is, and its position is where in the score
+     you are: three facts an edge fade cannot state.
+
+     A fade was the other option and it was rejected on the object rather than
+     on taste. To fade content it has to be drawn OVER the content, and the only
+     pure-CSS route to that on a scroll container is a mask on the container
+     itself — which also masks the container's border, so the well's own hairline
+     would dissolve at both lips whenever there was more to read. A machined edge
+     that disappears is a worse lie than the one it was sent to fix. The two
+     background layers that could sit under the content instead were tried and
+     dropped: the chips are opaque --high and cover most of the lip, so the
+     shadow would have shown only in the gaps between them.
+
+     §9.8 asks for no default scrollbar anywhere; this is the one scroll
+     container in the app the user is meant to look at, so it is also the one
+     that had to stop being the platform's grey lozenge. Chrome 121+ ignores the
+     ::-webkit-scrollbar tree the moment `scrollbar-color` is set on the same
+     element, so the standard properties are gated behind an @supports that only
+     Firefox — which has no ::-webkit-scrollbar to ignore them for — can enter. */
+  .run::-webkit-scrollbar { height:var(--sp-3); width:var(--sp-3); }
+  .run::-webkit-scrollbar-track { background:transparent; }
+  .run::-webkit-scrollbar-thumb {
+    background:var(--alu); background-clip:content-box;
+    border:var(--sp-0) solid transparent; border-radius:var(--r-pill);
+  }
+  @media (hover: hover) and (pointer: fine) {
+    /* The one hover in the app that is not on a control the design owns, and it
+       is the same move every other cap makes: the edge catches the light. */
+    .run::-webkit-scrollbar-thumb:hover { background:var(--alu-edge); background-clip:content-box; }
+  }
+  @supports not selector(::-webkit-scrollbar) {
+    .run { scrollbar-color:var(--alu) transparent; scrollbar-width:thin; }
+  }
+  /* The out-of-range summary is a sentence, and a sentence does not take a
+     share of a score's leading. Naming the first row min-content excludes it
+     from the stretch — an explicit track with a non-auto max is not a track
+     free space is distributed into — and the bar cells after it are implicit
+     `auto` rows that still are. ui.js sets the class only when it writes the
+     line, so with no summary the first system is an implicit row like every
+     other one and stretches with them. */
+  .run.has-run-note { grid-template-rows:min-content; }
 
   /* Two bars to a system as soon as the stage can hold them. The query is on
      the stage rather than on the viewport because the rig column is now
@@ -72,11 +149,24 @@
 
   /* One bar. The gutter is inside the cell rather than being a column of the
      run, because with two bars to a system a single pair of run-level tracks
-     cannot keep both numbers on their own chips' first line. */
+     cannot keep both numbers on their own chips' first line.
+
+     The barline is what makes the two bars on a system read as two bars. Both
+     cells were already built identically, but only the first one's number had
+     the well's own wall to its left: the second sat 16px from the end of bar
+     one's chips and 8px from the start of its own, which is not a difference
+     the eye can resolve, so bar 2's number read as a stray glyph dropped inside
+     bar 1's row while bar 1's read as a gutter. Printed music solved this by
+     drawing the line; the number now belongs to the bar on its right at both
+     ends of the system, and the run gained the one piece of furniture a score
+     is actually supposed to have. It is on the cell rather than on the gutter
+     span so it runs the full height of the system, and it is keyed to
+     [data-bar] because a kit has no bars to divide. */
   .seq-bar-cell {
     align-items:start; display:grid; gap:var(--sp-2);
     grid-template-columns:var(--sp-5) minmax(0,1fr); min-width:0;
   }
+  .seq-bar-cell[data-bar] { border-left:1px solid var(--edge); padding-left:var(--sp-1); }
 
   /* One bar's chips. Wrapping inside the row is fine — it is still one bar. */
   .seq-row { display:flex; flex-wrap:wrap; gap:var(--sp-2); min-width:0; }
@@ -107,7 +197,14 @@
   /* A kit has no bars, so its cell has no number — and an empty 24px gutter
      beside a full-width row is a column of nothing pretending to be one of
      something. The cell simply loses the track. */
-  .seq-bar-cell:not([data-bar]) { grid-template-columns:minmax(0,1fr); }
+  /* And it takes the whole system, because there is only ever one of it. The
+     two-bar template is right for a score and wrong for a kit: with --run-cols
+     at 2 the kit's single cell sat in the left track and left the right one
+     empty — measured at 1920x1080, 453px of an 880px well with nothing in it,
+     which is §V1's void back at half size on the one part that has no second
+     bar to put there. Spanning does not stretch the content; the voices simply
+     have the width the panel actually has. */
+  .seq-bar-cell:not([data-bar]) { grid-column:1 / -1; grid-template-columns:minmax(0,1fr); }
   .seq-bar-cell:not([data-bar]) > .seq-bar { display:none; }
   /* And a kit is not a score, so it does not get a score's well. On drums the
      run is a legend — four voices, one system — and `flex:1 1 auto` handed it
@@ -141,13 +238,72 @@
     border-radius:var(--r-cap); box-shadow:var(--bevel); position:relative;
     transform:translateY(calc(var(--link) * var(--lift, 1) * -2px));
     /* The marker arrives instantly because it marks *now*, and fades off over
-       340ms so the eye can track where it just was. background-color is in the
-       list on purpose: it used to be the one property left out, so the fill
-       snapped while the border and the shadow faded. 340ms is not on the
-       duration scale and is not meant to be — §6.13 names it, and it is the
-       phosphor falloff rather than a mechanism moving. */
-    transition:background-color 340ms var(--e-decay), border-color 340ms var(--e-decay),
-               box-shadow 340ms var(--e-decay), transform var(--t-click) var(--e-travel);
+       --t-lift so the eye can track where it just was. background-color is in
+       the list on purpose: it used to be the one property left out, so the fill
+       snapped while the border and the shadow faded.
+
+       box-shadow is NOT in the list, and that is §9.4 rather than tidiness.
+       "Nothing animates width, height, left, top, margin or box-shadow during
+       playback" — and this rule did, on the one element in the app that changes
+       state twice a beat for the length of a song. Measured before the change:
+       a .now chip's resolved shadow was five slots (--bevel's two inset legs,
+       --cast-1's two blurred legs, --bloom-part) and it interpolated down to
+       two over 340ms every time the playhead left a chip. Re-rasterising a
+       blur on a timer is the exact cost the rule exists to prevent, and it is
+       not a cost §6.13's phosphor trail has to pay: the trail is a falloff, and
+       a falloff is what opacity is for. The cast and the bloom therefore moved
+       to ::before, which cross-fades on the compositor without repainting
+       anything; the fill and the hairline stay here and still fade over the
+       same 340ms, so the trail is intact in every channel that carries it.
+
+       What is left on the chip's own box-shadow is flat by construction.
+       --bevel is two 1px inset legs and it is the same value at rest, linked,
+       now and active, so there is nothing for a transition to interpolate even
+       if one were declared. The one state that does change it is
+       :focus-visible, which adds the ring — and a focus ring that appears in
+       one frame is the correct behaviour for a focus ring anyway.
+
+       The rung is 340ms, which is §6.13's own figure for this decay, and the
+       comment that used to sit here said 340 "is not on the duration scale and
+       is not meant to be". It is now, and taking the token is the right move
+       even though the rung is named for the heaviest thing that moves rather
+       than for light going out: §5.2's own table already spends --t-lift on the
+       playhead's trail fading behind it, which is this exact phenomenon one
+       region up, so the collision is between the name and the phosphor rather
+       than between this rule and the one beside it. Anyone retuning --t-lift
+       should know it carries both phosphor falloffs as well as the card. */
+    transition:background-color var(--t-lift) var(--e-decay), border-color var(--t-lift) var(--e-decay),
+               transform var(--t-click) var(--e-travel);
+  }
+
+  /* The cap's elevation, held on its own surface so it can be taken away over
+     time without being redrawn. --link is still the one number that carries
+     §7.5: hover, .is-linked and .now all set it, and here it is simply the
+     opacity of the cast rather than a fourth thing to remember to add.
+
+     No background, and that is the whole of the stacking question. An outer
+     box-shadow is clipped to the region OUTSIDE its own border box, so a box
+     with no fill and nothing but a cast paints exactly nothing where the chip's
+     content is. That is what lets this sit in ordinary paint order — after the
+     chip, before the printed bar on ::after — with z-index left alone. The
+     obvious alternative, z-index:-1, is a trap here: the chip is position
+     relative with z-index auto and therefore is NOT a stacking context, so a
+     negative layer inside it does not go behind the chip, it goes behind
+     .run's own opaque --inset fill and the elevation vanishes outright.
+     Promoting the chip to fix that would have been a stacking-context change to
+     the rule §7.5 depends on, for no gain over a box that cannot occlude
+     anything in the first place.
+
+     inset is -1px against the chip's 1px hairline and the radius is --r-cap
+     plus that pixel, so the pseudo's border box lands exactly on the chip's and
+     the cast starts where it always started — the same concentric arithmetic
+     the well and its caps use. pointer-events:none because this covers the
+     whole cap and a shadow is not a target. */
+  .seq-chip::before, .seq-chord::before {
+    border-radius:calc(var(--r-cap) + 1px);
+    box-shadow:var(--cast-1), var(--bloom-part);
+    content:''; inset:-1px; opacity:var(--link); pointer-events:none; position:absolute;
+    transition:opacity var(--t-lift) var(--e-decay);
   }
 
   /* Width is duration, and duration is now measured against the bar rather
@@ -236,14 +392,24 @@
   .seq-chip.is-linked, .seq-chord.is-linked,
   .seq-chip:focus-visible, .seq-chord:focus-visible {
     --link:1;
-    box-shadow:var(--bevel), var(--cast-1);
+    transition-duration:var(--t-click);
+    transition-timing-function:var(--e-travel);
+  }
+  /* The cast has to arrive on the same curve as the colour it arrives with, and
+     the pseudo carries its own transition list, so the asymmetry has to be
+     stated twice. Both halves are the same two declarations; neither is a
+     duration the other could have inherited. */
+  .seq-chip.is-linked::before, .seq-chord.is-linked::before {
     transition-duration:var(--t-click);
     transition-timing-function:var(--e-travel);
   }
   @media (hover: hover) and (pointer: fine) {
     .seq-chip:hover, .seq-chord:hover {
       --link:1;
-      box-shadow:var(--bevel), var(--cast-1);
+      transition-duration:var(--t-click);
+      transition-timing-function:var(--e-travel);
+    }
+    .seq-chip:hover::before, .seq-chord:hover::before {
       transition-duration:var(--t-click);
       transition-timing-function:var(--e-travel);
     }
@@ -260,15 +426,31 @@
     --link:1;
     background:color-mix(in srgb, var(--part) 14%, var(--high));
     border-color:color-mix(in srgb, var(--part) 58%, var(--edge-hot));
-    /* --lit is what a struck pad sets, and setting it here is the point: the
-       marker in the run and the lamp on the faceplate are the same emission
-       token at the same strength, so the two never drift apart. The ring the
-       old hand-rolled shadow carried is now the border, which was already
-       going to --part anyway. */
-    --lit:1;
-    box-shadow:var(--bevel), var(--cast-1), var(--bloom-part);
     /* Asymmetric by design: nothing eases in, because it is marking *now*. It
-       leaves on the bed's 340ms decay. */
+       leaves on the bed's --t-lift decay. */
+    transition-duration:0ms;
+  }
+  /* --lit is what a struck pad sets, and it belongs on the surface that reads
+     it rather than on the chip the shadow left: the marker in the run and the
+     lamp on the faceplate are meant to be the same emission token at the same
+     strength, so the two never drift apart. The ring the old hand-rolled shadow
+     carried is now the border, which was already going to --part anyway.
+
+     One measured caveat for whoever tunes the emission next, because it is not
+     visible from this file. --bloom-part is declared on body and its
+     var(--lit) is substituted there, at that element's computed-value time,
+     before the token inherits — so every element reading it gets body's --lit,
+     which is the registered initial 0, and body's --part rather than the desk's.
+     On a .now chip the slot resolves to `color(srgb 0 0 0 / 0) 0 0 14px`: the
+     bloom is already fully transparent and was before this rule moved. It is
+     carried through unchanged rather than re-authored locally, because the
+     token lives in css/tokens.css and a component is not the place to redefine
+     one. When it is fixed there, this is where it will light.
+
+     The pseudo takes its own 0ms because arrival is instant on both surfaces or
+     the cast fades in behind a fill that has already snapped. */
+  .seq-chip.now::before, .seq-chord.now::before {
+    --lit:1;
     transition-duration:0ms;
   }
 
@@ -284,6 +466,15 @@
     box-shadow:var(--focus-ring), var(--bevel);
     outline:2px solid transparent; outline-offset:2px;
   }
+  /* The two states that flatten the cap, and they flatten it for opposite
+     reasons: a pressed chip has travelled INTO the panel, and a focused chip is
+     wearing a ring that a cast underneath would only wash grey. Both used to
+     get this for free, because box-shadow is not additive and their own
+     declarations simply replaced the cast; now that the cast is a separate
+     surface it has to be switched off by name. Listed together because the
+     result is identical and one rule cannot be got wrong in two places. */
+  .seq-chip:active::before, .seq-chord:active::before,
+  .seq-chip:focus-visible::before, .seq-chord:focus-visible::before { opacity:0; }
 
   /* A chip can be unavailable without being gone — a part that is switched off
      still has a run, it just cannot be auditioned. aria-disabled keeps it
@@ -354,9 +545,13 @@
     min-width:min(calc(var(--dur,1) * var(--run-step)), var(--sp-6));
     pointer-events:none; position:relative;
   }
+  /* --sp-0 is the rung the printed bar under a chip already takes, and the two
+     marks are one ink weight on purpose: a rest and a lit pad are the two things
+     the score prints along a baseline, and if they were different thicknesses
+     the difference would read as information. */
   .seq-rest::before {
     background:var(--edge-hot); border-radius:var(--r-chip); content:'';
-    height:2px; left:var(--sp-1); position:absolute; right:var(--sp-1); top:50%;
+    height:var(--sp-0); left:var(--sp-1); position:absolute; right:var(--sp-1); top:50%;
     transform:translateY(-50%);
   }
 
@@ -425,6 +620,19 @@
   .run[data-density='dense'] .chip-tag { display:none; }
   .run[data-density='dense'] .chip-glyph { min-width:2ch; }
   .run[data-density='dense'] .seq-chip { padding:var(--sp-1) var(--sp-2); }
+
+  /* The chord card has to come down with the chip, and for the opposite
+     reason. Every tier above buys horizontal room; a chord chart never runs
+     out of that — one chip to the bar is 326px wide at 1280x800 carrying
+     three strings none of which reaches 60px. What it runs out of is systems:
+     eight bars is four rows of card, and the card's own 12px of padding is
+     24px of every one of them. Taking the padding to the chip's rung and then
+     to the chip's dense rung is 8px and then 16px off four rows, which is the
+     58px that put the chart behind a scrollbar. Nothing here touches the type
+     — the symbol, the keys to press and the out-of-reach line are the whole
+     content of the card, and none of the three is spare. */
+  .run[data-density='tight'] .seq-chord { padding:var(--sp-2); }
+  .run[data-density='dense'] .seq-chord { padding:var(--sp-1) var(--sp-2); }
   /* A rest between every note is what makes a staccato bass bar ten items
      long. The mark stays — the silence is still on the score — but it stops
      bidding for width it does not need in order to be a mark. */
@@ -457,7 +665,9 @@
     align-items:center; display:flex; flex-direction:column; gap:var(--sp-3);
     font-size:var(--fs-lead); justify-content:center; line-height:var(--lh-ui);
     margin:0; padding:var(--sp-6) var(--sp-4); text-align:center;
-    animation:run-empty-in var(--t-throw) var(--e-throw) backwards;
+    /* --t-cue: §5.2's table spends this rung on the empty-state entrance by
+       name. It ran on --t-throw only because 240ms had no rung of its own. */
+    animation:run-empty-in var(--t-cue) var(--e-throw) backwards;
   }
   .seq-empty .mark { height:auto; width:min(100%, var(--fs-readout)); }
   /* The mark is drawn in the hairline ink, not the brand's: this is the state
@@ -487,9 +697,15 @@
      unconditionally and take the override with it. */
   @keyframes run-chip-in { from { opacity:0; transform:translateY(var(--sp-1)); } }
   @keyframes run-empty-in { from { opacity:0; transform:translateY(var(--sp-1)); } }
+  /* The fallback is --s-chip rather than a bare 16ms, and the two are the same
+     number by construction: --s-chip IS Motion.stagger's step, so a run that
+     arrives before any JS has written --hop staggers at exactly the rate a run
+     that arrives after it does. A literal here was a second copy of the step
+     that §9.4 caps at 16ms x 12, sitting in the one place nobody would look for
+     it. */
   .seq-chip, .seq-chord, .seq-rest {
     animation:run-chip-in var(--t-click) var(--e-travel) backwards;
-    animation-delay:calc(var(--enter-i,0) * var(--hop,16ms));
+    animation-delay:calc(var(--enter-i,0) * var(--hop, var(--s-chip)));
   }
 
   /* Nothing in Downbeat cuts to black, and that includes the run being
@@ -505,10 +721,16 @@
   /* Generate: the tape head passing. A --part band travels the width of the
      run behind the chips staggering in, transform-only, and it is scoped to
      the run so a "new melody" reroll can sweep the lane and the run while a
-     "new chords" reroll sweeps neither. --t-throw is the nearest duration on
-     the scale to §5.6's 240ms. */
+     "new chords" reroll sweeps neither.
+
+     --t-cue, at §5.6's own 240ms. This used to read --t-throw with a comment
+     admitting it was "the nearest duration on the scale" — the scale had no
+     240ms rung, so the sweep ran 20ms short of the figure the bible names for
+     it. §5.2 now spends --t-cue on exactly this ("a band crosses a region", and
+     the table names the --part band sweeping the lane and run), so the
+     approximation is retired rather than re-documented. */
   .run.is-sweeping::before {
-    animation:run-sweep var(--t-throw) var(--e-throw);
+    animation:run-sweep var(--t-cue) var(--e-throw);
     background:linear-gradient(90deg, transparent, var(--part));
     content:''; inset:0; pointer-events:none; position:absolute; z-index:1;
   }
@@ -521,8 +743,10 @@
   /* --------------------------------------------------------- less motion */
 
   /* Redefining the keyframe is the whole override: the entrance survives as a
-     120ms opacity reveal — an element that arrives with nothing at all reads
+     --t-click opacity reveal — an element that arrives with nothing at all reads
      as a glitch — and the translate, which is the part that moves you, goes.
+     (The prose here used to say 120ms; the animation has always run on the rung
+     declared above it, and the number in a comment is the copy that rots.)
      It sits with the component rather than in a11y.css because a keyframe can
      only be replaced by another declaration of the same name.
 

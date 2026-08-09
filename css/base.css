@@ -118,14 +118,27 @@
   }
 
   /* The engraved asset tag. The only number on screen nobody needs, and the
-     thing that makes a screenshot look like a photograph of equipment. The .1em
-     is narrower than --tr-caps on purpose: at 16% ink a wider track dissolves
-     into the panel instead of reading as engraving. */
+     thing that makes a screenshot look like a photograph of equipment.
+
+     The 16% ink measures 1.55:1 on --panel in the dark room and 1.38:1 in the
+     light one, and it stays. This is the one place in the app §9.1's 4.5:1 floor
+     does not apply, because the plate is decoration rather than text: it is
+     engraving, the effect *is* the low contrast, and every fact it prints is
+     carried in full by accessible text elsewhere on the desk. The element is
+     therefore aria-hidden in index.html, which is what makes the exemption
+     honest instead of merely convenient — a reader is not being asked to squint
+     at something it cannot see, it is being handed the same facts in a register
+     it can. §9.1 names the exemption so a later pass does not "fix" it, and
+     css/a11y.css lifts the ink to 40% under prefers-contrast for the sighted
+     readers who asked for more.
+
+     --tr-plate is narrower than --tr-caps on purpose: at 16% ink a wider track
+     dissolves into the panel instead of reading as engraving. */
   .plate {
     font-family:var(--sans);
     font-size:var(--fs-legend);
     font-variation-settings:'wdth' 112, 'wght' 500;
-    letter-spacing:.1em;
+    letter-spacing:var(--tr-plate);
     text-transform:uppercase;
     line-height:var(--lh-data);
     color:color-mix(in srgb, var(--ink) 16%, transparent);
@@ -195,6 +208,20 @@
   }
   ::-webkit-scrollbar-thumb:hover { background:var(--alu-edge); }
   ::-webkit-scrollbar-thumb:active { background:var(--alu-edge); }
+  /* §6.34 writes the hover as --alu-edge, and on near-black that is right: the
+     thumb goes from a 3.7:1 hairline colour to the aluminium highlight and
+     visibly catches the light. In the putty room --alu-edge is #E6E1D4, which
+     measures 1.06:1 against the --panel these four surfaces sit on — so in the
+     light theme the thumb did not brighten under the cursor, it vanished, and a
+     control you lose while reaching for it is worse than one with no hover at
+     all. §9.1's instruction to re-measure after a palette change is exactly this
+     case. A lit room has no headroom above the surface, so the thumb deepens
+     instead: the 68% ink derivation prefers-contrast already uses for --edge-hot,
+     one clear rung past the 50% it rests at. */
+  body.light ::-webkit-scrollbar-thumb:hover,
+  body.light ::-webkit-scrollbar-thumb:active {
+    background:color-mix(in srgb, var(--ink) 68%, transparent);
+  }
   /* Where a surface scrolls both ways the corner is the one piece WebKit still
      paints in its own grey. */
   ::-webkit-scrollbar-corner { background:transparent; }

@@ -179,7 +179,7 @@
      size of its own to insist on. */
   .lane.is-pitched { min-height:calc(var(--rows,8) * var(--row-h,22px) + 2px); }
   .lane.is-pitched > * { min-height:0; }
-  .lane.is-drums { display:flex; flex-direction:column; gap:2px; padding:var(--sp-2); }
+  .lane.is-drums { display:flex; flex-direction:column; gap:var(--sp-0); padding:var(--sp-2); }
   /* Neither grid means there are no notes to draw. The well keeps the height it
      would have had — a part with nothing in it must not collapse the panel and
      shove the run up the screen, because then switching parts moves everything
@@ -250,6 +250,10 @@
   .lane-keys i:not(.is-black) { box-shadow:inset 0 -1px 0 color-mix(in srgb, var(--room) 70%, transparent); }
   /* Only labelled when the row is tall enough to hold ten-pixel type without
      clipping it — ui.js adds the class after it has computed the row height. */
+  /* 3px, not a rung: the gutter is 26px wide and its right edge is a hairline
+     the grid is measured from, so the label is inset by the width of the key's
+     own bevel rather than by a spacing step — a --sp-1 here reads as a label
+     floating in the middle of a very narrow key. */
   .lane-keys.has-labels i[data-label]::after {
     color:var(--ink); content:attr(data-label); font-family:var(--mono);
     font-size:var(--fd-xs); font-variation-settings:'wdth' 87.5,'wght' 400; left:3px;
@@ -280,7 +284,14 @@
   }
   body.is-live .lane-head { opacity:1; }
   /* The wake. The lane reads as being written rather than scrolled, so the
-     light is behind the rule and not in front of it. */
+     light is behind the rule and not in front of it.
+
+     40px is a length of light, not a measure of space, which is why it is not on
+     the spacing scale and could not usefully be put there: it is roughly one
+     sixteenth of the track at the widths this lane is actually drawn at, so the
+     trail reads as the last step still glowing rather than as a comet. It is
+     tied to nothing else in the file on purpose — a wake that scaled with a
+     spacing rung would change length when the padding did. */
   .lane-head::before {
     background:linear-gradient(to right, transparent,
       color-mix(in srgb, var(--lamp) 24%, transparent));
@@ -306,6 +317,11 @@
     border-radius:var(--r-chip); box-shadow:var(--bevel); color:var(--on-part);
     display:flex; font-family:var(--mono); font-size:var(--fd-xs);
     font-variation-settings:'wdth' 87.5,'wght' 620; justify-content:center;
+    /* 1px, not a rung, and it is the grid's kerning rather than spacing: two
+       notes a semitone apart on adjacent sixteenths share an edge, and without
+       a hairline between them a run of stepwise quavers paints as one long
+       block. A --sp-1 gap would be a quarter of the row at the heights this
+       lane actually draws. */
     letter-spacing:var(--tr-data); line-height:var(--lh-data); margin:1px;
     min-width:0; overflow:visible; position:relative;
     transition:--lit var(--t-decay) var(--e-decay),
@@ -346,7 +362,22 @@
     animation:legend-in var(--t-throw) var(--e-throw) backwards;
     display:flex; flex-wrap:wrap; gap:var(--sp-3); margin-top:var(--sp-2);
   }
+  /* 6px is an optical correction and the decision is a ratio, not a step. The
+     list sets --sp-3 between one entry and the next, so the gap that binds a
+     swatch to its own letter has to be unmistakably smaller than the gap that
+     separates two entries — at --sp-2 it is two thirds of it, which is a
+     difference you have to measure rather than see, and the key reads as twelve
+     loose objects instead of six pairs. Half is the ratio the eye resolves
+     without being asked to. */
   .role-key li { align-items:center; color:var(--muted); display:flex; font-size:var(--fs-meta); gap:6px; }
+  /* 17px is the swatch, and it is sized off the line box rather than off the
+     spacing scale: the label beside it is --fs-meta at the inherited --lh-body,
+     which is an 18px line, so a 17px square is the largest picture of a note
+     that fits in this legend without the swatch — rather than the type — being
+     the thing that decides how tall the row is. --sp-5 is 24 and would decide
+     it; --sp-4 is 16 and fits, but draws the pigment sample smaller than the
+     word it is keyed to, at which point the key reads as type with decoration
+     beside it instead of as six samples of the ink in the lane. */
   .role-key b {
     align-items:center; border-radius:var(--r-chip); color:var(--on-part); display:flex;
     font-family:var(--mono); font-size:var(--fd-xs);
@@ -434,20 +465,40 @@
     align-items:center; border-radius:var(--r-cap); color:var(--muted); display:flex;
     font-size:var(--fs-meta); gap:var(--sp-1); justify-content:flex-end; margin-left:auto;
     /* 2px, so the label stays optically flush with the lane's right edge; the
-       focus ring is a box-shadow and sits outside the box either way. */
-    min-height:var(--tap); padding:0 var(--sp-0);
+       focus ring is a box-shadow and sits outside the box either way.
+
+       min-width as well as min-height, because this control only exists on the
+       phone and it was measured at 38x44 there — the height floor was stated and
+       the width floor was assumed, which is exactly what §9.3 says not to do. It
+       grows leftward off `margin-left:auto` into the lane head's own slack, so
+       nothing beside it moves. */
+    min-height:var(--tap); min-width:var(--tap); padding:0 var(--sp-0);
     transition:color var(--t-click) var(--e-travel),
                transform var(--t-click) var(--e-travel);
   }
   @media (hover:hover) and (pointer:fine) {
     .lane-toggle:hover { color:var(--ink); }
   }
-  .lane-toggle:active { transform:translateY(.5px); }
+  /* Against --m-travel like every other press in the app, rather than as a bare
+     half-pixel that css/a11y.css then had to cancel by name. The behaviour is
+     identical; what changes is that the reduced-motion layer now consumes this
+     control instead of enumerating it, which is the direction that file's own
+     comment sets — every name removed from its list is a file that keeps
+     behaving when someone adds a control to it. */
+  .lane-toggle:active { transform:translateY(calc(.5px * var(--m-travel, 1))); }
   /* The one ring, on the one radius the control actually has. The transparent
      outline is what carries it through forced-colors mode, where a box-shadow
-     is not painted at all. */
+     is not painted at all.
+
+     The ink step comes with it. The ring says where you are; it does not say
+     what the control is — and this toggle's entire rest-to-hover statement is
+     --muted going to --ink, so a keyboard user reaching the one control that
+     decides how much of the lane you can see was getting an amber box around
+     type that had not changed. Same split css/controls.css makes for the chrome
+     tiers: colour on focus, travel only on press. */
   .lane-toggle:focus-visible {
-    box-shadow:var(--focus-ring); outline:2px solid transparent; outline-offset:2px;
+    box-shadow:var(--focus-ring); color:var(--ink);
+    outline:2px solid transparent; outline-offset:2px;
   }
   .lane-toggle[disabled], .lane-toggle[aria-disabled=true] {
     cursor:not-allowed; opacity:.42; transform:none;
@@ -456,19 +507,36 @@
      chevron points is a property of the control and not of the viewport. */
   .lane-toggle .chev {
     display:inline-block; font-size:var(--fs-legend);
-    transition:transform 300ms var(--e-detent);
+    transition:transform var(--t-veil) var(--e-detent);
   }
   body.has-thumb.lane-slim .lane-toggle .chev { transform:rotate(180deg); }
 
   /* The chevron used to turn while the panel it points at jumped. Both now run
-     for the same 300ms on the same curve, so the disclosure reads as one
-     gesture instead of two unrelated ones — which is why the rail and the
-     playhead fade out rather than being switched off mid-move. 300ms is the
-     bible's own figure for this one gesture (§6.12) and it is written on both
-     sides of it; the point is that the two numbers are the same number. */
-  body.has-thumb .lane { transition:height 300ms var(--e-detent); }
+     on --t-veil and the same curve, so the disclosure reads as one gesture
+     instead of two unrelated ones — which is why the rail and the playhead fade
+     out rather than being switched off mid-move. The rung is the bible's own
+     figure for this one gesture (§6.12: 300ms, "the phone lane opening to full
+     height"), and since this pass it is a token on every side of it rather than
+     the same number written three times: the point was always that they cannot
+     drift, and a shared name is the only version of that which survives a
+     retune.
+
+     The well's own height leg is the one part of that gesture NOT declared
+     here. `body.has-thumb .lane` cannot own it: the element is
+     <div class="lane" id="lane">, css/motion.css transitions --part on #lane
+     with the `transition` shorthand, and a shorthand in the later layer
+     replaces the list outright — so this leg had never run and the panel was
+     the thing jumping while the chevron turned, which is the exact fault the
+     paragraph above claims to have fixed. It now sits in that rule, scaled by
+     --m-travel so a box growing under the thumb that tapped it collapses under
+     reduced motion.
+
+     The two opacity legs stay here, because nothing else transitions those
+     elements and a cross-fade is what tells you the rail and the playhead have
+     gone rather than been clipped — §5.8 keeps every one of those at full
+     duration. */
   body.has-thumb .lane-bars, body.has-thumb .lane-head {
-    transition:opacity 300ms var(--e-detent);
+    transition:opacity var(--t-veil) var(--e-detent);
   }
   /* An explicit height, not a max: the collapsed lane divides it between the
      pitch rows, and fr units have nothing to divide without one. The expanded
@@ -480,7 +548,17 @@
   body.has-thumb.lane-slim .lane { height:36px; min-height:0; }
   body.has-thumb.lane-slim .lane-bars,
   body.has-thumb.lane-slim .lane-head { opacity:0; pointer-events:none; }
-  body.has-thumb.lane-slim .tl-note { border-radius:2px; font-size:0; margin:0 1px; }
+  /* The radius override is gone rather than converted, and it cost nothing:
+     2px is not one of §4.2's five role tokens, and on a note that is four and a
+     quarter pixels tall it was not even a different shape. A UA scales a radius
+     down when the two on one edge exceed the box, so --r-chip's 4px resolves to
+     2.13px here and the declared 2px resolved to 2px. One fewer number that
+     could drift from the token it was standing in for. */
+  body.has-thumb.lane-slim .tl-note { font-size:0; margin:0 1px; }
+  /* 1px, and it is the one place the drum gap is not --sp-0. The voice rows are
+     5px tall in the strip, so the rung the full lane uses would be 40% of a row
+     — the gaps would read as the pattern and the hits as the gaps. Below --sp-0
+     there is only the hairline, which is what this is. */
   body.has-thumb.lane-slim .lane.is-drums { gap:1px; padding:var(--sp-1) var(--sp-2); }
   body.has-thumb.lane-slim .drum-name { display:none; }
   body.has-thumb.lane-slim .drum-row { grid-template-columns:minmax(0,1fr); }

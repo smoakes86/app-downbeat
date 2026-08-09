@@ -25,9 +25,9 @@
      settles, an exit should not. It is never load-bearing: every message it
      carries is also announced, so it stays out of hit-testing entirely.
 
-     Timing lives in css/motion.css, which declares the asymmetry (200ms in on
-     --e-throw, 110ms out on --e-close) on .toast and .toast.show. This block
-     owns only the two positions it moves between.
+     Timing lives in css/motion.css, which declares the asymmetry (--t-notice in
+     on --e-throw, --t-click out on --e-close) on .toast and .toast.show. This
+     block owns only the two positions it moves between.
 
      Keyframe required: toast-swap. */
   .toast {
@@ -41,6 +41,10 @@
     color:var(--ink);
     font-size:var(--fs-ui);
     left:50%;
+    /* 440px is a measure, not a rung: it is roughly 60 characters at --fs-ui,
+       which is the width a single sentence stays a single sentence at. The same
+       number caps the onboarding card below, for the same reason and
+       deliberately not by accident — both are one block of language on a room. */
     max-width:min(440px, calc(100vw - var(--sp-6)));
     opacity:0;
     padding:var(--sp-3) var(--sp-4);
@@ -54,7 +58,7 @@
 
   /* Two messages in a row must read as two arrivals rather than one caption
      change: the pill flinches as the text swaps, so the second one is seen. */
-  .toast.is-swapping { animation:toast-swap 90ms var(--e-travel); }
+  .toast.is-swapping { animation:toast-swap var(--t-recoil) var(--e-travel); }
 
   /* ================================================================ count-in
      §6.30 / §7.6. Four beats in which the app has nothing to say and everything
@@ -71,7 +75,7 @@
     display:flex; flex-direction:column; justify-content:center;
     gap:var(--sp-2);
     inset:0; overflow:hidden; position:fixed; z-index:90;
-    animation:scrim-in 300ms var(--e-throw) backwards;
+    animation:scrim-in var(--t-veil) var(--e-throw) backwards;
   }
   .count-in[hidden] { display:none; }
 
@@ -102,7 +106,7 @@
     content:''; height:2px; left:0; opacity:.55; pointer-events:none;
     position:absolute; right:0; top:0;
   }
-  .count-in.pulse::after { animation:count-scan calc(var(--beat-ms) * 1ms) linear forwards; }
+  .count-in.pulse::after { animation:count-scan calc(var(--beat-ms) * 1ms) var(--e-linear) forwards; }
 
   /* The one text glow permitted outside the two displays (§4.6 rule 6). The
      numeral is a lamp rather than a part — it belongs to the transport, so it
@@ -122,9 +126,17 @@
                 0 0 var(--sp-7) color-mix(in srgb, var(--lamp) 30%, transparent);
   }
   /* Arrival is a cold-cathode strike, not a fade. Two animations on purpose:
-     lcd-strike owns the opacity flicker, count-pulse owns the 90ms seat, and
-     because lcd-strike declares no transform the two do not fight. */
-  .count-in.pulse b { animation:count-pulse 90ms var(--e-throw), lcd-strike 340ms linear; }
+     lcd-strike owns the opacity flicker, count-pulse owns the --t-recoil seat,
+     and because lcd-strike declares no transform the two do not fight.
+
+     --e-linear on the strike is §5.1's second named case rather than an
+     exception to it: the shape of a cold-cathode strike lives in lcd-strike's
+     six keyframe stops, so easing *between* those stops would smear the
+     overshoot that is the whole effect. Nothing here travels. */
+  .count-in.pulse b {
+    animation:count-pulse var(--t-recoil) var(--e-throw),
+              lcd-strike var(--t-lift) var(--e-linear);
+  }
 
   /* §2.3: --lamp is identical in both themes because a lit lamp is a lit lamp,
      and it is measured at 8.54 on the dark --room. Nobody measured it on the
@@ -152,7 +164,7 @@
     content:attr(data-prev);
     inset:0; pointer-events:none; position:absolute; text-align:center;
   }
-  .count-in.pulse b::before { animation:count-digit-out 90ms var(--e-close) forwards; }
+  .count-in.pulse b::before { animation:count-digit-out var(--t-recoil) var(--e-close) forwards; }
 
   /* Silkscreen above the readout, not a caption beside it.
 
@@ -182,6 +194,29 @@
     padding:0 var(--sp-5);
   }
   .count-in .pill:active { transform:translateY(calc(.5px * var(--m-travel, 1))); }
+  /* The ring, and it was missing — which made this the one control in the app a
+     keyboard could reach and not see.
+
+     The rest rule above is `.count-in .pill`: two classes, exactly the weight of
+     `.pill:focus-visible` in css/controls.css, and this file is linked after
+     that one. So the resting box-shadow was quietly replacing the amber ring on
+     the only affordance offered during a four-beat count, on the surface that
+     covers the entire screen, with the Play button underneath deliberately
+     unreachable. The hover below already carries the guard for exactly this
+     collision; the rest state never did. Composed rather than replaced, so the
+     cap keeps its chamfer and its cast underneath the ring.
+
+     Press is the cap's own chamfer inverting, which is what every other cap in
+     the app does and what this one — styled like a .is-key opener but not
+     carrying the class — was doing with travel alone. Guarded off
+     :focus-visible so a pressed *and* focused Cancel keeps its ring: the press
+     still reads, because the half-pixel of travel above is unguarded. */
+  .count-in .pill:focus-visible {
+    box-shadow:var(--bevel), inset 0 0 0 1px var(--edge), var(--cast-1), var(--focus-ring);
+  }
+  .count-in .pill:active:not(:focus-visible) {
+    box-shadow:var(--bevel-in), inset 0 0 0 1px var(--edge), var(--cast-0);
+  }
   /* Hover takes the ring hot rather than lifting the fill: --alu-edge behind
      --ink measures 3.41:1, which is fine for a glyph on .icon and not fine for
      the word "Cancel". The boundary does the work instead.
@@ -223,7 +258,7 @@
     padding:calc(var(--sp-5) + var(--safe-t)) calc(var(--sp-4) + var(--safe-r))
             calc(var(--sp-5) + var(--safe-b)) calc(var(--sp-4) + var(--safe-l));
     position:fixed; z-index:100;
-    animation:scrim-in 240ms var(--e-throw) backwards;
+    animation:scrim-in var(--t-cue) var(--e-throw) backwards;
   }
   .onboarding[hidden] { display:none; }
 
@@ -237,8 +272,9 @@
        eyes as they step through it. */
     min-height:390px;
     overflow:hidden; padding:var(--sp-6) var(--sp-5); position:relative; width:100%;
-    /* 80ms behind the scrim: the room dims, and then the card arrives in it. */
-    animation:onboarding-card-in 340ms var(--e-throw) 80ms backwards;
+    /* --s-behind the scrim: the room dims, and then the card arrives in it.
+       That step is what the rung is named for, and this is its only consumer. */
+    animation:onboarding-card-in var(--t-lift) var(--e-throw) var(--s-behind) backwards;
   }
   .onboarding-close { position:absolute; right:var(--sp-4); top:var(--sp-4); z-index:1; }
 
@@ -247,7 +283,7 @@
     /* Top pad clears the close button, which is absolutely positioned and
        therefore contributes no height of its own. */
     padding:var(--sp-7) var(--sp-0) var(--sp-2);
-    animation:onboarding-page-in 160ms var(--e-throw) 80ms backwards;
+    animation:onboarding-page-in var(--t-fade) var(--e-throw) var(--s-behind) backwards;
   }
   .onboarding-page[hidden] { display:none; }
 
@@ -256,16 +292,17 @@
   .onboarding-page.is-leaving {
     opacity:0;
     transform:translateX(calc(var(--dir, 1) * -14px * var(--m-travel, 1)));
-    transition:opacity 160ms var(--e-close), transform 160ms var(--e-close);
+    transition:opacity var(--t-fade) var(--e-close), transform var(--t-fade) var(--e-close);
   }
 
-  /* The page contents arrive behind the card at 45ms apart. The index is
+  /* The page contents arrive behind the card one --s-region apart. The index is
      written in CSS rather than by Motion.stagger because this order is
      structural — mark, eyebrow, heading, body, footer — and never changes, so
      there is nothing for JS to decide. */
   .onboarding-page > *,
   .onboarding-foot {
-    animation:rise-in 220ms var(--e-throw) calc(80ms + var(--enter-i, 0) * 45ms) backwards;
+    animation:rise-in var(--t-throw) var(--e-throw)
+              calc(var(--s-behind) + var(--enter-i, 0) * var(--s-region)) backwards;
   }
   .onboarding-page > :nth-child(1) { --enter-i:0; }
   .onboarding-page > :nth-child(2) { --enter-i:1; }
@@ -353,8 +390,12 @@
     outline:2px solid transparent; outline-offset:2px;
   }
   /* The same reach on focus, because a keyboard user stepping the dots should
-     see the one under the cursor light exactly as a pointer does. */
+     see the one under the cursor light exactly as a pointer does — including
+     the lit one, which had the ink half of the parity and not the bloom half.
+     Tabbing onto the page you are already on should look the same as pointing
+     at it. */
   .onboarding-dots button:focus-visible:not([aria-current="true"])::after { background:var(--ink); }
+  .onboarding-dots button[aria-current="true"]:focus-visible::after { box-shadow:var(--bloom-lamp); }
   @media (hover:hover) and (pointer:fine) {
     .onboarding-dots button:hover::after { background:var(--ink); }
     /* The lit dot is the one emissive thing on this card, so approaching it
@@ -367,17 +408,33 @@
 
   /* ======================================================== performance mode
      §6.32. Two chrome bars occupying one slot. They cross-fade rather than cut:
-     the bar leaves over 160ms while the performance strip slides down into the
-     same position over 260ms, so it reads as one object changing job instead of
-     two objects swapping.
+     the bar leaves over --t-fade while the performance strip slides down into
+     the same position over --t-panel, so it reads as one object changing job
+     instead of two objects swapping. Two rungs apart is the whole trick — an
+     equal pair would read as a swap.
 
      Keyframe required: perf-chrome-in. */
-  .bar { transition:opacity 160ms var(--e-close), visibility 0s; }
+  /* `visibility 0s`, never a bare `visibility 0s` with no curve: a transition
+     leg with no timing function takes the initial `ease`, which is not one of
+     the seven named curves §9.4 allows. It makes no visual difference over zero
+     seconds — the point is that a grep for an unnamed easing in this codebase
+     returns nothing.
+
+     The curve is now the token rather than the bare keyword. §5.1 says these
+     legs are not really the --e-linear case at all, because the load-bearing
+     part is the `0s` that makes visibility step instead of being dropped from
+     the shorthand — but §9.4 rejects a spelled-out `linear` even where the
+     choice is right, and the whole value of that rule is that it has no
+     exceptions to argue about. The `0s` is the one duration here that is not a
+     rung and cannot be: it is the absence of a transition, not a short one. */
+  .bar { transition:opacity var(--t-fade) var(--e-close), visibility 0s var(--e-linear); }
   body.is-performing .bar {
     opacity:0; pointer-events:none; visibility:hidden;
-    /* The delay only exists on the way out. Coming back, visibility flips in
-       the same frame so the bar is focusable again before it is opaque. */
-    transition:opacity 160ms var(--e-close), visibility 0s linear 160ms;
+    /* The delay only exists on the way out, and it is the fade's own length so
+       the bar stops being hit-testable exactly as it finishes disappearing.
+       Coming back, visibility flips in the same frame so the bar is focusable
+       again before it is opaque. */
+    transition:opacity var(--t-fade) var(--e-close), visibility 0s var(--e-linear) var(--t-fade);
   }
 
   .performance-chrome {
@@ -392,12 +449,13 @@
     min-height:58px;
     padding:var(--safe-t) calc(var(--gutter) + var(--safe-r)) 0 calc(var(--gutter) + var(--safe-l));
     position:fixed; right:0; top:0; z-index:45;
-    animation:perf-chrome-in 260ms var(--e-throw) backwards;
+    animation:perf-chrome-in var(--t-panel) var(--e-throw) backwards;
   }
   .performance-chrome[hidden] { display:none; }
   .performance-chrome.is-leaving {
     transform:translateY(calc(-8px * var(--m-travel, 1)));
-    transition:transform calc(260ms * .55) var(--e-close);
+    /* §5.3's exit, spelled as the relationship rather than as the answer. */
+    transition:transform calc(var(--t-panel) * .55) var(--e-close);
   }
   /* Width reserved for the longest part name under the legend above it, so the
      strip does not reflow every time you step parts — which, in the one mode
@@ -424,10 +482,14 @@
   .performance-actions .play { justify-content:center; min-width:82px; }
   .performance-chrome #performanceExit { color:var(--ink); }
 
-  /* The regrid is a reflow you can follow rather than a jump cut. It is
-     declared here rather than in the layout layer because it exists for this
-     mode and nothing else. */
-  .desk { transition:grid-template-rows 340ms var(--e-detent); }
+  /* §6.32's regrid — a reflow you can follow rather than a jump cut — is
+     declared in css/motion.css, on #desk, and not here. It was here, and it had
+     never once run: the element is <main class="desk" id="desk">, motion.css
+     puts the part cross-fade on #desk with the `transition` shorthand, and a
+     shorthand in a later layer replaces the whole list rather than adding to
+     it. One element cannot have two owners of one property, so the leg moved to
+     the rule that was already winning. This note is here because this is where
+     someone looking for the number will look. */
 
   body.is-performing #songButton,
   body.is-performing #structureButton,
@@ -460,7 +522,7 @@
     align-content:center; display:grid; gap:var(--sp-3);
     justify-items:center; min-height:0; padding:var(--sp-6) var(--sp-4);
     text-align:center;
-    animation:rise-in 240ms var(--e-throw) backwards;
+    animation:rise-in var(--t-cue) var(--e-throw) backwards;
   }
   .empty-state[hidden] { display:none; }
 
@@ -477,6 +539,11 @@
     letter-spacing:var(--tr-tight); line-height:var(--lh-heading); max-width:26ch;
   }
   .empty-state p { color:var(--muted); font-size:var(--fs-body); line-height:var(--lh-body); max-width:38ch; }
+  /* 180px is a floor on the remedy, not a rung. An empty state is centred, and
+     a centred button shrink-wrapped to "Generate" is a caption with a border on
+     it — the whole argument of §6.37 is that the fix has to look like the thing
+     you press. Reserved rather than fitted, so the four different labels this
+     button carries all draw the same object. */
   .empty-state .go,
   .empty-state .ghost { margin-top:var(--sp-2); min-width:180px; width:auto; }
 
@@ -499,7 +566,7 @@
     box-shadow:var(--bevel), var(--cast-1);
     display:flex; flex-wrap:wrap; gap:var(--sp-3);
     padding:var(--sp-3) var(--sp-4);
-    animation:rise-in 240ms var(--e-throw) backwards;
+    animation:rise-in var(--t-cue) var(--e-throw) backwards;
   }
   .landing[hidden] { display:none; }
   .landing-copy { display:grid; gap:var(--sp-0); min-width:0; }

@@ -2,7 +2,7 @@
 
    The wildcard that used to live at styles.css:1211 — *{transition-duration:.001ms}
    — is deleted. It was the lifeless outcome by construction: it removed the
-   40ms pad strike, which is information, and it would have silently neutered
+   --t-lamp pad strike, which is information, and it would have silently neutered
    every entrance authored after it. What follows is curated instead.
 
    The dividing line is not "is it animation", it is "does it carry meaning".
@@ -45,14 +45,14 @@
        keyboard-gutter labels' optical centring — and a blanket transform:none
        takes those with it and breaks the interface it was trying to calm.
 
-       Three names, and it used to be nine. css/sheets.css and css/overlays.css
-       both write their presses as calc(<n> * var(--m-travel)) since the polish
-       pass, so the six entries that used to sit here are consumed by the
+       Two names, and it used to be nine. css/sheets.css, css/overlays.css and
+       now css/lane.css all write their presses as calc(<n> * var(--m-travel)),
+       so the seven entries that used to sit here are consumed by the
        declaration above instead of enumerated below. That is the direction of
        travel for this block: every name removed from it is a file that will
        keep behaving when someone adds a control to it without reading this
-       one. What is left belongs to css/lane.css and css/run.css. */
-    .lane-toggle:active, .seq-chip:active, .seq-chord:active { transform:none; }
+       one. What is left belongs to css/run.css alone. */
+    .seq-chip:active, .seq-chord:active { transform:none; }
 
     /* Three surfaces whose *state change* is a translate that no token gates:
        the swapped setup instructions, the deleted library card, and the thumb
@@ -87,8 +87,41 @@
        of jumping. With travel off there is nothing to slide, and animating
        width and margin to no purpose is a layout tween for decoration. The dot
        still fades up, because its presence is the second, non-colour cue that
-       rule C10 requires and it must not simply blink into being. */
-    .pill[aria-pressed]::before, .part::before { transition:opacity 160ms linear; }
+       rule C10 requires and it must not simply blink into being.
+
+       --e-linear rather than the bare keyword that used to be written here, and
+       it is §5.1's own case rather than a shrug: what is left is a pure alpha
+       ramp, which has no mass to accelerate, on the one preference where the
+       dot must not look like it is travelling. */
+    .pill[aria-pressed]::before, .part::before { transition:opacity var(--t-fade) var(--e-linear); }
+
+    /* Two layout tweens — the desk regrid and the phone lane's height — are
+       NOT listed here, and their absence is the point. Both are boxes changing
+       size over time, which is the most literal vestibular motion left in the
+       app, so both do collapse under this preference; they do it by writing
+       their own duration as calc(<n> * var(--m-travel)) at the point of use,
+       the same way every distance in the system does.
+
+       Naming them here instead would have been a bug rather than a style
+       choice. `.desk { transition:none }` in this layer outranks
+       `#desk { transition:--part … }` in the motion layer — a later layer beats
+       an ID — so the one declaration that cross-fades the entire right-hand
+       side on a part change would have died with the regrid. Reaching across
+       layers to cancel a transition by name is how you delete the thing sharing
+       the property.
+
+       The used map arrives at the hardware pad by pad at --s-pad in reading order
+       (§5.5). Zeroing --hop above collapses the three region hops in front of it
+       but cannot reach this term, because --pad-i is written as an inline style
+       on each group and an inline custom property outranks every layer — so the
+       tint still crossed twelve pads as a wave roughly 150ms long. It is
+       choreography, not information: the map is the same map whenever it lands,
+       so it lands at once.
+
+       The groups themselves are not listed: their only transitions are the
+       lamp's --lit decay and the cap's travel, and neither carries a delay. The
+       wave lives entirely on these five children. */
+    .pad-tint, .pad-bar, .wkey-tint, .wkey-bar, .bkey-tint { transition-delay:0s; }
 
     /* ----------------------------------------------------------- entrances
        Arrive together instead of in sequence. The stagger is choreography, not
@@ -101,18 +134,28 @@
        shortened to the 120ms opacity reveal §7.1 sets as the house reduced
        form; an element that arrives with nothing at all reads as a glitch
        rather than as an arrival, which is why none of these is `animation:none`.
+
+       The 120ms is --t-least, and it now has a name. It appears seven times
+       below and it is a single decision made once — "under this preference
+       everything arrives in the same short beat" — rather than seven judgements
+       about mass, which is the only thing §5.2's ladder measures. That is why
+       it is not a rung on that ladder: it sits apart in tokens.css as the floor,
+       named for the perceptual limit rather than for a weight, so nobody later
+       reaches for it to describe a small object. Rounding it onto --t-click or
+       --t-cut would have retuned §7.1's stated number to fit a scale that was
+       never asked to describe it.
        The sheet's case is the sharp one: `transition:none` here would sit in
        the a11y layer and kill the exit authored in the motion layer, and a
        sheet that vanishes in a frame is the outcome this block exists to
        prevent, so the resting transition is replaced rather than removed. */
-    .sheet { animation-duration:120ms; transition:opacity calc(var(--t-slide) * .55) var(--e-close); }
+    .sheet { animation-duration:var(--t-least); transition:opacity calc(var(--t-slide) * .55) var(--e-close); }
     .scrim, .count-in, .onboarding, .onboarding-page, .onboarding-card,
-    .performance-chrome, .empty-state, .empty, .landing { animation-duration:120ms; }
+    .performance-chrome, .empty-state, .empty, .landing { animation-duration:var(--t-least); }
     .onboarding-card { animation-delay:0ms; }
-    /* The onboarding's page contents step at a literal 45ms rather than off
-       --hop, because their order is structural, so they need the delay taken
-       out by name. */
-    .onboarding-page > *, .onboarding-foot { animation-delay:0ms; animation-duration:120ms; }
+    /* The onboarding's page contents step at --s-region rather than off --hop,
+       because their order is structural, so they need the delay taken out by
+       name — zeroing --hop above cannot reach a fixed-rate step. */
+    .onboarding-page > *, .onboarding-foot { animation-delay:0ms; animation-duration:var(--t-least); }
 
     /* A disclosure body growing from 0fr is a box changing size under the
        cursor — the reveal is the most literal layout animation in the app, and
@@ -144,9 +187,25 @@
        not, so the panels still arrive rather than being there from nowhere. */
     body.is-powered .rig,
     body.is-powered .stage,
+    body.is-powered .bay,
     body.is-powered .legend,
-    body.is-powered .plate { animation:plate-in 120ms var(--e-throw) backwards; }
-    body.is-powered .rig-stage { animation-duration:120ms; }
+    body.is-powered .plate,
+    /* The other six selectors css/motion.css's boot rule covers, and they were
+       the half of the sequence this block did not reach. §5.5 step 4 is the
+       engraved register *plus* the five control tiers, all on legend-in at
+       --t-throw; only the register was being shortened here, so under reduced
+       motion the panels and the legends landed at 120ms and then the transport,
+       the toggle well, the opener group, the device picker and the part
+       switcher went on arriving for another hundred milliseconds behind them.
+       A collapsed sequence that collapses unevenly is still a sequence. One
+       duration, one curve, everything at once. */
+    body.is-powered .is-entering,
+    body.is-powered .transport,
+    body.is-powered .toggle-well,
+    body.is-powered .key-group,
+    body.is-powered #rigDevices,
+    body.is-powered #parts { animation:plate-in var(--t-least) var(--e-throw) backwards; }
+    body.is-powered .rig-stage { animation-duration:var(--t-least); }
     /* The flicker is the one part of the sequence that is purely theatre, and a
        six-stop opacity stutter is exactly what this setting exists to stop. The
        display comes up already lit, bloom and all. */
@@ -155,14 +214,14 @@
     /* The lamp still strikes. It is a box-shadow coming up on the one control
        that means "the unit can be played now" — emission, not travel — so it
        keeps its authored gesture at the reduced length rather than being cut. */
-    body.is-powered .play { animation-delay:0ms; animation-duration:120ms; }
+    body.is-powered .play { animation-delay:0ms; animation-duration:var(--t-least); }
 
     /* ----------------------------------------------------- sweeps and scans
        The colour sweep becomes a cross-cut: the same statement — this half of
        the screen is new — made in one place instead of across one. The run
        declares its own equivalent in css/run.css, next to the keyframe it has
        to redefine. */
-    .sweep { animation-name:cross-cut; animation-duration:120ms; }
+    .sweep { animation-name:cross-cut; animation-duration:var(--t-least); }
 
     /* The count-in's scanline is a 2px bar crossing the entire viewport once
        per beat, four times, over a dimmed room — the largest single vestibular
@@ -182,7 +241,7 @@
     /* --------------------------------------------------- deliberately kept
        For the next person reading this file, the things NOT listed above are
        the point of it: --lit and its beat-relative decay on every pad, key,
-       note and drum cell; the `now` marker in the run and its 340ms falloff;
+       note and drum cell; the `now` marker in the run and its --t-lift falloff;
        the transport slot filling; the lane's is-now bar; every border-color,
        background-color, colour and fill transition on every control; the
        3.2-second depleting hairline under an armed delete, which is a countdown
@@ -209,7 +268,7 @@
        full-screen raster alive for nothing. */
     .scrim.is-leaving {
       backdrop-filter:none; -webkit-backdrop-filter:none;
-      transition:opacity calc(280ms * .55) var(--e-close);
+      transition:opacity calc(var(--t-open) * .55) var(--e-close);
     }
   }
 

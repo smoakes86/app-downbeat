@@ -1097,11 +1097,18 @@
     /* The incoming plate goes in first, so anything that asks the stage for
        "the" SVG — the phone crop in ui.js does — gets the one that is arriving
        rather than the one on its way out. Device switch is the one case that is
-       allowed to replace the faceplate, and even that cross-fades. */
+       allowed to replace the faceplate, and even that cross-fades.
+
+       143, not the 130 Motion.swap defaults to. §5.3's rule is one number for
+       the whole app — an exit is 0.55 of its own entrance — and 130 is half of
+       260, which is a different, invisible-looking ratio that nonetheless makes
+       this the one dismissal in Downbeat leaving on a clock nothing else uses.
+       The value is written here rather than argued for in the helper because
+       this is the only caller that names its durations. */
     host.insertBefore(svg, host.firstChild);
     if (old) {
       old.style.pointerEvents = 'none';
-      if (global.Motion) global.Motion.swap(old, svg, { in: 260, out: 130 });
+      if (global.Motion) global.Motion.swap(old, svg, { in: 260, out: 143 });
       else if (old.parentNode) old.parentNode.removeChild(old);
     }
 

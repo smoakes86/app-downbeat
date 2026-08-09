@@ -54,22 +54,86 @@
     --r-panel:18px;
     --r-pill:999px;
 
-    /* Durations are tied to mass, not to taste.
+    /* Durations are tied to mass, not to taste. Sixteen rungs, each named for
+       the kind of object that moves rather than for its number — a rung picked
+       by number is a rung picked by taste, which is the thing §5.2 exists to
+       stop.
 
-       --t-power is the odd one out: it is not the length of a single movement
-       but the length of a composed sequence, so it is the one duration that can
-       be wrong without any single rule looking wrong. It was 520ms while
-       css/motion.css composed §7.1 out to 640ms — the lamp strike is authored as
-       `calc(var(--t-power) - 180ms)` so that the sequence *ends* on the token,
-       and at 520 that put the last event 195ms before the legends had finished
-       arriving. 640ms is §7.1's own stated total and the number the boot
-       actually takes; src/ui.js reads the same token to decide when the
-       onboarding may cover the room, so the two cannot disagree again. */
-    --t-lamp:40ms;    /* light strikes */
-    --t-click:110ms;  /* a cap travels */
-    --t-throw:220ms;  /* a switch flips */
-    --t-slide:320ms;  /* a drawer */
-    --t-power:640ms;  /* the unit powers up, first pixel to lit lamp */
+       Five of them (lamp, click, throw, slide, power) predate this pass and are
+       untouched in both name and value; they are consumed too widely to rename.
+       The other eleven were literals: §9.4 demands every duration be a token
+       while the scale only covered five of the numbers the bible names, so the
+       rule was unsatisfiable and eighty-three literal times had been written
+       around the holes. css/motion.css had already written the hole down —
+       "five entrance times … sit between the duration rungs and are written
+       literally here" — which is a comment nobody should have had to author.
+
+       Exits are deliberately absent. §5.3 derives them: exit = 55% of the
+       entrance, spelled at the point of use as `calc(var(--t-x) * .55)` so the
+       relationship stays visible in the rule and cannot drift when an entrance
+       is retuned. An exit rung would be a second place to change.
+
+       One duration in the app is honestly not a rung: the 3.2s hairline that
+       depletes under an armed delete mirrors the undo window src/ui.js counts
+       down. A time that has to equal a JS timeout is that timeout's number, not
+       a judgement about mass, and it is commented as such at the point of use.
+
+       --t-power is the odd one out on this ladder: it is not the length of a
+       single movement but the length of a composed sequence, so it is the one
+       duration that can be wrong without any single rule looking wrong. It was
+       520ms while css/motion.css composed §7.1 out to 640ms — the lamp strike is
+       authored as this token minus the strike's own length (--t-bloom, 180ms) so
+       that the sequence *ends* on the token, and at 520 that put the last event
+       195ms before the legends had finished arriving. 640ms is §7.1's own total
+       and the number the boot actually takes; src/ui.js reads the same token to
+       decide when the onboarding may cover the room, so the two cannot disagree
+       again. */
+    --t-lamp:40ms;     /* a filament lights: no mass at all */
+    --t-recoil:90ms;   /* a body kicks and comes straight back */
+    --t-click:110ms;   /* a cap travels */
+    --t-cut:130ms;     /* the outgoing copy of something being replaced */
+    --t-fade:160ms;    /* a cross-cut: one layer trades places with another */
+    --t-bloom:180ms;   /* light and colour settling on a face already in place */
+    --t-notice:200ms;  /* a small surface arrives unasked */
+    --t-throw:220ms;   /* a switch flips */
+    --t-cue:240ms;     /* a line of type is recut; a band crosses a region */
+    --t-panel:260ms;   /* a panel-sized region enters */
+    --t-open:280ms;    /* a housing changes shape: a disclosure, a knob's track */
+    --t-veil:300ms;    /* the room is covered, or a rail opens to full height */
+    --t-slide:320ms;   /* a drawer */
+    --t-lift:340ms;    /* the heaviest single move: a card rises, the desk regrids */
+    --t-grow:400ms;    /* a bar grows out of nothing */
+    --t-power:640ms;   /* the unit powers up, first pixel to lit lamp */
+
+    /* The floor, and deliberately NOT a rung on the ladder above. Every value
+       from --t-lamp to --t-power answers "how heavy is this thing"; this one
+       answers "how short can a change be and still read as a change rather than
+       as a jump". That is a perceptual limit, not a mass, which is why it is
+       stated apart — dropping 120ms into the ladder between --t-click and
+       --t-cut would put a third value inside a 20ms band and invite the next
+       reader to pick it for a small object, which is exactly wrong.
+
+       Two consumers, and they want it for the same reason. css/a11y.css spends
+       it on the whole reduced-motion reveal: when transforms are off, every
+       entrance collapses to the shortest honest fade. css/layout.css spends it
+       on .bar-pos, the transport readout that appears and disappears with the
+       transport, where there is no object travelling and 110ms reads as a
+       flicker. It was written as a literal eleven times before it had a name. */
+    --t-least:120ms;
+
+    /* Steps, not durations. A step is the gap between two things that each take
+       their own time, and it is a separate family because getting one wrong
+       changes the *order* you read a sequence in rather than how heavy it feels.
+       --hop, below, is the beat-relative member of exactly this set — these are
+       the fixed-rate ones, for sequences whose reading order must not stretch
+       with the tempo. */
+    --s-pad:14ms;      /* one pad behind the last, in reading order */
+    --s-chip:16ms;     /* one chip behind the last — Motion.stagger's own step */
+    --s-bar:25ms;      /* one energy bar behind the last, left to right */
+    --s-word:40ms;     /* one word behind the last in a slot cut */
+    --s-region:45ms;   /* one desk region behind the last, at boot */
+    --s-lead:60ms;     /* one whole region leading another: rig before stage */
+    --s-behind:80ms;   /* a card arriving into a room that is already dimmed */
 
     /* Written once per song by Motion.tempo(bpm) — never per frame, because a
        registered inherited property written to :root invalidates the whole
@@ -84,7 +148,20 @@
        written onto this element by src/motion.js at load, from the same literal
        list that backs Motion.EASE. They are deliberately not duplicated here:
        two copies of a cubic-bezier is two copies that can disagree, and the
-       curves are read from JS as often as from CSS. */
+       curves are read from JS as often as from CSS.
+
+       --e-linear is the seventh curve and the only one declared here, because
+       the reason for that rule does not reach it: `linear` is a CSS-wide
+       keyword, not a bezier, so there is no second copy to drift out of step
+       with a first. It exists because five declarations already needed a
+       constant rate and had to spell a bare keyword §9.4 had no entry for — a
+       metronome scanline crossing the count-in, the phosphor strike on both
+       displays, and the hairline depleting under an armed delete. All three are
+       phenomena with no mass: a rate that is genuinely uniform, where an eased
+       curve would be a lie about a mechanism that is not there. §5.1 forbids it
+       on anything that travels through space, which has mass by definition and
+       therefore has to accelerate. */
+    --e-linear:linear;
 
     /* Two self-hosted variable faces. Archivo carries a real width axis, which
        is what makes a rack-panel silkscreen legend possible at all; Martian
@@ -115,6 +192,15 @@
 
     --lh-data:1;  --lh-tight:1.08;  --lh-heading:1.12;  --lh-ui:1.35;  --lh-body:1.5;
     --tr-caps:.145em;  --tr-tight:-.028em;  --tr-snug:-.012em;  --tr-0:0;  --tr-data:.01em;
+    /* The sixth rung, and the one the scale was missing rather than a new
+       design decision: §3.6 has always specified .1em for the spec plate by
+       name, and css/base.css has always written that number by hand. A tracking
+       value spelled at the point of use is a value §9.2 cannot check, which is
+       how a scale that claims to have collapsed seventeen values to five ends
+       up quietly carrying six. It is narrower than --tr-caps on purpose — at 16%
+       ink a wider track dissolves into the panel instead of reading as
+       engraving — so it cannot be folded into the caps rung. */
+    --tr-plate:.1em;
 
     /* Hardware palettes. These are pictures of two real objects, so they keep
        their real-world colours in both themes — but they are a closed,

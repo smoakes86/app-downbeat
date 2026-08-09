@@ -337,12 +337,20 @@ systems.
 ```
 --lh-data:1;  --lh-tight:1.08;  --lh-heading:1.12;  --lh-ui:1.35;  --lh-body:1.5;
 --tr-caps:.145em;  --tr-tight:-.028em;  --tr-snug:-.012em;  --tr-0:0;  --tr-data:.01em;
+--tr-plate:.1em;
 ```
 
 `body { line-height: var(--lh-body); letter-spacing: 0 }` and `.mono { letter-spacing:
 var(--tr-data) }`. The current global `-.006em` on `body` is **deleted** — it applies to the mono
 too, which is the opposite of what tabular data wants. Tracking is tied to size and nowhere else:
-17 letter-spacing values collapse to five tokens.
+17 letter-spacing values collapse to six tokens.
+
+`--tr-plate` is the sixth rung and it is a correction, not a new decision. §3.6 has always
+specified `.1em` for the spec plate **by name**, and `.plate` has always written that number by
+hand — so the scale that claimed to have five members has in fact always had six, with the sixth
+spelled at the point of use where §9.2 cannot check it. It does not fold into `--tr-caps`: at 16%
+ink a track that wide dissolves into the panel instead of reading as engraving, which is §3.6's
+whole argument. The rendered result is byte-identical to the hand-written value.
 
 ### 3.5 The signature register — the engraved legend
 
@@ -382,9 +390,45 @@ of equipment.
 DOWNBEAT · EP-133 K.O. II · C MIN · 96 BPM · 8 BAR
 ```
 
-`--fs-legend`, `'wdth' 112`, `'wght' 500`, `letter-spacing: .1em`, uppercase,
+`--fs-legend`, `'wdth' 112`, `'wght' 500`, `--tr-plate`, uppercase,
 `color: color-mix(in srgb, var(--ink) 16%, transparent)`. On regenerate it does a **slot cut**
 (§5.6), not a character shuffle — a keygen effect would date within a year.
+
+#### The plate is decoration, and it is `aria-hidden`
+
+The 16% ink measures **1.55:1 on `--panel` in the dark room and 1.38:1 in the light one**. That is
+the only text-contrast failure left in the app, and it is not going to be fixed, because raising it
+does not repair the effect — it deletes it. The plate is the single biggest visible win of the
+project precisely because it is almost not there.
+
+So the plate is **decorative engraving, exempt from §9.1's 4.5:1 floor**, and the exemption is paid
+for rather than asserted:
+
+- The element carries `aria-hidden="true"`, so no reader is handed type nobody can read. It has no
+  focusable descendants, so §9.6's *"nothing interactive is `aria-hidden`"* still holds.
+- Every fact it prints is carried in full by accessible text elsewhere on the desk, and none of it
+  is unique to the plate. Verified live at 1440×900 and at 390×844 with the thumb bar mounted —
+  none of these sits under an `aria-hidden`, `[hidden]` or `display:none` ancestor in either layout:
+
+  | Plate field | Also said, accessibly, at |
+  |---|---|
+  | `DOWNBEAT` | the sr-only `<h1>`, and `<title>` |
+  | device name | the pressed chip in `#rigDevices`; `#rigStage`'s `aria-label` |
+  | key and scale | `#songMeta` in the bar; `#rigStage`'s `aria-label` |
+  | BPM | `#songMeta` in the bar; `#rigStage`'s `aria-label` |
+  | bar count | every `.bar-seg`'s *"Bar n of m"*; `.lane`'s `role="img"` description |
+
+- `prefers-contrast: more` lifts the ink to **40%** (`css/a11y.css`) — 3.30:1 dark, 2.44:1 light. A
+  sighted reader who asked to be able to read the panel has asked to be able to read this too. Note
+  what those numbers are and are not: the bump does **not** clear the floor and is not claimed to.
+  It is a legibility concession inside an exemption, not the exemption being withdrawn. The plate
+  stays the faintest type on screen; it stops being invisible.
+
+**The terms of the exemption.** It holds only while the table above holds. If the plate is ever
+given a field that is not repeated in accessible text, the exemption lapses for that field: either
+duplicate the fact somewhere a reader can reach it, or drop `aria-hidden` and take the contrast
+hit. Do not silently hide a fact that exists nowhere else. §9.1 carries the same note so a reviewer
+working from the checklist alone reaches it.
 
 ### 3.7 The wordmark
 
@@ -564,19 +608,152 @@ elasticity in the system is where real elasticity exists: a finger dragging a sh
 --e-decay:  cubic-bezier(.3,0,.6,.2);      /* LED / phosphor falloff. Only on --lit and bloom. */
 --e-rubber: cubic-bezier(.18,1.3,.42,1);   /* the ONE overshoot in the app. Sheet drag release
                                               and the .check knob. Nothing else. */
+--e-linear: linear;                        /* a rate that is genuinely constant, because there
+                                              is no mass. NEVER on anything that moves. */
 ```
+
+**The six beziers are authored once**, as the literal list backing `Motion.EASE` in
+`src/motion.js`, and written onto the document element at load as `--e-detent … --e-rubber`. Two
+copies of a cubic-bezier is two copies that can disagree, and the curves are read from JS as often
+as from CSS.
+
+**`--e-linear` is the seventh, and it is declared in `css/tokens.css` instead** — the reason for
+the rule above does not reach it. `linear` is a CSS-wide keyword, not a bezier: there is no second
+copy to drift out of step with a first. Naming it is the point. Five declarations already needed a
+constant rate and had to spell a bare keyword the checklist had no entry for, which made a
+legitimate choice indistinguishable from a lazy one.
+
+**What it is for.** Phenomena with no mass, where an eased curve would be a lie about a mechanism
+that is not there:
+
+- the metronome scanline crossing the count-in, one bar wide, at the rate of the beat;
+- the phosphor strike on both displays, whose shape lives in its six keyframe stops — easing
+  *between* those stops smears the overshoot that is the entire effect;
+- the hairline depleting under an armed delete, which is a clock you are watching run out.
+
+**What it must never be used for: anything that travels through space.** A thing that moves has
+mass, mass has to accelerate, and a constant-rate translate is the single most recognisable tell of
+motion nobody designed. If it moves, it takes one of the six.
+
+**Two notes for whoever touches this next.** `Motion.EASE` carries the six beziers and no `linear`
+entry, because nothing in JS has yet wanted a constant rate — every `element.animate()` call in
+`src/motion.js` names a bezier. If one ever does, add `linear: 'linear'` to that map rather than
+writing the keyword at the call site, and delete the `--e-linear` line from `css/tokens.css` in the
+same change so the property keeps exactly one declaration. Separately, the four
+`transition: visibility 0s linear` legs are **not** this case: there the load-bearing part is the
+`0s`, which is what makes visibility step instead of being dropped from the shorthand. They may
+take the token, but nothing is wrong with them today.
 
 ### 5.2 Durations
 
-Tied to mass, not to taste. Fifteen ungrouped durations collapse to six plus the beat-relative one.
+Tied to mass, not to taste. **Every rung is named for the kind of object that moves, never for its
+number** — a rung picked by number is a rung picked by taste, which is the thing this section
+exists to stop.
+
+The scale shipped with five rungs while this document went on to name 400, 340, 300, 280, 260, 240,
+200, 180, 160, 130 and 90ms for specific components. §9.4 demands every duration be a token, so with
+five rungs that rule was **unsatisfiable**: eighty-three literal times had been written around the
+holes, across eleven sheets, and `css/motion.css` had been reduced to writing the hole down in a
+comment — *"five entrance times … sit between the duration rungs and are written literally here"*.
+Sixteen rungs closes it. The original five keep their names and their values; they are consumed too
+widely to rename.
 
 ```
---t-lamp:40ms;    /* light strikes */
---t-click:110ms;  /* a cap travels */
---t-throw:220ms;  /* a switch flips */
---t-slide:320ms;  /* a drawer */
---t-power:520ms;  /* the unit powers up */
+--t-lamp:40ms;     /* a filament lights: no mass at all */
+--t-recoil:90ms;   /* a body kicks and comes straight back */
+--t-click:110ms;   /* a cap travels */
+--t-cut:130ms;     /* the outgoing copy of something being replaced */
+--t-fade:160ms;    /* a cross-cut: one layer trades places with another */
+--t-bloom:180ms;   /* light and colour settling on a face already in place */
+--t-notice:200ms;  /* a small surface arrives unasked */
+--t-throw:220ms;   /* a switch flips */
+--t-cue:240ms;     /* a line of type is recut; a band crosses a region */
+--t-panel:260ms;   /* a panel-sized region enters */
+--t-open:280ms;    /* a housing changes shape: a disclosure, a knob's track */
+--t-veil:300ms;    /* the room is covered, or a rail opens to full height */
+--t-slide:320ms;   /* a drawer */
+--t-lift:340ms;    /* the heaviest single move: a card rises, the desk regrids */
+--t-grow:400ms;    /* a bar grows out of nothing */
+--t-power:640ms;   /* the unit powers up, first pixel to lit lamp */
 ```
+
+**The floor is separate, and it is not a rung.**
+
+```
+--t-least:120ms;   /* the shortest change that still reads as a change */
+```
+
+Every rung above answers *how heavy is this thing*. `--t-least` answers *how short can a change be
+before it stops reading as a change and starts reading as a jump*. That is a perceptual limit, not a
+mass, so it is stated apart from the ladder and **must not be picked for a small object** — a small
+object has `--t-lamp`, `--t-recoil` and `--t-click` waiting for it. Dropping 120ms into the ladder
+between `--t-click` and `--t-cut` would put a third value inside a 20ms band and invite exactly that
+mistake.
+
+It has two consumers and they want it for the same reason. `css/a11y.css` spends it on the whole
+reduced-motion reveal, which is §7.1's stated figure: when transforms are off, every entrance
+collapses to the shortest honest fade rather than to nothing, because an element that arrives with
+no duration at all reads as a glitch. `css/layout.css` spends it on `.bar-pos`, the transport
+readout that appears and disappears with the transport — nothing travels, and 110ms there reads as a
+flicker. It was written as a bare `120ms` eleven times across those two files before it had a name.
+
+`--t-power` reads **640ms**, not the 520ms this section used to print. It is not the length of a
+single movement but of a composed sequence, so it is the one duration that can be wrong without any
+single rule looking wrong — and §7.1 has always said the boot totals 640ms end to end. The lamp
+strike is authored as the token minus its own `--t-bloom`, so the sequence *ends* on the token; at
+520 that put the last event 195ms before the legends had finished arriving. `src/ui.js` reads the
+same token to decide when the onboarding may cover the room, so the two cannot disagree again.
+
+| Rung | Where it is spent |
+|---|---|
+| `--t-lamp` | the lit-pad strike; `[data-struck]` on the faceplate |
+| `--t-recoil` | `.parts` kicking 1.5px on a detent (§7.3); the count-in digit in and out; a toast's out-and-back as its text is replaced |
+| `--t-click` | a cap travelling; `[data-preview]`; the toast exit |
+| `--t-cut` | the outgoing half of `Motion.swap` and of a slot cut — `opacity:0; scale(.992)` |
+| `--t-fade` | `.pill` entrance and return; disclosure content in; the performance-chrome cross-cut; the two chrome bars leaving |
+| `--t-bloom` | the Play lamp striking at the end of boot; device-hover saturation; `.map-step` colour; the performance dim returning |
+| `--t-notice` | the toast arriving; the mark's baseline drawing; a library card collapsing on delete |
+| `--t-throw` | a switch flipping; `--part` / `--part-ink`; any `[hidden]` toggle arriving |
+| `--t-cue` | the title slot cut; the `--part` band sweeping the lane and run; empty-state entrance; the onboarding scrim |
+| `--t-panel` | `.bar` entrance; the phone sheet rising; boot panel strikes; `Motion.flip` reorder; `.performance-chrome` sliding down |
+| `--t-open` | the scrim's blur; `grid-template-rows: 0fr → 1fr`; the `.check` knob; `.part`'s transform; the desk dimming into performance mode |
+| `--t-veil` | the count-in covering the room; the phone lane opening to full height; the sheet-drag scrim |
+| `--t-slide` | the desktop sheet |
+| `--t-lift` | the onboarding card; sheet drag release; `.desk { grid-template-rows }`; `lcd-strike`; the playhead's trail fading behind it |
+| `--t-grow` | `.map-energy` bars growing from `height:0` |
+| `--t-power` | the whole boot sequence, first pixel to lit lamp |
+
+**Two things are deliberately not on the ladder.**
+
+1. **Exits.** §5.3 derives them — `exit = 55% of the entrance` — and they are spelled at the point
+   of use as `calc(var(--t-x) * .55)`, never as the answer. The relationship then stays visible in
+   the rule and cannot drift when an entrance is retuned. An exit rung would be a second place to
+   change. (The table in §5.3 rounds to the nearest 5 for readability; the code does not round.)
+2. **A duration that mirrors a JS timeout.** The 3.2s hairline depleting under an armed delete is
+   the undo window `src/ui.js` counts down. A time that *has* to equal a timeout is that timeout's
+   number, not a judgement about mass. It stays a literal and carries a comment saying so.
+
+**Steps are a separate family.** A step is the gap between two things that each take their own
+time. Getting one wrong changes the *order* you read a sequence in rather than how heavy it feels,
+which is why they do not share a scale with durations.
+
+```
+--s-pad:14ms;      /* one pad behind the last, in reading order */
+--s-chip:16ms;     /* one chip behind the last — Motion.stagger's own step */
+--s-bar:25ms;      /* one energy bar behind the last, left to right */
+--s-word:40ms;     /* one word behind the last in a slot cut */
+--s-region:45ms;   /* one desk region behind the last, at boot */
+--s-lead:60ms;     /* one whole region leading another: rig before stage */
+--s-behind:80ms;   /* a card arriving into a room that is already dimmed */
+```
+
+Two of these have no consumer in the sheets yet and that is not an oversight: `--s-bar` and
+`--t-grow` are §6.26's arrangement-map bars, which currently arrive without the growth or the
+left-to-right stagger this document specifies. The rungs are named so that whoever builds it takes
+the bible's numbers rather than inventing a twelfth.
+
+`--hop`, below, is the beat-relative member of exactly this set. These seven are the fixed-rate
+ones, for sequences whose reading order must not stretch with the tempo.
 
 **Beat-relative decay** *(graft: PHOSPHOR — the highest value-per-line change in the whole
 review):*
@@ -1190,9 +1367,16 @@ feeds the pad decay peak, the lane ink density and the accent cap.
 - **Open** the glyph rotates 45° to `✕` over 220ms `--e-detent`. The body animates open with
   `grid-template-rows: 0fr → 1fr` on a wrapper over 280ms, plus a 60ms-delayed opacity fade on the
   content so it does not appear inside a collapsed box.
-- **Content change** when the part or device changes under an open disclosure, fade the steps out
-  at 100ms and in at 160ms with a 6px `translateY`. Content changing silently under an open
-  disclosure is the classic "did that just change?" failure.
+- **Content change** when the part or device changes under an open disclosure, fade the steps out at
+  `calc(var(--t-fade) * .55)` — 88ms, §5.3's ratio — and in at `--t-fade` with a 6px `translateY`.
+  Content changing silently under an open disclosure is the classic "did that just change?" failure.
+  This line used to say **100ms**, hand-picked, and it was the last duration literal in
+  `css/sheets.css`. Two things forced the reconciliation: 100 is not on §5.2's ladder (which steps
+  90 → 110 around it), and `src/ui.js:727` removes `is-swapping` on a **120ms** timeout, so the out
+  has a hard ceiling. `--t-cut` is the rung whose name fits this exactly — *the outgoing copy of
+  something being replaced* — and at 130ms it would overrun that teardown and cut the swap
+  mid-fade. The ratio satisfies §5.3 and widens the margin from 20ms to 32ms. **If that timeout
+  moves, this number is its twin.**
 - On toggle, `scrollIntoView({ block:'nearest' })`.
 - Seed the HTML summary with the default device's real label so the first paint is never wrong.
 - Replace **both** indicator conventions (`▸/▾` and `＋/−`) with the one rotating glyph.
@@ -1754,11 +1938,34 @@ The checklist a reviewer uses to **reject** work. Any single failure is a reject
 - [ ] Text ≥ 4.5:1 on the surface it actually sits on (not the surface you assumed). Non-text
       graphics and load-bearing boundaries ≥ 3:1. **Re-measure after any palette change** — the
       last regression happened because a later pass changed the ink without re-checking.
+- [ ] **The spec plate is the one exemption, and it is a real one.** `.plate` prints at 16% ink —
+      1.53:1 dark, 1.38:1 light — and **must stay there**. It is decorative engraving, not text:
+      the low contrast *is* the effect, so raising it to the floor would delete the thing rather
+      than fix it. Do not "fix" this. The exemption is paid for and it is conditional:
+      `aria-hidden="true"` on the element, every field it prints duplicated in accessible text
+      elsewhere (§3.6 has the table — h1, device chip, `#songMeta`, `.bar-seg` labels), and a 40%
+      bump under `prefers-contrast: more`. **If a field is ever added to the plate that is not said
+      accessibly somewhere else, the exemption lapses for that field** — duplicate the fact or drop
+      `aria-hidden`, but never hide a fact that exists nowhere else. Nothing else in the app gets
+      this; an exemption that is not written down is just a bug nobody has found yet.
+- [ ] **The faceplate's specular and occlusion hairlines are the one place pure white and pure
+      black are allowed, and only as `rgba()` strokes on the drawn hardware.** Eleven of them exist,
+      all in `css/faceplate.css` (lines 172, 173, 251, 254, 391, 410, 455, 456, 457, 469, 477), all
+      `stroke:` on a `.dev-*` SVG shape, all between .06 and .95 alpha. They are exempt because they
+      are not ink and not chrome: they are the highlight where a light source grazes a moulded edge
+      and the shadow where one part occludes another, on a *picture of an object*. A specular
+      highlight that is `--ink` instead of white is a highlight of the wrong colour — the physics is
+      the spec. The letter of the rule above is about `#fff`/`#000` hex, which the faceplate does
+      not use; this bullet exists so the `rgba()` form is not mistaken for an oversight.
+      **The exemption is confined to strokes on the hardware drawing.** It does not cover fills, it
+      does not cover text, it does not cover anything outside `css/faceplate.css`, and it does not
+      cover the data layer (pads' `--lit`, the LCD's segments) which is `--part` and its tokens.
+      Any pure white or black reached for outside that boundary is a bug.
 
 ### 9.2 Type
 - [ ] Every `font-size` is a scale token. No half-pixels, no fourth value inside a 3px band.
 - [ ] Every `font-weight` is one of the five rungs, expressed via `font-variation-settings`.
-- [ ] Every `letter-spacing` is one of the five tracking tokens.
+- [ ] Every `letter-spacing` is one of the six tracking tokens (`--tr-plate` is the sixth; §3.4).
 - [ ] `line-height` is inherited from `body` unless the role demands `--lh-data`, `--lh-tight` or
       `--lh-heading`.
 - [ ] Musical data is in `--mono`. Language is in `--sans`. No drift either way.
@@ -1772,13 +1979,38 @@ The checklist a reviewer uses to **reject** work. Any single failure is a reject
 - [ ] Every shadow is a `--cast-*`, `--bevel*` or `--bloom-*` token. No ad-hoc `rgba(0,0,0,…)`.
 - [ ] One light source. One bevel recipe. Nothing over 1px. Max two gradient stops. No texture, no
       gloss, no `text-shadow` on UI text, no screwheads. (§4.6 — all nine.)
-- [ ] Every control clears 44×44. Measure it; do not assume it.
+- [ ] Every control in the **chrome** clears 44×44. Measure it; do not assume it — measure both
+      axes. The two misses found in the final pass were both a stated `min-height:var(--tap)` with
+      the width left to the content: `.lane-toggle` at 38×44 and `.thumb-more` at 40×44, each on the
+      phone, each now carrying `min-width:var(--tap)`. A floor on one axis is not a floor.
+- [ ] **Two documented deviations, and only these two.**
+      `.bar-seg` is a 3px strip with a 25px hit area (`inset -6px 0 -16px`), because the only room
+      to grow it is the button row above and the desk below — every version of that fix trades a
+      working target for this one. It is eight segments of a redundant control: the same bar is
+      reachable from the transport and the keyboard.
+      **The faceplate's pads and keys cannot clear 44×44 on a phone and this is arithmetic, not
+      neglect.** Measured at 390px: white keys 20×59, black keys 13×36, EP-133 pads 42×24, FM-1 pads
+      24×14. Sixteen white keys at 44px each is 704px of a 390px screen — the constraint is the
+      instrument's own proportions, and widening a black key to 44px stops it being a picture of the
+      hardware you are holding. This is why §9.6 requires every pad and key to have a keyboard path,
+      and why the run of chips below is the primary target surface: the faceplate is a *diagram of
+      where to put your fingers on the real unit*, and the chips are what you press here. If the
+      faceplate ever becomes the primary input, this deviation lapses and the layout has to change.
 
 ### 9.4 Motion
 - [ ] No bare `transition: <time>` shorthand anywhere — it resolves to `transition: all`. Every
       transition names its properties and its easing. (Four exist today: `styles.css:219, 439, 455,
       464`.)
-- [ ] Every duration is a token. Every easing is one of the six named curves.
+- [ ] Every duration is one of §5.2's sixteen `--t-*` rungs or its separate floor `--t-least`;
+      every stagger delay is one of its seven `--s-*` steps or `--hop`. Two carve-outs, both named
+      in §5.2 and both requiring a comment at the point of use: an exit written as
+      `calc(var(--t-x) * .55)`, and a time that has to equal a JS timeout. `--t-least` is **not** a
+      rung and must not be spent on a small object — it is the perceptual floor, and its only
+      legitimate uses are the reduced-motion reveal and a readout that fades with no object
+      travelling.
+- [ ] Every easing is one of the seven named curves. `--e-linear` is legitimate for a rate that is
+      genuinely constant and is **forbidden on anything that travels through space** (§5.1). A bare
+      `linear` keyword spelled in a rule is a failure even where the choice is right — name it.
 - [ ] Every surface that appears has an exit at ~55% of its entrance, routed through
       `Motion.hideWith`.
 - [ ] Nothing animates `width`, `height`, `left`, `top`, `margin` or `box-shadow` during playback.

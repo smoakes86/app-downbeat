@@ -177,8 +177,22 @@
         <div class="devices" id="rigDevices" role="group" aria-label="Choose your hardware"></div>
         <!-- The asset tag. It is the only number on screen nobody needs, and it
              is the thing that makes a screenshot look like a photograph of
-             equipment. ui.js slot-cuts it whenever the song changes. -->
-        <p class="plate" id="specPlate">Downbeat</p>
+             equipment. ui.js slot-cuts it whenever the song changes.
+
+             aria-hidden because it is engraving, not text. §3.6 prints it at 16%
+             ink, which measures 1.55:1 dark and 1.38:1 light and is the whole
+             effect; raising it to §9.1's floor would delete the thing rather
+             than fix it. The exemption is only legitimate because the plate
+             repeats and never uniquely carries: DOWNBEAT is the sr-only <h1>
+             above; the device is the pressed chip in #rigDevices and the
+             #rigStage label; the key and the BPM are #songMeta in the bar and
+             the #rigStage label; and the bar count is every .bar-seg's "Bar n of
+             m" plus the lane's own role=img description. All five were checked
+             live at 1440x900 and at 390x844 with the thumb bar mounted, and none
+             of them sits under an aria-hidden or display:none ancestor in either
+             layout. Hide anything here that is not also said out there and this
+             becomes a real loss — §9.1 records the exemption and its terms. -->
+        <p class="plate" id="specPlate" aria-hidden="true">Downbeat</p>
       </section>
 
       <!-- ---------------------------------------------------------- stage -->

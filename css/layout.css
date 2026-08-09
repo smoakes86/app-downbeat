@@ -47,6 +47,11 @@
      A width media query would put that decision in responsive.css, two files
      away from the only two rules that read it, and the bar is not the viewport
      anyway — in performance mode it is replaced by a different element. */
+  /* 56px is the bar's own height rather than a spacing rung: --tap plus --sp-3
+     of air for the controls it seats, and — the load-bearing half — the exact
+     fallback baked into --bar-h in tokens.css, so the desk reserves the right
+     height on the first paint, before ui.js has measured the element. The two
+     numbers are one number and must be changed together. */
   .bar {
     align-items:center; background:var(--material);
     backdrop-filter:blur(28px) saturate(170%); -webkit-backdrop-filter:blur(28px) saturate(170%);
@@ -73,6 +78,10 @@
   /* A tier boundary, not a divider between every control. */
   .bar-rule { align-self:center; background:var(--edge); flex:none; height:var(--sp-5); width:1px; }
 
+  /* 1px, not --sp-0. The title and the meta strip are one lockup, not two
+     stacked blocks: this is the hairline that stops their leading colliding and
+     nothing more, and at 2px the spec strip starts reading as a second line of
+     copy under a heading rather than as part of it. */
   .bar-song {
     display:flex; flex-direction:column; gap:1px; justify-content:center;
     margin-left:var(--sp-2); min-width:0;
@@ -103,13 +112,20 @@
   /* The readout reserves its width from first paint. It used to be display:none
      until the transport started, so pressing Play shoved every control in the
      bar sideways at the exact moment you were looking at them. Ten characters
-     is `bar 88/88`, the widest string it can hold. */
+     is `bar 88/88`, the widest string it can hold.
+
+     --t-least, not a rung off §5.2's ladder, and the distinction is the whole
+     reason it has its own token: this is not a mass, it is the shortest fade
+     that reads as a fade at all on a readout that appears and disappears with
+     the transport. The ladder steps 110 → 130 around it because the ladder
+     measures weight, and there is no object here to weigh. css/a11y.css spends
+     the same token on the house reduced-motion reveal for the same reason. */
   .bar-pos {
     background:color-mix(in srgb, var(--part) 12%, transparent); border-radius:var(--r-pill);
     color:var(--part-ink); flex:none; font-family:var(--mono); font-size:var(--fd-sm);
     letter-spacing:var(--tr-data); line-height:var(--lh-data);
     min-width:calc(10ch + var(--sp-4)); padding:var(--sp-1) var(--sp-2); text-align:center;
-    transition:opacity 120ms var(--e-throw);
+    transition:opacity var(--t-least) var(--e-throw);
   }
   .bar-pos:empty { opacity:0; }
 
@@ -183,18 +199,28 @@
     margin:0 auto; max-width:var(--shell);
     padding:var(--sp-3) calc(var(--gutter) + var(--safe-r)) calc(var(--sp-3) + var(--safe-b)) calc(var(--gutter) + var(--safe-l));
     grid-template-columns:var(--desk-rig) minmax(0,1fr);
-    /* Entering performance mode re-grids the desk. At 340ms that is a reflow
-       you can follow rather than a jump cut, and it is the one layout property
-       in the app allowed to animate — it happens between takes, never during
-       one. */
-    transition:grid-template-rows 340ms var(--e-detent);
+    /* Entering performance mode re-grids the desk. At --t-lift — the rung §5.2
+       names for "the desk regrids" — that is a reflow you can follow rather
+       than a jump cut, and it is the one layout property in the app allowed to
+       animate: it happens between takes, never during one.
+
+       This declaration does not win, and it is kept anyway. css/motion.css
+       states the same leg on #desk, in a later layer, inside the shorthand that
+       also carries the --part cross-fade — one element cannot have two owners
+       of one property, so that rule is the live one. What survives here is the
+       pairing of the number with the region it belongs to, which is where
+       anyone looking for it will look. Change both or neither. */
+    transition:grid-template-rows var(--t-lift) var(--e-detent);
   }
   /* The thumb bar has already paid the home indicator out of its own padding.
      Paying it a second time here is 34px of dead panel above the gesture area
      on every notched phone, and it is the same inset counted twice. */
   body.has-thumb .desk { padding-bottom:var(--sp-3); }
 
-  .rig, .stage {
+  /* One material for every region of the desk, .bay included: the moment a
+     panel is machined differently from the panel beside it the desk stops being
+     one object and becomes a page with cards on it. */
+  .rig, .stage, .bay {
     background:var(--sheen), var(--panel);
     border:1px solid var(--edge); border-radius:var(--r-panel);
     box-shadow:var(--bevel), var(--cast-2);
@@ -234,10 +260,16 @@
      row and the main axis stops policing height. In both cases the ratio gives
      way, the SVG's own preserveAspectRatio catches the drawing, and nothing
      escapes the panel. */
+  /* min-height:120px is a floor on the drawing, not spacing. Everything else
+     about this box gives way — the ratio yields to the row, flex-shrink lets a
+     short panel compress it — and without a floor the sequence ends at zero and
+     the hero silently disappears rather than being small. It sits below every
+     band's own row height on purpose, so it binds only on a window dragged past
+     the point where the plate was going to be usable anyway. */
   .rig-stage {
     aspect-ratio:var(--dev-ar, 356 / 540);
     flex:0 1 auto; margin:auto; max-height:100%; min-height:120px; position:relative;
-    transition:aspect-ratio 400ms var(--e-detent); width:100%;
+    transition:aspect-ratio var(--t-grow) var(--e-detent); width:100%;
   }
   .rig-stage svg { height:100%; inset:0; position:absolute; width:100%; }
 
@@ -251,6 +283,20 @@
      stated here because it is only true above 900px: stacked, the rig is a
      row of the desk and a panel that stops short of its row is the fault it
      was written to fix. */
+
+  /* ---------------------------------------------------------------- bay
+     The second region of the left column, and it only exists when a landscape
+     instrument is mounted. src/ui.js builds it and moves the SET-UP disclosure
+     into it; css/responsive.css decides when, because "is there a second cell
+     to fill" is a question about the band. Everything here is what the panel is
+     rather than when it appears.
+
+     A flex column with one child that takes all of it: the disclosure is the
+     region, not a strip inside one. min-height:0 is what lets that child
+     actually be bounded by the cell instead of growing the grid row — without
+     it a 485px recipe in a 374px cell pushes the desk taller than the viewport
+     and the whole page scrolls. */
+  .bay { display:flex; flex-direction:column; min-height:0; min-width:0; padding:var(--sp-4); }
 
   /* -------------------------------------------------------------- stage
      position:relative is load-bearing: both sheets are children of the stage,
@@ -298,9 +344,18 @@
   .thumb[hidden] { display:none; }
   /* Nothing in the app vanishes in a frame. The exit is 55% of the arrival and
      it accelerates away, which is what tells you the bar left rather than that
-     the browser dropped it. */
+     the browser dropped it.
+
+     Written as --t-least rather than as §5.3's calc, and the arithmetic is why:
+     the arrival above is --t-throw, 55% of which is 121ms, and this ships the
+     120ms floor. One millisecond is a fourteenth of a frame, so the ratio is
+     satisfied to well inside the "~55%" §9.4 actually asks for — and taking the
+     token instead of the calc costs nothing rendered while removing the last
+     literal from this file. If --t-throw is ever retuned, re-check this line:
+     the floor does not follow the entrance, so a much slower arrival would want
+     the calc back. */
   .thumb.is-leaving {
-    opacity:0; transition-duration:120ms; transition-timing-function:var(--e-close);
+    opacity:0; transition-duration:var(--t-least); transition-timing-function:var(--e-close);
     translate:0 var(--sp-2);
   }
   /* The column gap is already the 8px the register asks for, so the legend must
@@ -320,11 +375,16 @@
      layout and `.pill { display:flex }` is @layer components, which the cascade
      puts after it, so specificity never got a say. It lives in controls.css
      now, beside the .pill it has to beat. */
-  .thumb-more { flex:none; }
+  /* min-width because this is the one .pill in the app with no label: it draws a
+     glyph, so the horizontal padding every other pill shares with its text is all
+     the width it gets, and it measured 40x44 on a phone. The pill's min-height
+     already floors the other axis. `flex:none` so the row's wrap never shaves it
+     back below the floor. */
+  .thumb-more { flex:none; min-width:var(--tap); }
 
   /* Scroll chaining: without this, reaching the end of the run or a sheet
      rubber-bands the whole page on iOS and visibly detaches the fixed bar. */
-  .stage-body, .run, .sheet-body, .map-wrap, .parts, .lane-wrap {
+  .stage-body, .run, .sheet-body, .map-wrap, .parts, .lane-wrap, .bay > .recipe {
     overscroll-behavior:contain; -webkit-overflow-scrolling:touch;
   }
 }

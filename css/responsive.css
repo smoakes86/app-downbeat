@@ -45,8 +45,13 @@
      between two halves of the same control. Nothing in that gap belongs to
      either of them, and a lone glyph at the far end of a wide bar reads as an
      orphan rather than as an affordance. The two travel together; the row's
-     width is not information. */
-  .stage-body > .recipe > summary { justify-content:flex-start; }
+     width is not information.
+
+     Unqualified by parent on purpose. It used to read `.stage-body > .recipe`,
+     and the disclosure now moves between the stage and the desk's set-up bay —
+     a placement rule that only holds in one of the two places the element lives
+     is a rule that silently stops holding the first time it is moved. */
+  .recipe > summary { justify-content:flex-start; }
 
   /* On a phone the scrollbars are already invisible and the gutter they reserve
      is a fifth of a chip. */
@@ -111,6 +116,74 @@
        pixel. The horizontal auto margins stay: those still centre the drawing
        in whatever the column rounds to. */
     .desk[data-instrument='wide'] .rig-stage { margin-block:0; }
+
+    /* --------------------------------------------------- the 2x2 desk
+       And the half that was missing. Stopping the panel at its contents moved
+       the emptiness out of the rig and onto the desk underneath it: measured at
+       1440x900 the FM-1's panel was 100% full and there were still 383px of
+       bare surface below it, which is 47% of the left column — 481px and 49% at
+       1920x1080. A crisp panel floating over a hole reads harder than a soft
+       one with a hole inside it, because a hard edge is what the eye goes to.
+
+       So the left column becomes two cells and the second one is given
+       content. src/ui.js moves the SET-UP disclosure into a bay it builds under
+       the rig and writes data-bay, which is the one flag this block reads — no
+       flag, no second row, and the desk is exactly the two-column desk it was.
+       The stage spans both rows, so it neither gains nor loses width, and it
+       gets the 44px strip and its rung of gap back: measured at 1440x900 the
+       lane took 45px of that and the run 15.
+
+       SET-UP is the right occupant three times over: it is the largest block of
+       prose in the app, it is about the hardware and therefore belongs in the
+       hardware column, and it wants vertical room — measured, the steps run
+       340-485px at this column width against a cell of 273-411px, so the cell
+       is full at 1280x800, 1440x900 and 1920x1080 alike and the overflow
+       scrolls inside the well rather than pushing the desk taller. The one part
+       that does not overflow is the chords set-up at 1920x1080: 403px of prose
+       in a 411px port, which is the worst case in the matrix at 98% full.
+
+       Rows are `auto` then `1fr`: the rig is sized by the instrument in it and
+       the bay takes everything left, which is the only ordering where neither
+       region can pool slack. */
+    .desk[data-bay='on'] { grid-template-rows:auto minmax(0,1fr); }
+    .desk[data-bay='on'] > .rig { grid-area:1 / 1 / 2 / 2; }
+    .desk[data-bay='on'] > .bay { grid-area:2 / 1 / 3 / 2; }
+    .desk[data-bay='on'] > .stage { grid-area:1 / 2 / 3 / 3; }
+
+    /* Shut, the bay is a 44px silkscreen strip, and a 44px strip does not
+       justify a 374px cell. So the rows swap and the rig takes the column back,
+       centring its instrument the way the tall panel does — collapsing SET-UP
+       is a choice the player made, and the desk should answer it rather than
+       leave a hole where the prose was. */
+    .desk[data-bay='on']:has(> .bay > .recipe:not([open])) {
+      grid-template-rows:minmax(0,1fr) auto;
+    }
+    .desk[data-bay='on']:has(> .bay > .recipe:not([open])) .rig { align-self:stretch; }
+    .desk[data-bay='on']:has(> .bay > .recipe:not([open])) .rig-stage { margin-block:auto; }
+
+    /* css/overlays.css deletes SET-UP in performance mode and is right to: in
+       the stage it is a strip standing between you and the run. In the bay it
+       IS the lower half of the left column, and deleting it there opens the
+       exact hole this block exists to close. The stage is unaffected either
+       way, so the mode still gets everything it was asking for. */
+    body.is-performing .desk[data-bay='on'] > .bay > .recipe { display:block; }
+  }
+
+  /* The complement of the block above, and filed next to it rather than in this
+     file's usual broadest-to-narrowest order, because on its own it reads as a
+     rule about nothing.
+
+     Three separate things put the disclosure back in the stage when the band is
+     left — the resize listener, the media-query listener and the next part
+     render — and any one of them is enough. This is what happens if a viewport
+     ever changes without any of the three: the bay's own rules in
+     css/sheets.css size the disclosure to a grid row that only the block above
+     declares, so a stranded bay would collapse SET-UP to nothing rather than
+     merely being in the wrong place. Sized by its contents instead, a stranded
+     bay is an ordinary panel with the instructions legibly in it, which is a
+     layout mistake rather than a disappearance. */
+  @media (max-width:899px), (max-height:500px) {
+    .bay > .recipe { flex:0 0 auto; min-height:auto; overflow:visible; }
   }
 
   /* ------------------------------------------------------------- laptop
@@ -184,6 +257,11 @@
     /* The rack. Centred against the instrument beside it, not top-aligned with
        the legend above it — the two buttons are a control group, and a control
        group hung from a label reads as a caption for the label. */
+    /* 132px is the rack's own width — the two device buttons stood in a column
+       beside the instrument — and it is fixed rather than a share of the panel
+       on purpose. Every pixel this column does not take is a pixel the plate
+       does, and the plate is the one thing in this band that wants width; a
+       fraction would hand it back the moment the viewport grew. */
     .rig > .devices {
       align-self:center; flex-direction:column; grid-area:devices; height:auto; width:132px;
     }
@@ -323,13 +401,33 @@
        and where every other sheet on the device comes from — but only as far as
        the top of the stage, so the invariant holds: it covers what you were
        reading, never the hardware you were reading it for. */
+    /* --t-panel on --e-throw, not the hand-written curve that used to be here.
+       §9.4 allows seven easings and this was an eighth, and .26s was the one
+       duration in the app spelled in seconds — which also hid it from the
+       exit ledger, where css/motion.css pairs this entrance with its own
+       calc(var(--t-panel) * .55). Same number, and now the same token at both
+       ends, so retuning the rise retunes the fall in one edit. */
     .sheet {
-      animation:sheet-up .26s cubic-bezier(.32,.72,0,1);
+      animation:sheet-up var(--t-panel) var(--e-throw);
       border-left:0; border-top:1px solid var(--edge);
       border-radius:var(--r-panel) var(--r-panel) 0 0; top:auto; height:100%; width:100%;
     }
     .sheet-head { padding-top:var(--sp-2); position:relative; }
-    /* The grabber says "this drags" before you try it. */
+    /* The grabber says "this drags" before you try it.
+
+       None of its three numbers is a spacing rung and none should become one:
+       38x5 is the drawn geometry of the object itself — the platform grabber
+       every phone sheet in the world wears, and the size a thumb reads as a
+       handle rather than as a rule — and 6px is an optical placement inside the
+       head's 12px top pad (§9.3's documented-optical case).
+
+       6 rather than a rung, and the rungs either side are both wrong for
+       mechanical reasons. --sp-1 puts a 5px pill 4px under a 1px border, where
+       it reads as a printing fault rather than as a handle. --sp-2 is worse
+       than optical: 8 + 5 = 13 against a 12px pad, so the pill crosses out of
+       the padding box and into the heading's own lead. 6 leaves visible air
+       above the pill and lets the heading's 8px lead carry the separation
+       below it, which is the side the eye is not measuring. */
     .sheet-head::before {
       background:var(--edge-hot); border-radius:var(--r-pill); content:""; height:5px;
       left:50%; position:absolute; top:6px; transform:translateX(-50%); width:38px;
@@ -338,7 +436,15 @@
     .sheet-head, .sheet-body { padding:var(--sp-3); }
 
     .lane-wrap { position:relative; }
+    /* 44px is the drum-name gutter narrowed from css/lane.css's desktop 64, not
+       --tap: nothing in this column is a target, and a label column that
+       silently tracked the tap floor would move the score every time the floor
+       was reconsidered. The coincidence is arithmetic. */
     .drum-row { grid-template-columns:44px minmax(0,1fr); }
+    /* A drawn height, not a gap — heights are not on the --sp scale. It fixes
+       the row where css/lane.css leaves a 20px floor and lets flex divide the
+       rest, because on a phone the four voices have to fit inside a 118px
+       --lane-target and still leave the run something to be read in. */
     .drum-cell { height:16px; }
     /* 9px was written round a chip that no longer has 7px of padding. §4.1
        absorbs it to a rung and the chip keeps its own vertical rhythm. */
@@ -443,6 +549,10 @@
     .device small { display:none; }
     .stage { border-radius:var(--r-well); }
     .stage-body { gap:var(--sp-2); padding:var(--sp-2); }
+    /* Narrower than the desktop's 448 because the stage itself is narrower here,
+       and a sheet that covers the whole of a landscape stage takes the run with
+       it — the invariant this file exists to protect is that the hardware stays
+       lit beside the sheet. min() keeps it honest below 360. */
     .sheet { width:min(360px, 100%); }
 
     /* One row across the foot: the parts take the slack and scroll if they must,
@@ -501,7 +611,7 @@
        gap is deliberately left at 16, because .stage-body > .legend takes its
        8px coupling out of that gap as a difference and changing one without the
        other pushes every legend a rung away from the region it names. */
-    .rig, .stage-body { padding:var(--sp-5); }
+    .rig, .stage-body, .bay { padding:var(--sp-5); }
 
     /* The chrome shares the desk's measure. The desk is capped at --shell and
        centred, so above about 1720px a full-bleed bar put the wordmark 400px
@@ -536,7 +646,7 @@
       gap:var(--sp-2);
       padding-top:var(--sp-2); padding-bottom:calc(var(--sp-2) + var(--safe-b));
     }
-    .rig { padding:var(--sp-3); }
+    .rig, .bay { padding:var(--sp-3); }
     .stage-body { gap:var(--sp-3); padding:var(--sp-3); }
     .bar { min-height:0; }
   }

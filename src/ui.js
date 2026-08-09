@@ -842,6 +842,74 @@
       const desk = $('#desk');
       if (desk) desk.dataset.instrument = size[2] >= size[3] ? 'wide' : 'tall';
     }
+    /* Written from the same branch that decides the column's shape, so the desk
+       cannot be told it has a second cell and left without anything to put in
+       it — or the reverse, which is worse. */
+    placeSetup();
+  }
+
+  /* ------------------------------------------------------------- the bay
+
+     Stopping the wide rig panel at its contents fixed the emptiness inside it
+     and moved the emptiness onto the desk underneath: measured at 1440x900 the
+     FM-1's panel was 100% full and there were still 383px of bare surface below
+     it, 47% of the left column, rising to 481px and 49% at 1920x1080. There is
+     no arrangement of a 1.86:1 object that fills a portrait column, so the
+     column stops being one region. The second one is a panel, and it is given
+     the one piece of content that wants the height.
+
+     SET-UP is that piece. It is the largest block of prose in the app; it is
+     about the hardware, so it belongs in the hardware column directly under the
+     hardware; and in the stage it was a 44px collapsed strip pinned to the foot
+     of the most valuable panel on the screen. Moving it hands the stage that
+     strip back for the lane and the run and fills the hole with reading matter.
+     Measured, the steps run 340-485px at this column width against a cell of
+     273-411px across 1280x800, 1440x900 and 1920x1080, so the cell is full at
+     all three and the overflow scrolls inside the well.
+
+     The element is moved rather than copied, for the same reason #parts and
+     #barControls are moved into the thumb bar: one <details>, one id, one skip
+     target, one set of handlers, and nothing to keep in step. */
+  const wideDesk = global.matchMedia('(min-width: 900px) and (min-height: 501px)');
+  let setupBay = null;
+  /* The bay opens the disclosure, so what the stage had has to be remembered.
+     Coming back to a narrow window and finding SET-UP expanded under the run is
+     the desk overruling a choice the player made. */
+  let recipeStageOpen = false;
+
+  function placeSetup() {
+    const recipe = $('#recipe');
+    const body = $('#stageBody');
+    if (!recipe || !body) return;
+    /* Both halves, and the media query is the same string css/responsive.css
+       uses. A flag the stylesheet cannot honour is a third grid item dropped
+       into a two-column desk. */
+    if (desk.dataset.instrument === 'wide' && wideDesk.matches) {
+      if (!setupBay) {
+        setupBay = document.createElement('section');
+        setupBay.className = 'bay';
+        setupBay.id = 'setupBay';
+        /* A region needs a name in the landmark list for the same reason the
+           rig and the stage have one — and the disclosure's own silkscreen is
+           the label a sighted reader gets, so it is the label to use. */
+        setupBay.setAttribute('aria-label', 'Set-up');
+      }
+      if (setupBay.parentNode !== desk) desk.append(setupBay);
+      if (recipe.parentNode !== setupBay) {
+        recipeStageOpen = recipe.open;
+        setupBay.append(recipe);
+        recipe.open = true;
+      }
+      desk.dataset.bay = 'on';
+      return;
+    }
+    if (recipe.parentNode !== body) {
+      // Last, which is where index.html has it: after the run it summarises.
+      body.append(recipe);
+      recipe.open = recipeStageOpen;
+    }
+    if (setupBay && setupBay.parentNode) setupBay.remove();
+    delete desk.dataset.bay;
   }
 
   /* ---------------------------------------------------------------- lane
@@ -1294,8 +1362,14 @@
   function layOutRun(view, part) {
     const chips = Array.from(runBox.querySelectorAll('.seq-chip, .seq-chord'));
     // An empty part leaves the well to its empty state, so the tier from the
-    // part before it must not be left behind to style nothing.
-    if (!chips.length) { runBox.dataset.density = 'roomy'; return; }
+    // part before it must not be left behind to style nothing — and neither may
+    // the previous part's out-of-range summary, which would otherwise pin the
+    // apology's row to min-content and stop it centring in the well.
+    if (!chips.length) {
+      runBox.dataset.density = 'roomy';
+      runBox.classList.remove('has-run-note');
+      return;
+    }
     // Devices.js writes its own bar markers inline with the chips; the grid
     // supersedes them.
     Array.from(runBox.querySelectorAll('.seq-bar')).forEach((el) => el.remove());
@@ -1366,6 +1440,12 @@
         : `${off} notes sit outside the pads`;
       out.append(summary);
     }
+    /* The well distributes its spare height across its rows, and a sentence is
+       not a system — without this the summary line would take a quarter of the
+       score's leading and sit alone at the top of a row of its own. The class
+       is what lets css/run.css name that first track without also naming the
+       first bar of a run that has no summary at all. */
+    runBox.classList.toggle('has-run-note', off > 0);
     /* One cell per bar rather than one line per bar. The cell carries its own
        gutter, so the run can pack two bars to a system the way a printed lead
        sheet does and eight bars stop needing eight full-width lines — which is
@@ -1406,7 +1486,42 @@
        two thirds of the padding come off in that order as the bar fills up.
        css/run.css spends the tier; this only has to name it. */
     const busiest = rows.reduce((most, row) => Math.max(most, row.items.length), 0);
-    runBox.dataset.density = busiest > 7 ? 'dense' : busiest > 3 ? 'tight' : 'roomy';
+    const tiers = ['roomy', 'tight', 'dense'];
+    let tier = busiest > 7 ? 2 : busiest > 3 ? 1 : 0;
+    runBox.dataset.density = tiers[tier];
+
+    /* The tier above answers "how wide can a chip be", and that was only ever
+       half the question. A chord chart is one chip to the bar — the busiest
+       bar holds a single item, so the arithmetic says roomy — and eight roomy
+       chords still stack four systems deep. Measured at 1280x800 with the
+       EP-133 mounted, that is 318px of score in a 263px well: the run went
+       back behind the scrollbar §V1 was written to remove, on a laptop, with
+       nothing dense about the music.
+
+       The well cannot know its own height from a media query, because the
+       height it gets is whatever the lane and the set-up strip leave it, so
+       the only honest way to ask is to lay the score out and look. Stepping
+       down is monotonic — every tier removes chip padding and never adds it,
+       and a smaller chip cannot wrap where a larger one did not — so the loop
+       terminates at `dense` and takes no step at all wherever the score
+       already fits, which is every part at 1440x900 and 1920x1080. Reading
+       scrollHeight forces one layout per part switch, never per frame.
+
+       The query is what keeps this off the phone, and it is the same one
+       css/responsive.css uses to decide the desk is two columns of locked
+       height: only there is the well the only place a score can hide. Stacked
+       or on a short screen the stage-body scrolls and the run sits on its own
+       two-tap floor, where no tier makes eight bars fit in 88px — stepping
+       would spend the note value and the pad eyebrow and buy the reader
+       nothing. It is a media query rather than a measurement of the well
+       because the well's height is not settled on the first render below 900px
+       and a tier that depends on a transient pixel is a tier that disagrees
+       with itself between two loads of the same page. */
+    const locked = global.matchMedia('(min-width:900px) and (min-height:501px)').matches;
+    while (locked && tier < 2 && runBox.scrollHeight > runBox.clientHeight + 1) {
+      tier += 1;
+      runBox.dataset.density = tiers[tier];
+    }
 
     /* The entrance is a delay, not a class that lingers: --enter-i drives an
        animation-delay, so nothing is left on the chip afterwards to delay the
@@ -2567,7 +2682,15 @@
     }
     if (event.key === 'Escape' && openName) { event.preventDefault(); return closeSheet(); }
     if (event.key === 'Escape' && performanceOn) { event.preventDefault(); return setPerformance(false); }
-    if (event.target.matches('input, select, textarea')) return;
+    /* The listener is on the document, so the target is not guaranteed to be
+       an element: with no focused node Chrome delivers keydown to the document
+       itself, which has neither `matches` nor `closest`, and the TypeError
+       aborted the handler — taking Space, G and the part-number shortcuts with
+       it for that press. A document target means nothing is focused, which is
+       exactly the case the shortcuts are for, so it falls through rather than
+       returning. */
+    const focused = event.target instanceof Element ? event.target : null;
+    if (focused && focused.matches('input, select, textarea')) return;
     if ((event.metaKey || event.ctrlKey) && !event.altKey && !event.shiftKey && event.key.toLowerCase() === 'z') {
       event.preventDefault();
       return undoLastChange();
@@ -2576,7 +2699,7 @@
     if (event.code === 'Space') {
       // Space belongs to whatever control has focus — pressing it on Save
       // should save, not save and start playing.
-      if (event.target.closest('button, a, summary')) return;
+      if (focused && focused.closest('button, a, summary')) return;
       event.preventDefault();
       togglePlayback();
     } else if (event.key === 'g' || event.key === 'G') {
@@ -2710,10 +2833,20 @@
   }
 
   if (global.ResizeObserver) {
-    const ro = new global.ResizeObserver(syncChrome);
+    const ro = new global.ResizeObserver(() => { placeSetup(); syncChrome(); });
     ro.observe(bar);
     ro.observe(thumb);
     ro.observe($('#performanceChrome'));
+    /* And the viewport itself, for the set-up bay. A window dragged across
+       900px or 501px has to move the disclosure back out of the desk, and the
+       resize event is the wrong single point of failure for something that
+       leaves a region empty when it misses: browsers coalesce and throttle it,
+       and an emulated viewport can change without dispatching it at all. The
+       root element is safe to observe from a callback that moves the
+       disclosure, because moving it cannot change the size of a box that is
+       already exactly the viewport — placeSetup is idempotent, so a second
+       delivery is a no-op rather than a loop. */
+    ro.observe(document.documentElement);
   }
   /* The first measurement happens against whatever face is on screen at the
      time, and font-display:swap means that is the metric-matched fallback on a
@@ -2727,17 +2860,22 @@
     document.fonts.ready.then(syncChrome).catch(() => {});
   }
   /* Column width is what decides whether a note can carry its own name, so the
-     measurement is retaken whenever the column width can have changed. */
-  global.addEventListener('resize', () => { syncChrome(); applyNoteDensity(); });
+     measurement is retaken whenever the column width can have changed — and the
+     set-up bay is placed here too, because dragging a window across 900px or
+     501px is the one way the desk can change shape without anything being
+     re-rendered. It is a no-op whenever the disclosure is already where it
+     belongs. */
+  global.addEventListener('resize', () => { placeSetup(); syncChrome(); applyNoteDensity(); });
 
   /* Crossing a band changes how much faceplate fits, how much height the lane
      may spend, and where the controls live. */
-  const onBand = () => { placeControls(); if (song) renderPart(); };
-  [phone, shortways].forEach((q) => {
+  const onBand = () => { placeControls(); placeSetup(); if (song) renderPart(); };
+  [phone, shortways, wideDesk].forEach((q) => {
     if (q.addEventListener) q.addEventListener('change', onBand);
     else q.addListener(onBand);
   });
   placeControls();
+  placeSetup();
 
   syncSolo();
   refreshScales();
