@@ -651,7 +651,12 @@
      separately and in the direction you would shift, which is what the ↑ and ↓
      on the chips are saying one at a time. */
   function runNoteFor(view) {
-    if (part === 'drums') return `${view.mapping.voices.length} voices`;
+    /* The beat has a name now, and it is the one thing worth knowing about a
+       drum part before you look at the grid. */
+    if (part === 'drums') {
+      const voices = `${view.mapping.voices.length} voices`;
+      return song.beatName ? `${song.beatName} · ${voices}` : voices;
+    }
     if (part === 'chords') return `${(song.spans || []).length} chords`;
     const events = view.mapping.events || [];
     let off = 0;

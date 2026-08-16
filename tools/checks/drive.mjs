@@ -486,6 +486,63 @@ await check('arrange reset', async () => {
   await page.waitForTimeout(300);
 });
 
+/* ---------------------------------------------------------------- beats
+
+   A genre with one beat writes one song, however many times you press
+   generate — which is what house, bossa and ambient did. This is the guard
+   against a library quietly collapsing back to a single pattern. */
+await check('every genre has more than one beat in it', async () => {
+  const out = await page.evaluate(() => {
+    const thin = [];
+    const junk = [];
+    const voices = window.Genres.DRUM_VOICES.map((v) => v.id);
+    window.Genres.order.forEach((g) => {
+      const seen = new Set();
+      for (let i = 0; i < 10; i++) {
+        const s = window.Compose.compose({ genre: g });
+        seen.add(s.drums.map((d) => `${d.step}:${d.instrument}`).join(','));
+        /* The beat carries its own name alongside its voices, so a key that
+           is not a voice must never be stamped out as a pattern. */
+        s.drums.forEach((d) => { if (voices.indexOf(d.instrument) < 0) junk.push(`${g}: ${d.instrument}`); });
+      }
+      /* Ambient is deliberately silent — its whole form is what enters and
+         leaves, and it has no drum part to vary. */
+      if (g !== 'ambient' && seen.size < 2) thin.push(`${g} (${seen.size} of 10)`);
+    });
+    return { thin, junk: junk.slice(0, 3) };
+  });
+  if (out.junk.length) throw new Error(`non-voice keys played: ${out.junk.join(', ')}`);
+  if (out.thin.length) throw new Error(`one beat only: ${out.thin.join(', ')}`);
+});
+
+await check('the beat is named, and the name is the one that played', async () => {
+  const out = await page.evaluate(() => {
+    const bad = [];
+    window.Genres.order.forEach((g) => {
+      const s = window.Compose.compose({ genre: g });
+      if (!s.beatName) { bad.push(`${g}: no name`); return; }
+      const voices = window.Genres.DRUM_VOICES.map((v) => v.id).filter((id) => s.beat[id]);
+      const played = [...new Set(s.drums.map((d) => d.instrument === 'openHat' && !s.beat.openHat ? 'hat' : d.instrument))];
+      played.forEach((id) => {
+        if (voices.indexOf(id) < 0) bad.push(`${g}/${s.beatName}: played ${id}, not in the beat`);
+      });
+    });
+    return bad.slice(0, 4);
+  });
+  if (out.length) throw new Error(out.join('; '));
+});
+
+/* Same recipe, same beat — or a share link stops being note for note. */
+await check('the beat is reproducible from the seed', async () => {
+  const same = await page.evaluate(() => {
+    const a = window.Compose.compose({ genre: 'house', harmonySeed: 12345, melodySeed: 999 });
+    const b = window.Compose.compose({ genre: 'house', harmonySeed: 12345, melodySeed: 999 });
+    const sig = (s) => s.beatName + '|' + s.drums.map((d) => `${d.step}:${d.instrument}:${d.velocity.toFixed(3)}`).join(',');
+    return sig(a) === sig(b);
+  });
+  if (!same) throw new Error('the same seed gave two different beats');
+});
+
 /* ------------------------------------------------ playing the arrangement
 
    The claim is that each section plays its own parts and no others, which is

@@ -1214,14 +1214,27 @@
 
   /* ----------------------------------------------------------------- drums */
 
+  /* Which beat this song plays. A genre carries several and the draw is
+     seeded, so the same recipe gives the same beat back — but two songs in the
+     same genre no longer arrive with the identical drum part. */
+  function pickBeat(genre, rng) {
+    const list = Array.isArray(genre.drums) ? genre.drums : [genre.drums || {}];
+    return (list.length ? rng.pick(list) : {}) || {};
+  }
+
+  /* A beat is a set of named voices plus its own name, so the keys have to be
+     read against the voice list rather than trusted. Stamping `name` out as a
+     pattern would emit a hit on every step that happens to be a letter. */
+  const VOICE_IDS = G.DRUM_VOICES.map((v) => v.id);
+
   function buildDrums(ctx) {
     const { genre, totalBars, rng, energy } = ctx;
-    const patterns = genre.drums || {};
+    const patterns = ctx.beat || pickBeat(genre, rng);
     const energyMod = G.ENERGY[energy] || G.ENERGY.flow;
     const totalSteps = totalBars * STEPS_PER_BAR;
     const events = [];
 
-    Object.keys(patterns).forEach((instrument) => {
+    VOICE_IDS.forEach((instrument) => {
       const pattern = patterns[instrument];
       if (!pattern) return;
       for (let step = 0; step < totalSteps; step++) {
@@ -1278,8 +1291,7 @@
   /* Which voices the kit uses, and on which beats, read off the patterns —
      through the same energy filter buildDrums applies, or the notes would
      promise a rim shot the kit has just dropped. */
-  function describeDrums(genre, energyMod) {
-    const patterns = genre.drums || {};
+  function describeDrums(patterns, energyMod) {
     const ghosts = !energyMod || energyMod.ghosts !== false;
     const beatsOf = (pattern) => {
       const hits = [];
@@ -1391,7 +1403,13 @@
     const melody = buildMelody({ key, genre, spans, totalBars, rng: melodyRng, energy, form });
     const chordTrack = buildChordTrack({ genre, spans, rng: makeRng(harmonySeed ^ 0x27d4eb2f), energy });
     const bass = buildBass({ genre, spans, totalBars, rng: makeRng(harmonySeed ^ 0x85ebca6b), energy });
-    const drums = buildDrums({ genre, totalBars, rng: makeRng(harmonySeed ^ 0xc2b2ae35), energy });
+    /* The beat is drawn before the events are built so the choice can be kept
+       on the song: the run of pads, the set-up notes and the arrangement all
+       have to describe the beat that is actually playing, not the genre's
+       first one. */
+    const drumRng = makeRng(harmonySeed ^ 0xc2b2ae35);
+    const beat = pickBeat(genre, drumRng);
+    const drums = buildDrums({ genre, totalBars, rng: drumRng, energy, beat });
     const counter = opts.counter
       ? buildCounter({ key, genre, spans, totalBars, rng: makeRng(melodySeed ^ 0x165667b1), energy }, melody)
       : [];
@@ -1403,8 +1421,9 @@
       swingUnit: genre.swingUnit || 8,
       progression, spans, melody, counter, chordTrack, bass, drums, form,
       harmonySeed, melodySeed, energy,
+      beat, beatName: beat.name || '',
       bassPlan: BASS_STYLES[genre.bass] || BASS_STYLES.roots,
-      drumPlan: describeDrums(genre, energyMod)
+      drumPlan: describeDrums(beat, energyMod)
     };
     song.theory = describe(song);
     return song;
@@ -1412,7 +1431,7 @@
 
   global.Compose = {
     compose, makeRng, STEPS_PER_BAR, chooseForm,
-    buildMelody, buildCounter, buildChordTrack, buildBass, buildDrums,
+    buildMelody, buildCounter, buildChordTrack, buildBass, buildDrums, pickBeat,
     BASS_STYLES, describeDrums
   };
 })(window);
