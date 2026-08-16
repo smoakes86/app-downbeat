@@ -1237,8 +1237,17 @@
     VOICE_IDS.forEach((instrument) => {
       const pattern = patterns[instrument];
       if (!pattern) return;
+      /* A pattern longer than one bar has to divide the loop, or its second
+         half lands in a different place every time round and the figure stops
+         being a figure. Where it does not divide, only the first bar is used
+         — a plainer beat is a better answer than a two-bar idea chopped at a
+         point the music never arrives at. Every length the app offers (4, 8
+         and 12 bars) is divisible by two and four, so this is the guard for
+         an auto length that lands somewhere odd, not the common case. */
+      const span = totalSteps % pattern.length === 0
+        ? pattern.length : STEPS_PER_BAR;
       for (let step = 0; step < totalSteps; step++) {
-        const symbol = pattern[step % pattern.length];
+        const symbol = pattern[step % span];
         if (!symbol || symbol === '.' || symbol === '-') continue;
         /* Ghost hits are colour, not the beat, and they are the first thing a
            player drops when the room wants less — so at the calm end the kit

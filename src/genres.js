@@ -37,7 +37,15 @@
      song; house, bossa and ambient did exactly that. Each entry is named
      because the name is information — "Boom-bap" and "Straight eights" are
      instructions to a player, and the app is in the business of telling you
-     how to play the thing. */
+     how to play the thing.
+
+     A pattern longer than sixteen is written as one string per bar, joined —
+     `'x.....x...x.....' + '..x...x...x.....'` — because the bar line is the
+     thing you read a drum pattern against, and a thirty-two character run
+     with no break in it hides exactly the information the second bar exists
+     to carry. Voices within one beat may be different lengths: a hat that
+     keeps time under a kick that answers itself every other bar is two bars
+     of music written as one bar and two. */
   const GENRES = {
     pop: {
       label: 'Pop',
@@ -67,7 +75,7 @@
           hat:   'x.x.x.x.x.x.x.x.',
           clap:  '........x.......' },
         { name: 'Syncopated',
-          kick:  'x.....x..x..x...',
+          kick:  'x.....x..x..x...' + 'x.....x..x..x.x.',
           snare: '....x.......x...',
           hat:   'xx.xxx.xxx.xxx.x',
           clap:  '....x.......x...' }
@@ -105,10 +113,21 @@
           hat:   'x..xx..xx..xx..x',
           rim:   '..............x.' },
         { name: 'Boom-bap',
-          kick:  'x.....x.....x...',
+          kick:  'x.....x.....x...' + 'x.....x...x.....',
           snare: '....x.......x...',
           hat:   'x.x.x.x.x.x.x.x.',
-          rim:   '..........g.....' },
+          rim:   '..........g.....' + '..............g.' },
+        { name: 'Long dust',
+          /* Four bars before it comes round: the kick moves, the rim answers
+             on the third bar, and the hat never changes. The whole appeal of
+             the genre is a loop you stop noticing, which needs a loop long
+             enough to stop noticing. */
+          kick:  'x.......x.x.....' + 'x.......x.......'
+               + 'x...........x...' + 'x.......x.x...x.',
+          snare: '....x.......x...',
+          hat:   'x..xx..xx..xx..x',
+          rim:   '................' + '................'
+               + '..........g.....' + '..............g.' },
         { name: 'Sparse',
           kick:  'x...........x...',
           snare: '....x.......x...',
@@ -159,10 +178,12 @@
           kick:  'x.......x.......',
           snare: '........g.......' },
         { name: 'Trading',
-          ride:  'x.xxx.xxx.xxx.xx',
+          /* Two bars, because trading is a two-bar idea: the drums answer in
+             the second what the horn played in the first. */
+          ride:  'x.xxx.xxx.xxx.xx' + 'x.xxx.xx........',
           hat:   '....x.......x...',
-          kick:  '......x.....x...',
-          snare: 'g..g..g...g..g..' }
+          kick:  '......x.....x...' + '......x.x...x.x.',
+          snare: 'g..g..g...g..g..' + 'g..g..g.x.x.x.xx' }
       ],
       melody: { range: [62, 82], restiness: 0.18, leapiness: 0.35, pentatonicBias: 0.15, chromaticApproach: 0.38, cells: bank('swung', 'flowing', 'syncopated') },
       progressions: [
@@ -194,8 +215,8 @@
           kick:  'x.......x.......' },
         { name: 'Slow blues',
           ride:  'x.xxx.xxx.xxx.xx',
-          snare: '....x.......x...',
-          kick:  'x.....x.x.......',
+          snare: '....x.......x...' + '....x.....g.x...',
+          kick:  'x.....x.x.......' + 'x.....x.x.....x.',
           rim:   '..........g.....' },
         { name: 'Hats up',
           hat:   'x.xxx.xxx.xxx.xx',
@@ -229,10 +250,10 @@
       patches: { chord: 'guitar', lead: 'brightLead', counter: 'organ', bass: 'fingerBass' },
       drums: [
         { name: 'Driving',
-          kick:  'x...x..x..x.x...',
+          kick:  'x...x..x..x.x...' + 'x...x..x..x.x.x.',
           snare: '....x.......x...',
           hat:   'x.x.x.x.x.x.x.x.',
-          crash: 'x...............' },
+          crash: 'x...............' + '................' },
         { name: 'Straight eights',
           kick:  'x.......x.......',
           snare: '....x.......x...',
@@ -283,8 +304,8 @@
           hat:   'x..x..x..x..x..x',
           rim:   '......g.......g.' },
         { name: 'Pocket',
-          kick:  'x..x..x...x.x...',
-          snare: '....x.......x...',
+          kick:  'x..x..x...x.x...' + 'x..x..x.....x...',
+          snare: '....x.......x...' + '....x.....g.x...',
           hat:   'x.x.x.x.x.x.x.x.',
           rim:   '..g...g...g...g.' },
         { name: 'Half-time swing',
@@ -332,11 +353,16 @@
           hat:     'x..xx..xx..xx..x',
           openHat: '......o.......o.' },
         { name: 'Rolling',
+          /* Four bars. The kick never moves — it cannot, it is the floor —
+             so the variation lives in the open hat and the rim, which is
+             where it lives on the record too. */
           kick:    'x...x...x...x...',
           clap:    '....x.......x...',
           hat:     'x.x.x.x.x.x.x.x.',
-          openHat: '..o...o...o...o.',
-          rim:     '...g...g...g...g' }
+          openHat: '..o...o...o...o.' + '..o...o...o...o.'
+                 + '..o...o...o...o.' + '..o...o...o.o.o.',
+          rim:     '................' + '...g...g...g...g'
+                 + '................' + '...g...g...g..gg' }
       ],
       melody: { range: [64, 84], restiness: 0.24, leapiness: 0.3, pentatonicBias: 0.55, cells: bank('syncopated', 'flowing', 'busy') },
       progressions: [
@@ -369,7 +395,7 @@
           kick:  'x...x...x...x...',
           snare: '....x.......x...',
           hat:   'x.x.x.x.x.x.x.x.',
-          openHat: '......o.......o.' },
+          openHat: '......o.......o.' + '......o...o...o.' },
         { name: 'Sixteenth pulse',
           kick:  'x.......x...x...',
           snare: '....x.......x...',
@@ -440,7 +466,7 @@
           snare: '....g...x...g...',
           hat:   'x.x.x.x.x.x.x.x.' },
         { name: 'Stomp and clap',
-          kick:  'x...x...x...x...',
+          kick:  'x...x...x...x...' + 'x...x...x...x.x.',
           clap:  '....x.......x...',
           rim:   '..g...g...g...g.' },
         { name: 'Waltzing eight',
@@ -476,9 +502,13 @@
           snare: '........x.......',
           hat:   'x.x.xxx.x.xxx.xx' },
         { name: 'Rolling hats',
-          kick:  'x.....x.x.......',
+          /* Four bars: the hat thins out and comes back, which is the one
+             thing a trap loop does that a listener notices. */
+          kick:  'x.....x.x.......' + 'x.....x.....x...'
+               + 'x.....x.x.......' + 'x...x.....x.x...',
           snare: '........x.......',
-          hat:   'xxxxxxxxxxxxxxxx' },
+          hat:   'xxxxxxxxxxxxxxxx' + 'x.x.x.x.x.x.x.x.'
+               + 'xxxxxxxxxxxxxxxx' + 'xxxxxxxxxxxxxxxx' },
         { name: 'Sparse and heavy',
           kick:  'x...........x...',
           snare: '........x.......',
@@ -512,16 +542,22 @@
       bass: 'bossa',
       patches: { chord: 'nylon', lead: 'sineLead', counter: 'guitar', bass: 'upright' },
       drums: [
-        { name: 'Clave',
-          rim:   'x..x..x...x..x..',
+        /* Son clave is a TWO-bar figure and always was — three strokes in the
+           first bar, two in the second. Writing it into sixteen steps folded
+           both halves onto each other and produced a bar that repeats where
+           the real thing alternates, which is the one rhythmic fact about
+           this music. 3-2 and 2-3 are the two ways round, and they are
+           different beats rather than the same beat rotated. */
+        { name: 'Clave 3-2',
+          rim:   'x..x..x.........' + '..x...x.........',
           hat:   'x.x.x.x.x.x.x.x.',
           kick:  'x.....x.x.....x.' },
-        { name: 'Reverse clave',
-          rim:   '..x...x.x..x..x.',
+        { name: 'Clave 2-3',
+          rim:   '..x...x.........' + 'x..x..x.........',
           hat:   'x.x.x.x.x.x.x.x.',
           kick:  'x.....x.x.....x.' },
         { name: 'Brushed samba',
-          rim:   'x..x..x...x..x..',
+          rim:   'x..x..x.........' + '..x...x.........',
           hat:   'x.xxx.xxx.xxx.xx',
           kick:  'x..x..x.x..x..x.' },
         { name: 'Quiet',
@@ -566,8 +602,8 @@
           snare: '..g.x..g..g.x..g',
           hat:   'xxxxxxxxxxxxxxxx' },
         { name: 'Broken',
-          kick:  'x.x.....x.....x.',
-          snare: '....x.....g.x...',
+          kick:  'x.x.....x.....x.' + 'x.x...x.......x.',
+          snare: '....x.....g.x...' + '....x.g...g.x..g',
           hat:   'x.x.x.x.x.x.x.x.',
           rim:   '......g.......g.' }
       ],
@@ -604,11 +640,11 @@
           hat:   'x.xxx.xxx.xxx.xx',
           clap:  '....x.......x...' },
         { name: 'Driving praise',
-          kick:  'x...x...x...x...',
+          kick:  'x...x...x...x...' + 'x...x...x...x.x.',
           snare: '....x.......x...',
           hat:   'x.x.x.x.x.x.x.x.',
           clap:  '....x.......x...',
-          crash: 'x...............' },
+          crash: 'x...............' + '................' },
         { name: 'Half-time',
           kick:  'x.........x.....',
           snare: '........x.......',

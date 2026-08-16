@@ -515,6 +515,57 @@ await check('every genre has more than one beat in it', async () => {
   if (out.thin.length) throw new Error(`one beat only: ${out.thin.join(', ')}`);
 });
 
+await check('every pattern is whole bars, and every genre has a long one', async () => {
+  const out = await page.evaluate(() => {
+    const voices = window.Genres.DRUM_VOICES.map((v) => v.id);
+    const ragged = [];
+    const short = [];
+    window.Genres.order.forEach((g) => {
+      let longest = 0;
+      window.Genres.GENRES[g].drums.forEach((beat) => {
+        voices.filter((id) => beat[id]).forEach((id) => {
+          const L = beat[id].length;
+          /* A pattern that is not a whole number of bars drifts against the
+             bar line a little further every time it comes round. */
+          if (L % 16) ragged.push(`${g}/${beat.name}/${id} is ${L} steps`);
+          longest = Math.max(longest, L);
+        });
+      });
+      if (g !== 'ambient' && longest <= 16) short.push(g);
+    });
+    return { ragged: ragged.slice(0, 3), short };
+  });
+  if (out.ragged.length) throw new Error(out.ragged.join('; '));
+  if (out.short.length) throw new Error(`no beat longer than a bar in: ${out.short.join(', ')}`);
+});
+
+await check('a long pattern that cannot divide the loop folds back to one bar', async () => {
+  const out = await page.evaluate(() => {
+    /* Force the awkward case rather than waiting for it: a five-bar loop
+       against a two-bar figure. The figure must not land in a different place
+       every time round — better a plainer beat than a chopped one. */
+    const beat = { name: 'probe', kick: 'x...............' + '....x...........' };
+    const genre = window.Genres.GENRES.pop;
+    const five = window.Compose.buildDrums({ genre, totalBars: 5, energy: 'flow', beat,
+      rng: window.Compose.makeRng(7) });
+    const four = window.Compose.buildDrums({ genre, totalBars: 4, energy: 'flow', beat,
+      rng: window.Compose.makeRng(7) });
+    const barsOf = (evts, n) => {
+      const out = [];
+      for (let i = 0; i < n; i++) {
+        out.push(evts.filter((e) => e.step >= i * 16 && e.step < (i + 1) * 16)
+          .map((e) => e.step - i * 16).join(','));
+      }
+      return out;
+    };
+    return { five: barsOf(five, 5), four: barsOf(four, 4) };
+  });
+  // 5 bars: does not divide, so every bar is bar one of the figure.
+  if (new Set(out.five).size !== 1) throw new Error(`five bars gave ${JSON.stringify(out.five)}`);
+  // 4 bars: divides, so the figure alternates.
+  if (new Set(out.four).size !== 2) throw new Error(`four bars gave ${JSON.stringify(out.four)}`);
+});
+
 await check('the beat is named, and the name is the one that played', async () => {
   const out = await page.evaluate(() => {
     const bad = [];
