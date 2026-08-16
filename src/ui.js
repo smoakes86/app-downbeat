@@ -222,6 +222,12 @@
        document. */
     if (Motion) Motion.tempo(song.bpm);
 
+    /* The transport sets the kit when it starts, but a pad tapped before you
+       have pressed play should already answer in this song's voice — an 808
+       kick on a trap sketch and a brush on a jazz one — so the kit is set when
+       the song is written rather than when it is first heard. */
+    if (Engine.setKit) Engine.setKit(song.genre.kit);
+
     arrangement = global.Arrange ? global.Arrange.plan(song) : null;
     activeSection = null;
 

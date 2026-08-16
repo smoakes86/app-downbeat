@@ -336,6 +336,7 @@
           kick:  'x.......x.....x.',
           snare: '....x.......x...',
           hat:   'x..x..x..x..x..x',
+          shaker: '..x...x...x...x.',
           rim:   '......g.......g.' },
         { name: 'Pocket',
           kick:  'x..x..x...x.x...' + 'x..x..x.....x...',
@@ -498,7 +499,7 @@
         { name: 'Brushed',
           kick:  'x.......x.......',
           snare: '....g...x...g...',
-          hat:   'x.x.x.x.x.x.x.x.' },
+          shaker: 'x.x.x.x.x.x.x.x.' },
         { name: 'Stomp and clap',
           kick:  'x...x...x...x...' + 'x...x...x...x.x.',
           clap:  '....x.......x...',
@@ -596,7 +597,7 @@
           kick:  'x..x..x.x..x..x.' },
         { name: 'Quiet',
           rim:   'x.....x...x.....',
-          hat:   '..x...x...x...x.',
+          shaker: 'xxxxxxxxxxxxxxxx',
           kick:  'x.......x.......' }
       ],
       melody: { range: [62, 81], restiness: 0.24, leapiness: 0.22, pentatonicBias: 0.35, chromaticApproach: 0.18, cells: bank('flowing', 'syncopated', 'simple') },
@@ -672,12 +673,14 @@
           kick:  'x.......x.......',
           snare: '....x.......x...',
           hat:   'x.xxx.xxx.xxx.xx',
-          clap:  '....x.......x...' },
+          clap:  '....x.......x...',
+          tamb:  '....x.......x...' },
         { name: 'Driving praise',
           kick:  'x...x...x...x...' + 'x...x...x...x.x.',
           snare: '....x.......x...',
           hat:   'x.x.x.x.x.x.x.x.',
           clap:  '....x.......x...',
+          tamb:  '..x...x...x...x.',
           crash: 'x...............' + '................' },
         { name: 'Half-time',
           kick:  'x.........x.....',
@@ -735,16 +738,40 @@
   };
 
   /* What each drum voice is called on the grid, in playing order top to bottom. */
+  /* Loudest and highest first: this is the order the kit is laid out in on the
+     faceplates, and it reads down the way a drummer's reach does. */
   const DRUM_VOICES = [
     { id: 'crash',   label: 'Crash',    how: 'Marks the top of the loop.' },
     { id: 'ride',    label: 'Ride',     how: 'Keeps the pulse ticking over the top.' },
     { id: 'openHat', label: 'Open hat', how: 'Lifts the offbeats.' },
     { id: 'hat',     label: 'Hi-hat',   how: 'The subdivision you count along to.' },
+    { id: 'tamb',    label: 'Tambourine', how: 'Rides the backbeat without competing with it.' },
+    { id: 'shaker',  label: 'Shaker',   how: 'Keeps sixteenths going under everything else.' },
     { id: 'clap',    label: 'Clap',     how: 'Doubles the backbeat.' },
     { id: 'rim',     label: 'Rim',      how: 'Quiet colour between the main hits.' },
     { id: 'snare',   label: 'Snare',    how: 'The backbeat, usually beats 2 and 4.' },
+    { id: 'tomHigh', label: 'High tom', how: 'The top of a fill.' },
+    { id: 'tomMid',  label: 'Mid tom',  how: 'The middle of a fill.' },
+    { id: 'tomLow',  label: 'Floor tom', how: 'The bottom of a fill, and the weight under one.' },
     { id: 'kick',    label: 'Kick',     how: 'Where the bar lands.' }
   ];
+
+  /* Which kit the genre is played on. The patterns say what is hit; this says
+     what it sounds like when it is, and it is at least as much of what makes a
+     beat belong to a genre — the same sixteen steps on an 808 and on a jazz
+     kit with brushes are not the same beat. */
+  const KIT = {
+    pop: 'acoustic', lofi: 'dusty', rock: 'acoustic', rnb: 'dusty',
+    jazz: 'brushes', blues: 'acoustic', house: 'machine', synthwave: 'machine',
+    trap: 'eight08', funk: 'acoustic', gospel: 'acoustic', bossa: 'brushes',
+    folk: 'acoustic', ambient: 'acoustic'
+  };
+
+  /* Attached to the genre rather than looked up, because the audio engine is
+     handed a song and should not have to know that a table exists. KIT is
+     declared below GENRES, so this is a second pass rather than part of the
+     one that stamps the ids. */
+  Object.keys(GENRES).forEach((id) => { GENRES[id].kit = KIT[id] || 'acoustic'; });
 
   global.Genres = {
     GENRES,
@@ -752,6 +779,7 @@
     CELLS,
     DRUM_VOICES,
     FEEL,
+    KIT,
     order: ['pop', 'lofi', 'rock', 'rnb', 'jazz', 'blues', 'house', 'synthwave', 'trap', 'funk', 'gospel', 'bossa', 'folk', 'ambient'],
     scalesFor: function (id) {
       const genre = GENRES[id];

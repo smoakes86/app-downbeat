@@ -337,43 +337,142 @@
      pass 0, which is in the past the moment the context has been running for a
      second: the whole envelope was written behind the playhead and every drum
      preview was silent. Absent or past means now. */
+  /* Kits.
+
+     A pattern says what is hit; a kit says what it sounds like when it is, and
+     that is at least as much of what makes a beat belong to a genre. The same
+     sixteen steps on an 808 and on a jazz kit with brushes are not the same
+     beat, and until now every genre in the app played the same kick.
+
+     Multipliers rather than whole sound definitions, so a kit is a character
+     applied to one instrument set rather than a fork of it — five kits times
+     thirteen voices written out longhand would be sixty-five sounds to keep in
+     step with each other, and they would drift. */
+  const KITS = {
+    acoustic: {},
+    /* Filtered, soft and a little slack: the sound of a record rather than of
+       a room. Long-ish kick, dark hat, snare with the crack taken off. */
+    dusty:    { kickTo: 0.86, kickDecay: 1.25, click: 0.5, snareNoise: 0.78,
+                snareBody: 1.15, snareDecay: 1.2, hatFreq: 0.72, hatDecay: 1.3, tone: 0.9 },
+    /* Brushes have no attack to speak of. The snare is nearly all noise and no
+       body, and it starts rather than cracks. */
+    brushes:  { kickDecay: 0.8, kickTo: 1.1, click: 0.25, snareNoise: 1.15,
+                snareBody: 0.3, snareDecay: 1.9, snareFreq: 0.72, hatFreq: 0.88, hatDecay: 1.4 },
+    /* A drum machine: short, tight, clicky, no room. */
+    machine:  { kickFrom: 1.15, kickTo: 0.92, kickGlide: 0.55, kickDecay: 0.78,
+                click: 1.6, snareNoise: 1.1, snareBody: 0.72, snareDecay: 0.72,
+                snareFreq: 1.2, hatFreq: 1.12, hatDecay: 0.62 },
+    /* The 808: a kick that is a bass note, not a thump. It glides slowly to a
+       low sine and rings on, which is why it needs the click taken down —
+       otherwise the attack fights the sub it is supposed to introduce. */
+    eight08:  { kickFrom: 0.72, kickTo: 0.62, kickGlide: 3.2, kickDecay: 2.6,
+                click: 0.7, snareNoise: 0.95, snareBody: 0.6, snareDecay: 0.85,
+                snareFreq: 1.25, hatFreq: 1.2, hatDecay: 0.7 }
+  };
+
+  let kit = KITS.acoustic;
+  let kitName = 'acoustic';
+
+  function setKit(name) {
+    kitName = KITS[name] ? name : 'acoustic';
+    kit = KITS[kitName];
+  }
+
+  function currentKit() {
+    return kitName;
+  }
+
+  const K = (name, fallback) => (kit[name] === undefined ? fallback : kit[name]);
+
   function playDrum(instrument, when, velocity) {
     ensure();
     const target = buses.drums;
     const level = clamp(velocity === undefined ? 0.9 : velocity, 0.05, 1);
     if (!(when > ctx.currentTime)) when = ctx.currentTime + 0.005;
 
+    /* Velocity has only ever been a gain, which is not how anything struck
+       behaves: hit a drum harder and it gets BRIGHTER and rings longer as well
+       as louder. Without this a ghost note is the same sound turned down,
+       which is the single clearest tell that a kit is synthesised — and the
+       new dynamics model made it much more audible, because it put thirty
+       velocity levels where there used to be two. */
+    const open = 0.72 + 0.45 * level;   // filters travel with the hit
+    const ring = 0.8 + 0.28 * level;    // and so does the tail
+
     switch (instrument) {
       case 'kick':
-        tone(when, { type: 'sine', from: 150, to: 45, glide: 0.07, decay: 0.36, gain: 0.75 * level, target, reverb: 0.03 });
-        burst(when, { type: 'highpass', frequency: 1400, decay: 0.02, gain: 0.14 * level, target, reverb: 0.02 });
+        tone(when, {
+          type: 'sine',
+          from: 150 * K('kickFrom', 1), to: 45 * K('kickTo', 1),
+          glide: 0.07 * K('kickGlide', 1), decay: 0.36 * K('kickDecay', 1) * ring,
+          gain: 0.75 * level, target, reverb: 0.03
+        });
+        burst(when, { type: 'highpass', frequency: 1400, decay: 0.02, gain: 0.14 * level * K('click', 1), target, reverb: 0.02 });
         break;
       case 'snare':
-        burst(when, { type: 'bandpass', frequency: 1750, q: 0.9, decay: 0.17, gain: 0.4 * level, target, reverb: 0.2 });
-        tone(when, { type: 'triangle', from: 190, decay: 0.09, gain: 0.22 * level, target, reverb: 0.12 });
+        burst(when, {
+          type: 'bandpass', frequency: 1750 * K('snareFreq', 1) * open, q: 0.9,
+          decay: 0.17 * K('snareDecay', 1) * ring, gain: 0.4 * level * K('snareNoise', 1), target, reverb: 0.2
+        });
+        tone(when, {
+          type: 'triangle', from: 190, decay: 0.09 * ring,
+          gain: 0.22 * level * K('snareBody', 1), target, reverb: 0.12
+        });
         break;
       case 'hat':
-        burst(when, { type: 'highpass', frequency: 8200, decay: 0.035, gain: 0.24 * level, target, reverb: 0.08 });
+        burst(when, {
+          type: 'highpass', frequency: 8200 * K('hatFreq', 1) * open,
+          decay: 0.035 * K('hatDecay', 1) * ring, gain: 0.24 * level, target, reverb: 0.08
+        });
         break;
       case 'openHat':
-        burst(when, { type: 'highpass', frequency: 7600, decay: 0.3, gain: 0.2 * level, target, reverb: 0.16 });
+        burst(when, {
+          type: 'highpass', frequency: 7600 * K('hatFreq', 1) * open,
+          decay: 0.3 * K('hatDecay', 1) * ring, gain: 0.2 * level, target, reverb: 0.16
+        });
         break;
       case 'clap':
         [0, 0.011, 0.022].forEach((offset, i) => {
-          burst(when + offset, { type: 'bandpass', frequency: 1150, q: 1.4, decay: 0.06, gain: 0.24 * level * (1 - i * 0.15), target, reverb: 0.22 });
+          burst(when + offset, { type: 'bandpass', frequency: 1150 * open, q: 1.4, decay: 0.06, gain: 0.24 * level * (1 - i * 0.15), target, reverb: 0.22 });
         });
-        burst(when + 0.03, { type: 'bandpass', frequency: 1000, q: 1.1, decay: 0.16, gain: 0.16 * level, target, reverb: 0.3 });
+        burst(when + 0.03, { type: 'bandpass', frequency: 1000, q: 1.1, decay: 0.16 * ring, gain: 0.16 * level, target, reverb: 0.3 });
         break;
       case 'rim':
-        burst(when, { type: 'bandpass', frequency: 2400, q: 3, decay: 0.035, gain: 0.24 * level, target, reverb: 0.16 });
-        tone(when, { type: 'triangle', from: 1700, decay: 0.025, gain: 0.14 * level, target, reverb: 0.1 });
+        burst(when, { type: 'bandpass', frequency: 2400 * open, q: 3, decay: 0.035, gain: 0.24 * level, target, reverb: 0.16 });
+        tone(when, { type: 'triangle', from: 1700, decay: 0.025, gain: 0.14 * level * K('snareBody', 1), target, reverb: 0.1 });
         break;
       case 'ride':
-        burst(when, { type: 'highpass', frequency: 5200, decay: 0.42, gain: 0.1 * level, target, reverb: 0.24 });
+        burst(when, { type: 'highpass', frequency: 5200 * open, decay: 0.42 * ring, gain: 0.1 * level, target, reverb: 0.24 });
         tone(when, { type: 'square', from: 3400, decay: 0.1, gain: 0.02 * level, target, reverb: 0.2 });
         break;
       case 'crash':
-        burst(when, { type: 'highpass', frequency: 3200, decay: 1.1, gain: 0.16 * level, target, reverb: 0.4 });
+        burst(when, { type: 'highpass', frequency: 3200 * open, decay: 1.1 * ring, gain: 0.16 * level, target, reverb: 0.4 });
+        break;
+
+      /* Toms are a pitched membrane: a sine falling about a fifth, with just
+         enough noise on the front to be a stick rather than a synth blip.
+         Three of them, because a fill that does not descend is not a fill. */
+      case 'tomLow':
+      case 'tomMid':
+      case 'tomHigh': {
+        const top = { tomLow: 155, tomMid: 215, tomHigh: 290 }[instrument];
+        tone(when, {
+          type: 'sine', from: top, to: top * 0.66, glide: 0.13,
+          decay: (instrument === 'tomLow' ? 0.42 : 0.32) * K('kickDecay', 1) * ring,
+          gain: 0.5 * level, target, reverb: 0.16
+        });
+        burst(when, { type: 'bandpass', frequency: top * 5 * open, q: 1.2, decay: 0.035, gain: 0.12 * level * K('click', 1), target, reverb: 0.1 });
+        break;
+      }
+      /* Hand percussion: a short band of noise high up, with no body at all.
+         The shaker is drier and the tambourine rings, which is the whole
+         difference between them. */
+      case 'shaker':
+        burst(when, { type: 'bandpass', frequency: 6800 * open, q: 0.8, decay: 0.045 * ring, gain: 0.13 * level, target, reverb: 0.1 });
+        break;
+      case 'tamb':
+        burst(when, { type: 'bandpass', frequency: 7400 * open, q: 0.6, decay: 0.16 * ring, gain: 0.14 * level, target, reverb: 0.22 });
+        burst(when + 0.008, { type: 'highpass', frequency: 9200, decay: 0.1 * ring, gain: 0.07 * level, target, reverb: 0.2 });
         break;
       default:
         burst(when, { type: 'highpass', frequency: 6000, decay: 0.05, gain: 0.18 * level, target });
@@ -523,6 +622,10 @@
     stop(true);
     const opts = options || {};
     currentSong = song;
+    /* The kit belongs to the song, so the transport sets it — and leaves it
+       set, so that a pad tapped after the music stops answers in the same
+       voice it was just playing in. */
+    if (song.genre) setKit(song.genre.kit);
     looping = opts.loop !== false;
     onStop = opts.onStop || null;
     onLoop = opts.onLoop || null;
@@ -634,7 +737,7 @@
   // Deliberately not called `Audio` — that name is already taken in a browser.
   global.Engine = {
     ensure, start, stop, isPlaying, position, span, sectionAt,
-    setLoop, setMute, isMuted,
+    setLoop, setMute, isMuted, setKit, currentKit,
     /* Pure, and exported because the claim the arrangement makes — this
        section plays these parts and no others — is a property of the laid-out
        events rather than of anything you can observe from outside while it

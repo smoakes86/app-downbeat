@@ -95,13 +95,23 @@
   const EP_CHROMATIC = { code: '310', label: '12T' };
 
   /* Drum voices in the order they get dealt onto pads / keys. */
-  const DRUM_ORDER = ['kick', 'snare', 'rim', 'clap', 'hat', 'openHat', 'ride', 'crash'];
+  /* Pad order on the EP-133: the order you would lay a kit out on twelve pads,
+     kick first because that is the one you find without looking. Twelve voices
+     for twelve pads, so a beat can use the whole kit and still fit. */
+  const DRUM_ORDER = ['kick', 'snare', 'rim', 'clap', 'hat', 'openHat',
+    'shaker', 'tamb', 'tomLow', 'tomMid', 'tomHigh', 'ride', 'crash'];
   const DRUM_LABEL = {
     kick: 'Kick', snare: 'Snare', rim: 'Rim', clap: 'Clap',
-    hat: 'Hat', openHat: 'Open', ride: 'Ride', crash: 'Crash'
+    hat: 'Hat', openHat: 'Open', ride: 'Ride', crash: 'Crash',
+    shaker: 'Shaker', tamb: 'Tamb', tomLow: 'Floor tom', tomMid: 'Mid tom', tomHigh: 'Hi tom'
   };
-  /* On the FM-1 a kit is played as pitches — low keys thump, high keys hiss. */
-  const FM_DRUM_KEY = { kick: 0, snare: 7, rim: 5, clap: 9, hat: 12, openHat: 14, ride: 16, crash: 19 };
+  /* On the FM-1 a kit is played as pitches — low keys thump, high keys hiss —
+     so the toms sit between the kick and the snare, where they belong on a
+     real one, and the hand percussion goes up with the metal. */
+  const FM_DRUM_KEY = {
+    kick: 0, tomLow: 2, tomMid: 3, tomHigh: 4, rim: 5, snare: 7, clap: 9,
+    hat: 12, openHat: 14, shaker: 15, ride: 16, tamb: 17, crash: 19
+  };
 
   const octaveOf = (midi) => Math.floor(midi / 12 - 1);
   const esc = (s) => String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
@@ -131,9 +141,14 @@
     })).sort((a, b) => a.start - b.start || a.midi - b.midi);
   }
 
-  function usedDrums(song) {
+  /* `limit` because the EP-133 has twelve pads and the kit now has thirteen
+     voices in it. Nothing the composer writes comes close, but the order is
+     deliberate — kick and snare first, crash last — so if a kit ever did
+     overflow, what falls off the end is the cymbal rather than the backbeat. */
+  function usedDrums(song, limit) {
     const seen = new Set(song.drums.map((h) => h.instrument));
-    return DRUM_ORDER.filter((id) => seen.has(id));
+    const used = DRUM_ORDER.filter((id) => seen.has(id));
+    return limit ? used.slice(0, limit) : used;
   }
 
   /* ------------------------------------------------- EP-133 note mapping */
@@ -970,7 +985,7 @@
 
     if (deviceId === 'ep133') {
       if (isDrums) {
-        const voices = usedDrums(song);
+        const voices = usedDrums(song, 12);
         const padVoices = [];
         const idsByVoice = {};
         voices.forEach((v, i) => { padVoices[i] = v; idsByVoice[v] = 'p' + (i + 1); });

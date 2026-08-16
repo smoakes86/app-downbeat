@@ -681,6 +681,72 @@ await check('no two hits in a loop are identical', async () => {
   if (out.length) throw new Error(out.join('; '));
 });
 
+/* A voice a pattern can name but the kit cannot play is a silent hit: it
+   occupies a pad on the faceplate, prints a chip in the run and makes no
+   sound. Every voice is struck in every kit and the graph is watched for a
+   source appearing. */
+await check('every voice sounds, in every kit', async () => {
+  const out = await page.evaluate(() => {
+    const voices = window.Genres.DRUM_VOICES.map((v) => v.id);
+    const named = [];
+    window.Genres.order.forEach((g) => {
+      window.Genres.GENRES[g].drums.forEach((beat) => {
+        Object.keys(beat).forEach((k) => {
+          if (k !== 'name' && voices.indexOf(k) < 0) named.push(`${g}/${beat.name}: "${k}"`);
+        });
+      });
+      if (!window.Genres.GENRES[g].kit) named.push(`${g}: no kit`);
+    });
+
+    window.Engine.ensure();
+    let made = 0;
+    const realOsc = AudioContext.prototype.createOscillator;
+    const realBuf = AudioContext.prototype.createBufferSource;
+    AudioContext.prototype.createOscillator = function () { made++; return realOsc.call(this); };
+    AudioContext.prototype.createBufferSource = function () { made++; return realBuf.call(this); };
+    const silent = [];
+    ['acoustic', 'dusty', 'brushes', 'machine', 'eight08'].forEach((k) => {
+      window.Engine.setKit(k);
+      voices.forEach((v) => {
+        const before = made;
+        window.Engine.playDrum(v, undefined, 0.9);
+        if (made === before) silent.push(`${k}/${v}`);
+      });
+    });
+    AudioContext.prototype.createOscillator = realOsc;
+    AudioContext.prototype.createBufferSource = realBuf;
+    return { named: named.slice(0, 3), silent: silent.slice(0, 5) };
+  });
+  if (out.named.length) throw new Error(`patterns name non-voices: ${out.named.join(', ')}`);
+  if (out.silent.length) throw new Error(`silent voices: ${out.silent.join(', ')}`);
+});
+
+await check('a hard hit is brighter than a soft one, not only louder', async () => {
+  const out = await page.evaluate(() => {
+    window.Engine.ensure();
+    window.Engine.setKit('acoustic');
+    const seen = [];
+    const real = AudioContext.prototype.createBiquadFilter;
+    AudioContext.prototype.createBiquadFilter = function () {
+      const node = real.call(this);
+      seen.push(node);
+      return node;
+    };
+    const freqAt = (level) => {
+      seen.length = 0;
+      window.Engine.playDrum('hat', undefined, level);
+      return seen.length ? seen[0].frequency.value : 0;
+    };
+    const soft = freqAt(0.2);
+    const hard = freqAt(1);
+    AudioContext.prototype.createBiquadFilter = real;
+    return { soft, hard };
+  });
+  if (!(out.hard > out.soft * 1.15)) {
+    throw new Error(`velocity does not open the filter (${out.soft.toFixed(0)}Hz soft, ${out.hard.toFixed(0)}Hz hard)`);
+  }
+});
+
 /* Same recipe, same beat — or a share link stops being note for note. */
 await check('the beat is reproducible from the seed', async () => {
   const same = await page.evaluate(() => {
