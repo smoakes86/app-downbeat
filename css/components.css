@@ -718,6 +718,14 @@
     transition:opacity var(--t-fade) var(--e-ios), transform var(--t-fade) var(--e-ios);
   }
   .toast.on { opacity:1; transform:translate(-50%, 0) scale(1); }
+  /* With a sheet up there is no transport to sit above, and the usual place
+     is the middle of the sheet. It goes under the title bar instead. */
+  body.has-modal .toast {
+    top:calc(var(--safe-t) + var(--nav-h) + var(--sp-3));
+    bottom:auto;
+    transform:translate(-50%, -12px) scale(.96);
+  }
+  body.has-modal .toast.on { transform:translate(-50%, 0) scale(1); }
 
   /* ======================================================== empty state */
 

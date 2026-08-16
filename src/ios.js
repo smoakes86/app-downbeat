@@ -100,6 +100,10 @@
   /* The app behind whatever is presented. Guarded on `live` so a handler that
      closes one sheet and opens another never un-inerts the app in between. */
   function setInert(on) {
+    /* The class is for the chrome that is NOT inside .app — today the toast,
+       which is bottom-anchored above the transport and would otherwise land
+       in the middle of an open sheet. */
+    doc.body.classList.toggle('has-modal', !!on || !!live);
     const app = $('.app');
     if (!app) return;
     if (on) app.setAttribute('inert', '');
