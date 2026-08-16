@@ -1,0 +1,511 @@
+/* Downbeat — the hardware.
+
+   Everything src/devices.js draws: the two faceplates, the run of pads to
+   press, and the set-up recipe. That module is unchanged by the iOS rebuild,
+   so every class name below is a contract with it rather than a choice.
+
+   The faceplate rules are carried over intact from the previous design and
+   deserve to be: these are pictures of two real objects, so they keep their
+   real-world colours in both appearances and only their lit state follows the
+   part you are playing. The recipe never varies — a recess, a two-stop cap, a
+   specular hairline along the top edge and an occlusion hairline at the base,
+   with one light source fixed at top-centre.
+
+   What changed for iOS is everything *around* them: a pad is now sized to be
+   hit with a thumb, the run is a rail you flick rather than a wrapped block,
+   and every hover affordance has an :active twin because a finger has no
+   hover. */
+@layer device {
+
+  /* ======================================================== the faceplate */
+
+  .dev-svg { display:block; }
+  .dev-svg text { font-family:var(--mono); text-rendering:geometricPrecision; user-select:none; }
+  .dev-pad, .dev-wkey, .dev-bkey { cursor:pointer; outline:none; }
+  /* A pad with nothing loaded keeps its look — an empty pad on the real unit
+     is indistinguishable from a full one — but it stops claiming to be
+     pressable. It stays focusable and says why when activated. */
+  .dev-pad[aria-disabled="true"], .dev-wkey[aria-disabled="true"],
+  .dev-bkey[aria-disabled="true"] { cursor:default; }
+  .pad-glows, .key-glows, .lcd-dots, .lcd-glass, .lcd-note,
+  .pad-ring, .wkey-ring, .bkey-ring,
+  .pad-glow, .wkey-glow, .bkey-glow { pointer-events:none; }
+
+  /* The two-stop gradients. They are styled rather than written as attributes
+     because the gradient ids are namespaced per mount and CSS cannot know the
+     serial. */
+  .g-ground-a { stop-color:var(--edge-cast); stop-opacity:.56; }
+  .g-ground-b { stop-color:var(--edge-cast); stop-opacity:0; }
+  .g-glass-a { stop-color:var(--ep-glass); stop-opacity:1; }
+  .g-glass-b { stop-color:var(--ep-glass); stop-opacity:0; }
+
+  /* How light actually falls on a translucent cap: a hot centre and a coloured
+     edge, not a flat wash of the part colour. The core is the device's own cap
+     white rather than #fff — an LED under a moulded cap picks up the plastic
+     on the way out. */
+  .g-lit-a { stop-color:color-mix(in srgb, var(--part) 55%, var(--ep-cap-hi)); }
+  .g-lit-b { stop-color:var(--part); }
+  .dev-fm .g-lit-a { stop-color:color-mix(in srgb, var(--part) 55%, var(--fm-wkey-hi)); }
+
+  /* --------------------------------------------------------- the lamp strike
+
+     One timing, four key types. Attack rides [data-struck] at --t-lamp; decay
+     is beat-relative, so at 76 BPM a struck pad smears like a long-persistence
+     scope and at 158 BPM it machine-guns — the interface gets faster when the
+     music does. */
+  .dev-pad, .dev-wkey, .dev-bkey {
+    transition:--lit var(--t-decay) var(--e-decay),
+               transform var(--t-click) var(--e-travel);
+  }
+  .pad-glow, .wkey-glow, .bkey-glow, .pad-glow-b, .key-glow-b {
+    transition:--lit var(--t-decay) var(--e-decay);
+  }
+  /* A strike attacks in --t-lamp and decays on the beat. A preview is not a
+     strike — it arrives on the cap-travel curve, because it is the pad showing
+     you what it would do rather than doing it. */
+  .dev-svg [data-struck] { transition-duration:var(--t-lamp), var(--t-click); }
+  .dev-svg [data-preview] { transition-duration:var(--t-click), var(--t-click); }
+  .dev-key rect, .dev-key .dev-fn {
+    transition:fill var(--t-decay) var(--e-decay), stroke var(--t-decay) var(--e-decay);
+  }
+
+  /* Three things read --lit at once: the hot core, the shared bloom, and the
+     0.8px the cap physically travels. `translate` rather than `transform`, so
+     the press can own `transform` without the two fighting over one property
+     mid-decay. The depression is travel, so it scales by --m-travel and goes
+     to nothing under reduced motion while the light — which is information —
+     keeps its full decay. */
+  .pad-glow, .wkey-glow, .bkey-glow {
+    opacity:var(--lit);
+    stroke:var(--on-part); stroke-width:1.5;
+  }
+  .pad-glow-b, .key-glow-b { opacity:var(--lit); stroke:none; }
+  .dev-pad, .dev-wkey, .dev-bkey {
+    translate:0 calc(var(--lit) * .8px * var(--m-travel));
+  }
+
+  /* The used map travels: it leaves the chip you pressed, crosses the run and
+     arrives at the hardware, pad by pad in reading order. Opacity rather than a
+     fill swap, because a flat fill cannot cross-fade to a gradient. */
+  .pad-tint, .pad-bar, .wkey-tint, .wkey-bar, .bkey-tint {
+    opacity:0;
+    transition:opacity var(--t-throw) var(--e-detent)
+               calc(2 * var(--hop) + var(--pad-i, 0) * var(--s-pad));
+  }
+  .dev-pad.used .pad-tint, .dev-pad.used .pad-bar,
+  .dev-wkey.used .wkey-tint, .dev-wkey.used .wkey-bar,
+  .dev-bkey.used .bkey-tint { opacity:1; }
+
+  /* ----------------------------------------------------------- the type split
+
+     The device's permanent silkscreen and Downbeat's generated instructions
+     have to be separable at a glance, so legends are light, tracked out and
+     embossed while data is heavy and at full strength. A legend is language —
+     what the object says about itself — so it is Archivo, whose expanded cut
+     under caps tracking *is* rack-panel silkscreen. Data stays in the mono,
+     because that is what the app is telling you. */
+  .dev-brand, .dev-model, .dev-knob-cap, .dev-hintline, .dev-fn, .dev-group-id {
+    font-family:var(--sans);
+    font-size:9px;
+    font-variation-settings:'wght' 300,'wdth' 118;
+    letter-spacing:.145em;
+  }
+  .pad-id, .pad-sub, .pad-main, .wkey-name, .seg, .tft {
+    font-variation-settings:'wght' 620;
+    fill-opacity:1;
+  }
+  .dev-brand, .dev-knob-cap { fill-opacity:.72; }
+  /* A 0.4px duplicate in the body colour behind the glyph — the difference
+     between ink printed on plastic and ink floating above it. */
+  .legend-emboss { fill-opacity:.35; }
+
+  /* -------------------------------------------------------------- the display
+
+     Four layers, because a backlit display is not a rectangle with text in it:
+     a recess it is set into, the matrix, the segment bloom behind the glyphs
+     and a sheen across the glass. The dot rect is painted over the text so the
+     matrix breaks the glyphs — that is the whole tell of a segment LCD. */
+  .lcd-face { fill:var(--ep-lcd); }
+  .lcd-recess-dark { fill:none; stroke:rgba(0,0,0,.72); }
+  .lcd-recess-lite { fill:none; stroke:rgba(255,255,255,.06); }
+  .lcd-recess-dark, .lcd-recess-lite { stroke-width:1; }
+  .lcd-bloom { opacity:.55; }
+  .g-dot { fill:var(--ep-ink); fill-opacity:.22; }
+
+  /* A segment LCD tracks wide because every character is its own block of
+     segments with dead glass between them — the literal truth here rather than
+     a styling choice. */
+  .seg { fill:var(--ep-seg); font-size:12px; letter-spacing:.145em; }
+  .seg-dim { opacity:.55; }
+  .seg-right { font-size:15px; }
+
+  /* --------------------------------------------------- EP-133 K.O. II */
+
+  .dev-ep .dev-body { stroke:var(--ep-edge); stroke-width:1; }
+  .dev-ep .g-body-a { stop-color:var(--ep-body-hi); }
+  .dev-ep .g-body-b { stop-color:var(--ep-body-lo); }
+  .dev-ep .g-cap-a { stop-color:var(--ep-cap-hi); }
+  .dev-ep .g-cap-b { stop-color:var(--ep-cap-lo); }
+
+  .dev-ep .dev-brand { fill:var(--ep-legend); }
+  .dev-ep .dev-model { fill:var(--ep-label); }
+  .dev-ep .dev-hintline { fill:var(--ep-legend); }
+  .dev-ep .dev-knob-cap { fill:var(--ep-legend); }
+  .dev-ep .legend-emboss { fill:var(--ep-body-hi); }
+
+  .dev-knob circle { fill:var(--ep-well); stroke:var(--ep-legend); }
+  .dev-knob line { stroke:var(--ep-label); stroke-width:1.6; }
+
+  .dev-key rect { fill:var(--ep-key); stroke:var(--ep-ink); }
+  .dev-key .dev-fn, .dev-key .dev-group-id { fill:var(--ep-key-ink); }
+  .dev-key .legend-emboss { fill:var(--ep-key); }
+  /* An engaged function key takes a part-coloured edge and a wash of the part
+     on its cap, but the caption stays --ep-key-ink: printing the caption in
+     --part drops it to 3.76:1 on the dark key on the melody hue, and a legend
+     you have to squint at is worse than a quieter on-state. */
+  .dev-key.is-on rect {
+    fill:color-mix(in srgb, var(--part) 20%, var(--ep-key));
+    stroke:var(--part); stroke-width:1.6;
+  }
+  .dev-group-id { font-size:13px; }
+  .rec-dot { fill:var(--ep-accent); }
+  .dev-fader .fader-track { fill:var(--ep-key); }
+  .dev-fader .fader-cap { fill:var(--ep-accent); stroke:var(--ep-ink); }
+
+  /* The pad, in the order it is drawn. */
+  .pad-well { fill:var(--ep-well); }
+  .pad-face { stroke:var(--ep-edge); }
+  /* 22% of the part on the cap resolves to about 1.1:1 against the chassis, so
+     the tint is a supporting cue and never the signal. The printed bar along
+     the bottom edge is what actually carries the used map, and it is
+     mandatory. */
+  .pad-tint {
+    fill:color-mix(in srgb, var(--part) 22%, var(--ep-cap));
+    stroke:color-mix(in srgb, var(--part) 45%, var(--ep-edge));
+  }
+  .pad-bar { fill:var(--part); }
+  .pad-spec {
+    fill:none; stroke:rgba(255,255,255,.7); stroke-width:1;
+    transition:stroke var(--t-click) var(--e-travel);
+  }
+  .pad-occ { fill:none; stroke:rgba(0,0,0,.14); stroke-width:1; }
+
+  .pad-id { font-size:9px; fill:var(--ep-id); text-anchor:start; letter-spacing:var(--tr-data); }
+  .pad-main { font-size:14px; fill:var(--ep-label); text-anchor:middle; letter-spacing:var(--tr-0); }
+  .pad-sub { font-size:9px; fill:var(--ep-legend); text-anchor:middle; letter-spacing:var(--tr-data); }
+
+  /* THE UNIT-DENSITY CORRECTION. A font-size inside a viewBox is written in
+     user units, and the two plates put very different numbers of user units
+     across the opening they are drawn into — 356 for the EP against 682 for
+     the FM — so the identical rung renders at two different pixel sizes. On a
+     phone the difference is severe: the FM is drawn at roughly half a CSS
+     pixel per user unit.
+
+     --dev-u is CSS pixels per user unit, measured off the mounted plate by
+     src/devices.js. Each rule below asks for a rendered size and divides by
+     the scale to get the units that produce it. The ceilings are the plate's
+     own geometry — the point past which the glyphs stop fitting the object
+     they are printed on — and with no observer var()'s fallback of 1
+     reproduces the literal sizes rather than breaking. */
+     The ceilings are the plate's own geometry, not taste, and on a phone they
+     are what actually bind: "teenage engineering" and "EP-133 K.O. II" share
+     one baseline 316 units apart and touch at 10 units, and the hint line over
+     the pads runs off the right edge of the chassis past 9.5. */
+  .dev-ep .dev-brand, .dev-ep .dev-model { font-size:clamp(7px, calc(9px / var(--dev-u, 1)), 10px); }
+  .dev-ep .dev-hintline { font-size:clamp(7px, calc(9px / var(--dev-u, 1)), 9.5px); }
+  .dev-ep .pad-sub { font-size:clamp(7px, calc(9px / var(--dev-u, 1)), 11px); }
+  .dev-ep .dev-knob-cap, .dev-ep .dev-fn, .dev-ep .pad-id {
+    font-size:clamp(7px, calc(9px / var(--dev-u, 1)), 12px);
+  }
+  .dev-ep .pad-main { font-size:clamp(12px, calc(14px / var(--dev-u, 1)), 18px); }
+
+  /* -------------------------------------------------------- M-VAVE FM-1 */
+
+  .dev-fm .dev-brand, .dev-fm .dev-model, .dev-fm .dev-knob-cap, .dev-fm .dev-fn {
+    font-size:clamp(6px, calc(9px / var(--dev-u, 1)), 12px);
+  }
+
+  .dev-fm .dev-body { stroke:var(--fm-ink); stroke-width:1; }
+  .dev-fm .g-body-a { stop-color:var(--fm-body-hi); }
+  .dev-fm .g-body-b { stop-color:var(--fm-body-lo); }
+  .dev-fm .g-cap-a { stop-color:var(--fm-wkey-hi); }
+  .dev-fm .g-cap-b { stop-color:var(--fm-wkey-lo); }
+  /* A TFT and a segment LCD do not look alike: colder glass and a sharper,
+     non-dotted pixel grid. The cold comes from the unit's own display blue. */
+  .dev-fm .g-glass-a { stop-color:var(--fm-t1); stop-opacity:.07; }
+  .dev-fm .g-glass-b { stop-color:var(--fm-t1); stop-opacity:0; }
+  .dev-fm .g-dot { fill:var(--fm-ink); fill-opacity:.3; }
+  .dev-fm .lcd-face { fill:var(--fm-tft); }
+
+  .dev-fm .dev-brand { fill:var(--fm-brand); }
+  .dev-fm .dev-model { fill:var(--fm-legend); }
+  .dev-fm .dev-knob-cap { fill:var(--fm-brand); }
+  .dev-fm .legend-emboss { fill:var(--fm-body-hi); }
+  .dev-fm .dev-knob circle { fill:var(--fm-body-hi); stroke:var(--fm-ink); }
+  .dev-fm .dev-knob line { stroke:var(--fm-wkey-hi); }
+  .dev-fm .dev-key rect { fill:var(--fm-body-hi); stroke:var(--fm-ink); }
+  .dev-fm .dev-key .dev-fn { fill:var(--fm-brand); }
+  .dev-fm .dev-key .legend-emboss { fill:var(--fm-body-hi); }
+  /* The FM's own on-state is amber, not the part colour — its LEDs are amber
+     and that is what OCT± lights up. */
+  .dev-fm .dev-key.is-on rect {
+    fill:color-mix(in srgb, var(--fm-t3) 16%, var(--fm-body-hi));
+    stroke:var(--fm-t3);
+  }
+  .dev-fm .dev-key.is-on .dev-fn { fill:var(--fm-t3); }
+
+  /* The TFT does not track out: it is a raster panel drawing a UI font, not a
+     grid of segment blocks. */
+  .tft { font-size:clamp(6px, calc(9px / var(--dev-u, 1)), 11px); letter-spacing:var(--tr-data); }
+  .tft.t1 { fill:var(--fm-t1); }
+  .tft.t2 { fill:var(--fm-t2); }
+  .tft.t3 { fill:var(--fm-t3); }
+
+  .wkey-face { stroke:var(--fm-edge); }
+  .wkey-tint {
+    fill:color-mix(in srgb, var(--part) 22%, var(--fm-wkey));
+    stroke:color-mix(in srgb, var(--part) 45%, var(--fm-edge));
+  }
+  .wkey-bar { fill:var(--part); }
+  /* The front chamfer: the only thing that says the key has thickness rather
+     than being a painted rectangle. */
+  .wkey-chamfer { fill:color-mix(in srgb, var(--fm-wkey) 92%, var(--fm-ink)); }
+  .wkey-lip {
+    fill:none; stroke:rgba(255,255,255,.6); stroke-width:1;
+    transform-box:fill-box; transform-origin:50% 50%;
+    transition:transform var(--t-click) var(--e-travel),
+               stroke var(--t-click) var(--e-travel);
+  }
+  .wkey-name {
+    font-size:clamp(6px, calc(8.5px / var(--dev-u, 1)), 10px);
+    fill:var(--fm-legend); text-anchor:middle;
+  }
+
+  .bkey-face { fill:var(--fm-bkey); stroke:var(--fm-ink); }
+  /* Black keys carry a heavier tint and no printed bar: 25 units is not enough
+     width for a bar to read as anything but a smudge. */
+  .bkey-tint { fill:color-mix(in srgb, var(--part) 32%, var(--fm-bkey)); }
+  .bkey-lip {
+    fill:none; stroke:rgba(255,255,255,.14); stroke-width:1;
+    transition:stroke var(--t-click) var(--e-travel);
+  }
+
+  /* ------------------------------------------------------------- states */
+
+  /* One ring, drawn last, on its own element — the UA ring on an SVG <g> is a
+     bounding box that ignores rx, so on a rounded cap it draws a rectangle
+     around a pill, and stroking the face rect would put the ring underneath
+     the used tint. Amber, because it sits outside the track palette and so
+     reads on all ten hues and on both key colours. */
+  .dev-ring { fill:none; stroke:none; stroke-width:2.5; }
+  .dev-pad:focus-visible .pad-ring,
+  .dev-wkey:focus-visible .wkey-ring,
+  .dev-bkey:focus-visible .bkey-ring { stroke:var(--lamp); }
+
+  .dev-pad:focus-visible:not([aria-disabled="true"]) .pad-spec { stroke:rgba(255,255,255,.95); }
+  .dev-wkey:focus-visible:not([aria-disabled="true"]) .wkey-lip { stroke:rgba(255,255,255,.85); }
+  .dev-bkey:focus-visible:not([aria-disabled="true"]) .bkey-lip { stroke:rgba(255,255,255,.3); }
+
+  /* The press. A cap that lights but does not move is a picture of a cap: the
+     pad goes *in* under the finger and the key bottoms out with its front lip
+     all but gone. Outside any hover query, because a touch device has no hover
+     and still has a press — this is the primary state on iOS, not the
+     fallback. */
+  .dev-pad:active:not([aria-disabled="true"]) { transform:translateY(calc(.9px * var(--m-travel))); }
+  .dev-wkey:active:not([aria-disabled="true"]),
+  .dev-bkey:active:not([aria-disabled="true"]) { transform:translateY(calc(1.8px * var(--m-travel))); }
+  .dev-wkey:active:not([aria-disabled="true"]) .wkey-lip { transform:scaleX(calc(1 - .3 * var(--m-travel))); }
+  .dev-pad:active:not([aria-disabled="true"]) .pad-spec { stroke:rgba(255,255,255,.95); }
+
+  @media (hover:hover) and (pointer:fine) {
+    .dev-pad:hover:not([aria-disabled="true"]) { transform:translateY(calc(-.8px * var(--m-travel))); }
+    .dev-pad:hover:not([aria-disabled="true"]) .pad-spec { stroke:rgba(255,255,255,.95); }
+    .dev-wkey:hover:not([aria-disabled="true"]),
+    .dev-bkey:hover:not([aria-disabled="true"]) { transform:translateY(calc(.9px * var(--m-travel))); }
+    .dev-wkey:hover:not([aria-disabled="true"]) .wkey-lip { transform:scaleX(calc(1 - .14 * var(--m-travel))); }
+    .dev-bkey:hover:not([aria-disabled="true"]) .bkey-lip { stroke:rgba(255,255,255,.3); }
+  }
+
+  /* ======================================================== the run of pads
+
+     One horizontal rail rather than a wrapped block, because a phone has one
+     readable row of this and because a rail can follow the playhead: during
+     playback devices.js scrolls the chip it has just lit into view, so the run
+     runs ahead of your hands the way a teleprompter does. */
+
+  .run {
+    display:flex;
+    align-items:stretch;
+    gap:var(--sp-2);
+    overflow-x:auto;
+    overflow-y:hidden;
+    -webkit-overflow-scrolling:touch;
+    overscroll-behavior-x:contain;
+    scrollbar-width:none;
+    padding:var(--sp-1) var(--gutter) var(--sp-3);
+    scroll-padding-inline:var(--gutter);
+  }
+  .run::-webkit-scrollbar { display:none; }
+
+  /* The bar number, standing between the chips it separates. */
+  .seq-bar {
+    flex:none;
+    align-self:center;
+    display:grid; place-items:center;
+    min-width:20px; height:20px;
+    border-radius:var(--r-pill);
+    background:var(--fill-4);
+    color:var(--label-3);
+    font-family:var(--mono);
+    font-size:var(--fd-xs);
+    font-variation-settings:'wght' 600;
+    letter-spacing:var(--tr-data);
+  }
+  .seq-bar:first-child { display:none; }
+
+  /* A chip is 56 wide and 60 tall, which is a thumb, and it says two things:
+     what to press, printed in the mono because it is a legend on a machine,
+     and what it sounds like underneath. */
+  .seq-chip {
+    position:relative;
+    flex:none;
+    min-width:60px;
+    display:flex;
+    flex-direction:column;
+    align-items:center;
+    justify-content:center;
+    gap:2px;
+    padding:var(--sp-2) var(--sp-2);
+    border-radius:var(--r-sm);
+    background:var(--grouped-cell);
+    box-shadow:inset 0 0 0 var(--hairline) var(--separator);
+    scroll-snap-align:center;
+    transition:background-color var(--t-lamp) var(--e-ios),
+               transform var(--t-click) var(--e-ios),
+               box-shadow var(--t-lamp) var(--e-ios);
+  }
+  .seq-chip b {
+    font-family:var(--mono);
+    font-size:var(--fd-sm);
+    font-variation-settings:'wght' 650;
+    font-weight:650;
+    line-height:1.1;
+    letter-spacing:var(--tr-data);
+    color:var(--label);
+    white-space:nowrap;
+  }
+  .seq-chip small {
+    font-size:var(--fs-caption2);
+    line-height:1.15;
+    color:var(--label-2);
+    white-space:nowrap;
+  }
+  .chip-oct { font-style:normal; color:var(--part-ink); }
+
+  .seq-chip:active { transform:scale(.95); background:var(--fill-3); }
+
+  /* Lit by the transport, or linked from the pad you are touching. Both wear
+     the part colour, because they are the same fact arriving from two
+     directions. */
+  .seq-chip.now, .seq-chord.now {
+    --lit:1;
+    background:var(--part);
+    box-shadow:var(--bloom-part, none);
+  }
+  .seq-chip.now b, .seq-chip.now small, .seq-chip.now .chip-oct,
+  .seq-chord.now .seq-chord-name, .seq-chord.now .seq-chord-keys { color:var(--on-part); }
+
+  .seq-chip.is-linked, .seq-chord.is-linked {
+    box-shadow:inset 0 0 0 2px var(--part);
+    background:var(--grouped-cell-2);
+  }
+
+  /* A note with no pad under it. It keeps its full contrast because it is the
+     one chip in the run that needs acting on, and the dashed edge says there
+     is nothing there to press. */
+  .seq-chip.is-off {
+    background:none;
+    box-shadow:none;
+    outline:1px dashed var(--label-3);
+    outline-offset:-1px;
+  }
+  .seq-chip.is-off b { color:var(--label-2); }
+
+  /* Chords are read as stacks, so their chips are wider and print the symbol
+     above the keys that make it. */
+  .run.is-chords { gap:var(--sp-2); }
+  .seq-chord {
+    position:relative;
+    flex:none;
+    min-width:104px;
+    display:flex;
+    flex-direction:column;
+    align-items:flex-start;
+    justify-content:center;
+    gap:3px;
+    padding:var(--sp-3);
+    border-radius:var(--r-sm);
+    background:var(--grouped-cell);
+    box-shadow:inset 0 0 0 var(--hairline) var(--separator);
+    text-align:left;
+    scroll-snap-align:center;
+    transition:background-color var(--t-lamp) var(--e-ios),
+               transform var(--t-click) var(--e-ios),
+               box-shadow var(--t-lamp) var(--e-ios);
+  }
+  .seq-chord:active { transform:scale(.97); background:var(--fill-3); }
+  .seq-chord-name {
+    font-family:var(--mono);
+    font-size:var(--fd-sm);
+    font-variation-settings:'wght' 650;
+    letter-spacing:var(--tr-data);
+    color:var(--label);
+    white-space:nowrap;
+  }
+  .seq-chord-keys {
+    font-size:var(--fs-caption2);
+    line-height:1.2;
+    color:var(--label-2);
+    white-space:nowrap;
+  }
+  .chord-off { display:block; font-size:var(--fs-caption2); color:var(--label-3); }
+
+  .seq-empty {
+    flex:1 1 auto;
+    padding:var(--sp-4) var(--gutter);
+    font-size:var(--fs-subhead);
+    color:var(--label-2);
+  }
+
+  /* ==================================================== the set-up recipe */
+
+  .recipe-steps { display:flex; flex-direction:column; gap:var(--sp-4); }
+  .recipe-steps li { display:flex; gap:var(--sp-3); align-items:flex-start; }
+  .step-n {
+    flex:none;
+    width:22px; height:22px;
+    display:grid; place-items:center;
+    margin-top:1px;
+    border-radius:var(--r-pill);
+    background:var(--tint-fill);
+    color:var(--tint);
+    font-size:var(--fs-caption2);
+    font-weight:700;
+    font-variant-numeric:tabular-nums;
+  }
+  .recipe-steps b {
+    display:block;
+    font-size:var(--fs-subhead);
+    font-weight:600;
+    color:var(--label);
+    margin-bottom:2px;
+  }
+  .recipe-steps p {
+    font-size:var(--fs-footnote);
+    line-height:1.4;
+    color:var(--label-2);
+    -webkit-user-select:text;
+    user-select:text;
+  }
+  .recipe-steps p b { display:inline; font-size:inherit; color:var(--label); }
+}

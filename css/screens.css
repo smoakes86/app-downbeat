@@ -1,0 +1,575 @@
+/* Downbeat — the four screens.
+
+   Play is the app; the other three are where you set it up, read it and keep
+   it. Each is a stack of blocks with an inset-grouped list or a card in it,
+   which is the layout iOS has used for a decade and the reason a settings
+   screen never needs a legend explaining how to read it. */
+@layer screens {
+
+  /* A titled block. The title is a sentence-case footnote in the margin, not a
+     tracked-out silkscreen legend — the silkscreen register belongs on the
+     hardware, and using it for interface copy is what made the previous
+     layout read as a diagram of an app. */
+  .block { display:flex; flex-direction:column; gap:var(--sp-2); }
+  .block-head {
+    display:flex;
+    align-items:baseline;
+    gap:var(--sp-3);
+    padding:0 var(--gutter);
+  }
+  .block-head .group-title { flex:1 1 auto; padding:0; }
+  /* A trailing text button in a section header, the way iOS puts "See All"
+     there. It is drawn at its type size and reaches 44 points with a pseudo,
+     rather than being drawn as a button-shaped thing it is not. */
+  .block-action {
+    position:relative;
+    flex:none;
+    font-size:var(--fs-footnote);
+    font-weight:510;
+    color:var(--tint);
+    padding:var(--sp-1) 0;
+  }
+  .block-action::before { content:''; position:absolute; inset:-12px -8px; }
+  .block-action:active { opacity:.4; }
+  .block-note { flex:none; font-size:var(--fs-caption); color:var(--label-3); }
+
+  /* A card: the same rounded, inset, elevated surface as a grouped list, for
+     content that is not a list of rows. */
+  .card {
+    margin:0 var(--gutter);
+    padding:var(--sp-4);
+    background:var(--grouped-cell);
+    border-radius:var(--r-sm);
+  }
+  .card-flush { padding:0; overflow:hidden; }
+
+  /* ============================================================ the rig */
+
+  /* The faceplate is the hero of the Play screen and the reason the app
+     exists: the pads you are about to press, at the size you can press them.
+     src/ui.js fits the plate to the opening by measuring both and picking a
+     scale that keeps the silkscreen readable; where the fit would make the
+     type too small the bay scrolls sideways instead of shrinking the object.
+
+     No housing. The plate is a photograph of an object with its own contact
+     shadow underneath it, so it wants the room rather than a box: a panel
+     behind it turns every pixel the object does not fill into visible dead
+     space, which is exactly what a fitted drawing produces at half the widths
+     a phone comes in. On the room, the same fit simply reads as an object
+     sitting there. */
+  .face-bay {
+    position:relative;
+    padding:0 var(--sp-2);
+    overflow-x:auto;
+    overflow-y:hidden;
+    -webkit-overflow-scrolling:touch;
+    overscroll-behavior-x:contain;
+    scrollbar-width:none;
+  }
+  .face-bay::-webkit-scrollbar { display:none; }
+  /* width:max-content is doing real work. A flex row that merely centres an
+     over-wide child pushes it to a negative offset, which no browser counts
+     towards scrollWidth and no LTR scroll can reach — so a 27-key keybed
+     silently loses its left half instead of scrolling. Sized to its content
+     the row grows, the bay scrolls, and min-width keeps the centring for the
+     plates that do fit. */
+  .face-stage {
+    display:flex;
+    justify-content:center;
+    width:max-content;
+    min-width:100%;
+    margin:0 auto;
+  }
+  /* The one image in the app that is deliberately wider than its container.
+     The global max-width:100% in base.css is right for every other image and
+     is exactly what was squashing this one back down after src/ui.js had
+     measured a scale for it. */
+  .face-stage .dev-svg { flex:none; max-width:none; }
+
+  /* A 27-key keybed is wider than a phone at any scale its legends survive, so
+     the bay scrolls and says so — on whichever side there is still something
+     to reach. Drawn on the wrapper rather than inside the scroller, or the
+     hint would travel with the content it is describing. */
+  .face-wrap { position:relative; }
+  .face-wrap::before, .face-wrap::after {
+    content:'';
+    position:absolute; top:0; bottom:0;
+    width:34px;
+    opacity:0;
+    pointer-events:none;
+    transition:opacity var(--t-fade) var(--e-ios);
+  }
+  .face-wrap::before {
+    left:0;
+    background:linear-gradient(to left, transparent, var(--grouped-bg));
+  }
+  .face-wrap::after {
+    right:0;
+    background:linear-gradient(to right, transparent, var(--grouped-bg));
+  }
+  .face-wrap.more-left::before, .face-wrap.more-right::after { opacity:1; }
+
+  /* The line the plate's glass is printing, repeated in the interface for
+     anyone who cannot read a 9-unit legend on a rendered SVG. */
+  .face-readout {
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    gap:var(--sp-2);
+    min-height:20px;
+    padding:0 var(--gutter);
+    font-family:var(--mono);
+    font-size:var(--fd-xs);
+    font-variation-settings:'wght' 550;
+    letter-spacing:var(--tr-data);
+    color:var(--label-2);
+    text-align:center;
+  }
+
+  /* ========================================================== the shape */
+
+  /* One part at a time, drawn against the bars. Bars are never narrower than
+     --bar-min, so a twelve-bar sketch scrolls rather than collapsing into
+     slivers — and the lane follows the playhead while it runs. */
+  .lane-scroll {
+    margin:0 var(--gutter);
+    border-radius:var(--r-sm);
+    background:var(--grouped-cell);
+    overflow-x:auto;
+    overflow-y:hidden;
+    -webkit-overflow-scrolling:touch;
+    overscroll-behavior-x:contain;
+    scrollbar-width:none;
+  }
+  .lane-scroll::-webkit-scrollbar { display:none; }
+
+  .lane {
+    position:relative;
+    width:max(100%, calc(var(--bars, 4) * var(--bar-min, 96px)));
+    height:var(--lane-h, 132px);
+    /* Bar lines, and a lighter line on each beat inside the bar. Drawn as a
+       gradient rather than as elements: there is no interaction on a grid line
+       and 4 x 12 of them is 48 nodes that do nothing. */
+    background-image:
+      repeating-linear-gradient(to right,
+        var(--separator) 0 var(--hairline),
+        transparent var(--hairline) calc(100% / var(--bars, 4))),
+      repeating-linear-gradient(to right,
+        var(--fill-4) 0 var(--hairline),
+        transparent var(--hairline) calc(100% / var(--beats, 16)));
+  }
+
+  .lane-note {
+    position:absolute;
+    left:calc(var(--x) * 100%);
+    width:max(3px, calc(var(--w) * 100%));
+    bottom:calc(var(--y) * 100%);
+    height:var(--note-h, 7px);
+    border-radius:2px;
+    background:var(--part);
+    /* Velocity is real information — it is how hard the part is played — so it
+       is carried by opacity across a band that never reaches invisible. */
+    opacity:calc(.5 + var(--vel, .8) * .5);
+  }
+  /* The countermelody is drawn under the melody when both are visible, so it
+     is outlined rather than filled and cannot be mistaken for the tune. */
+  .lane.is-counter .lane-note { border-radius:2px; }
+
+  /* The bass letters every note with the job it is doing, because a bass line
+     you can only see the shape of is not a bass line you can play. */
+  .lane.is-bass .lane-note {
+    height:var(--note-h, 15px);
+    display:grid;
+    place-items:center;
+    font-family:var(--mono);
+    font-size:9px;
+    font-variation-settings:'wght' 700;
+    color:var(--on-part);
+    opacity:1;
+  }
+  .lane-note[data-role=root]   { background:var(--role-root); }
+  .lane-note[data-role=third]  { background:var(--role-third); }
+  .lane-note[data-role=fifth]  { background:var(--role-fifth); }
+  .lane-note[data-role=other]  { background:var(--role-other); }
+  .lane-note[data-role=approach] { background:var(--role-approach); }
+
+  /* Chord blocks are held rather than struck, so they are drawn as a slab with
+     the symbol printed on the left edge of the span. */
+  .lane.is-chords .lane-note { opacity:calc(.42 + var(--vel, .8) * .4); }
+  .lane-chord {
+    position:absolute;
+    left:calc(var(--x) * 100%);
+    top:4px;
+    padding:1px 5px;
+    border-radius:var(--r-xs);
+    background:var(--fill-3);
+    font-family:var(--mono);
+    font-size:var(--fd-xs);
+    font-variation-settings:'wght' 620;
+    letter-spacing:var(--tr-data);
+    color:var(--label-2);
+    white-space:nowrap;
+  }
+
+  /* The bar numbers, along the foot of the lane. */
+  .lane-bars {
+    position:absolute; left:0; right:0; bottom:0;
+    height:16px;
+    display:grid;
+    grid-auto-flow:column;
+    grid-auto-columns:1fr;
+    pointer-events:none;
+  }
+  .lane-bars span {
+    align-self:center;
+    padding-left:4px;
+    font-family:var(--mono);
+    font-size:9px;
+    font-variation-settings:'wght' 500;
+    color:var(--label-3);
+  }
+
+  .lane-head {
+    position:absolute;
+    top:0; bottom:0;
+    left:calc(var(--head, 0) * 100%);
+    width:2px;
+    margin-left:-1px;
+    background:var(--lamp);
+    box-shadow:0 0 10px color-mix(in srgb, var(--lamp) 60%, transparent);
+    opacity:0;
+    pointer-events:none;
+  }
+  body.is-live .lane-head { opacity:1; }
+
+  /* -------------------------------------------------------- the drum lane */
+
+  .lane.is-drums { display:flex; flex-direction:column; gap:2px; padding:var(--sp-2) 0; background-image:none; }
+  .drum-row { display:flex; align-items:center; gap:var(--sp-2); min-height:20px; }
+  .drum-label {
+    position:sticky;
+    left:0;
+    z-index:2;
+    flex:none;
+    width:58px;
+    padding-left:var(--sp-3);
+    background:linear-gradient(to right, var(--grouped-cell) 74%, transparent);
+    font-size:var(--fs-caption2);
+    font-weight:600;
+    color:var(--label-2);
+    white-space:nowrap;
+    overflow:hidden;
+    text-overflow:ellipsis;
+  }
+  .drum-cells {
+    flex:1 1 auto;
+    display:grid;
+    grid-auto-flow:column;
+    grid-auto-columns:1fr;
+    gap:1px;
+    padding-right:var(--sp-3);
+  }
+  .drum-cell {
+    height:16px;
+    border-radius:2px;
+    background:var(--fill-4);
+  }
+  /* A downbeat is marked in the empty grid too, so you can count without
+     hunting for the bar line. */
+  .drum-cell[data-beat] { background:var(--fill-3); }
+  .drum-cell.on { background:var(--part); opacity:calc(.45 + var(--vel, .8) * .55); }
+  .drum-cell.ghost { background:var(--part); opacity:.3; }
+  .drum-cell.accent { background:var(--part); opacity:1; box-shadow:0 0 0 1px var(--part-ink); }
+
+  /* ======================================================== song screen */
+
+  /* The genre is the one decision that changes everything downstream, so it is
+     not a row in a list of eight — it is a rail of cards you flick through,
+     each carrying the name and what the genre actually does. */
+  .genre-card {
+    position:relative;
+    width:150px;
+    min-height:92px;
+    display:flex;
+    flex-direction:column;
+    justify-content:flex-end;
+    gap:2px;
+    padding:var(--sp-3);
+    border-radius:var(--r-md);
+    background:var(--grouped-cell);
+    text-align:left;
+    box-shadow:inset 0 0 0 var(--hairline) var(--separator);
+    transition:transform var(--t-click) var(--e-ios),
+               box-shadow var(--t-throw) var(--e-ios),
+               background-color var(--t-throw) var(--e-ios);
+  }
+  .genre-card:active { transform:scale(.96); }
+  .genre-card b { font-size:var(--fs-callout); font-weight:600; color:var(--label); }
+  .genre-card small { font-size:var(--fs-caption2); line-height:1.25; color:var(--label-2); }
+  /* aria-CHECKED, not aria-selected: these are radios. Matching on the wrong
+     one is invisible in review — the control works, it just never looks
+     chosen. */
+  .genre-card[aria-checked=true] {
+    background:var(--tint-fill);
+    box-shadow:inset 0 0 0 2px var(--tint);
+  }
+  .genre-card[aria-checked=true] b { color:var(--tint); }
+
+  .tempo-row { display:flex; flex-direction:column; gap:var(--sp-1); padding:var(--sp-2) var(--sp-4) var(--sp-3); }
+  .tempo-top { display:flex; align-items:baseline; justify-content:space-between; gap:var(--sp-3); }
+  .tempo-read {
+    font-family:var(--mono);
+    font-size:var(--fd);
+    font-variation-settings:'wght' 620;
+    letter-spacing:var(--tr-data);
+    color:var(--label);
+  }
+
+  /* The screen's primary action. A row of the shell rather than something
+     sticky inside the scroller: a call to action nine rows below the fold is a
+     call to action nobody presses, and a sticky one sits on top of the row you
+     were reaching for. */
+  .cta-bar {
+    position:relative;
+    z-index:28;
+    padding:var(--sp-2) var(--gutter);
+    background:var(--chrome-solid);
+    box-shadow:inset 0 var(--hairline) 0 var(--separator);
+  }
+  .cta-bar[hidden] { display:none; }
+
+  /* ===================================================== arrange screen */
+
+  /* The map is drawn to scale, so a section that is twice as long is twice as
+     wide, and every section is a control: tapping one mutes the parts it drops
+     so you hear the idea rather than reading it. */
+  .map {
+    display:flex;
+    gap:3px;
+    padding:var(--sp-1) var(--gutter) var(--sp-2);
+    overflow-x:auto;
+    scrollbar-width:none;
+    -webkit-overflow-scrolling:touch;
+    overscroll-behavior-x:contain;
+  }
+  .map::-webkit-scrollbar { display:none; }
+
+  /* Drawn to scale: a section twice as long is twice as wide. flex-grow AND
+     flex-shrink both take the bar count, so the proportions hold whether the
+     form fits the screen or has to be squeezed into it — and 52px is the floor
+     at which a two-word section name still has somewhere to go. */
+  .map-sec {
+    flex:var(--w, 1) var(--w, 1) 0;
+    min-width:58px;
+    display:flex;
+    flex-direction:column;
+    gap:3px;
+    padding:var(--sp-2) 6px;
+    border-radius:var(--r-xs);
+    background:var(--grouped-cell);
+    text-align:left;
+    transition:background-color var(--t-throw) var(--e-ios), transform var(--t-click) var(--e-ios);
+  }
+  .map-sec:active { transform:scale(.97); }
+  .map-sec[aria-pressed=true] { background:var(--tint-fill); box-shadow:inset 0 0 0 2px var(--tint); }
+  /* Two lines rather than an ellipsis: "Last chorus" and "Chorus 2" are the
+     names that matter most in the form, and three sections all reading
+     "Cho…" tells you nothing. */
+  .map-sec-name {
+    font-size:var(--fs-caption2);
+    font-weight:600;
+    line-height:1.15;
+    color:var(--label);
+    display:-webkit-box;
+    -webkit-line-clamp:2;
+    -webkit-box-orient:vertical;
+    overflow:hidden;
+  }
+  .map-sec-bars { font-size:9px; color:var(--label-3); white-space:nowrap; }
+  .map-tracks { display:flex; flex-direction:column; gap:2px; margin-top:2px; }
+  .map-track { height:4px; border-radius:2px; background:var(--fill-4); }
+  .map-track.on { background:var(--tk); }
+
+  .map-key { display:flex; flex-wrap:wrap; gap:var(--sp-3); padding:0 var(--gutter); }
+  .map-key span { display:inline-flex; align-items:center; gap:5px; font-size:var(--fs-caption2); color:var(--label-2); }
+  .map-key i { width:9px; height:9px; border-radius:2px; background:var(--tk); }
+
+  .section-row .row-icon { background:var(--tint-fill); color:var(--tint); font-size:var(--fs-caption2); font-weight:700; }
+
+  /* ===================================================== library screen */
+
+  /* Swipe-to-delete. The row rides on a transform over a fixed action layer,
+     which is exactly how a UITableViewCell does it — and it means the delete
+     is revealed by the same gesture people already use everywhere else. */
+  .swipe { position:relative; overflow:hidden; background:var(--grouped-cell); }
+  .swipe-actions {
+    position:absolute;
+    top:0; right:0; bottom:0;
+    display:flex;
+  }
+  .swipe-actions button {
+    width:84px;
+    display:grid;
+    place-items:center;
+    font-size:var(--fs-subhead);
+    font-weight:590;
+    color:#FFFFFF;
+    background:var(--red);
+  }
+  .swipe-actions button.is-neutral { background:var(--fill-1); color:var(--label); }
+  .swipe-body {
+    position:relative;
+    background:var(--grouped-cell);
+    transform:translateX(calc(var(--swipe, 0) * 1px));
+    transition:transform var(--t-throw) var(--e-ios);
+    touch-action:pan-y;
+  }
+  .swipe.is-dragging .swipe-body { transition:none; }
+
+  .sketch-row .row-title { font-weight:500; }
+  .sketch-dot {
+    width:10px; height:10px; border-radius:3px;
+    background:var(--tk, var(--tint));
+  }
+
+  /* ======================================================== onboarding */
+
+  .intro {
+    position:fixed;
+    top:0; left:0; right:0;
+    height:100vh;
+    z-index:70;
+    display:flex;
+    flex-direction:column;
+    background:var(--grouped-bg);
+    padding-top:var(--safe-t);
+    padding-bottom:var(--safe-b);
+    opacity:0;
+    transition:opacity var(--t-panel) var(--e-ios);
+  }
+  @supports (height:100dvh) { .intro { height:100dvh; } }
+  .intro[hidden] { display:none; }
+  .intro.is-open { opacity:1; }
+
+  .intro-pages {
+    flex:1 1 auto;
+    min-height:0;
+    display:flex;
+    overflow-x:auto;
+    scroll-snap-type:x mandatory;
+    -webkit-overflow-scrolling:touch;
+    overscroll-behavior:contain;
+    scrollbar-width:none;
+  }
+  .intro-pages::-webkit-scrollbar { display:none; }
+  .intro-page {
+    flex:none;
+    width:100%;
+    scroll-snap-align:center;
+    scroll-snap-stop:always;
+    display:flex;
+    flex-direction:column;
+    align-items:center;
+    justify-content:center;
+    gap:var(--sp-4);
+    padding:var(--sp-6) var(--sp-6);
+    text-align:center;
+    overflow-y:auto;
+  }
+  .intro-mark { opacity:.9; }
+  .intro-page h2 { font-size:var(--fs-title1); font-weight:700; letter-spacing:var(--tr-title); max-width:18ch; }
+  .intro-page p { font-size:var(--fs-callout); line-height:1.45; color:var(--label-2); max-width:34ch; }
+  .intro-eyebrow {
+    font-size:var(--fs-footnote);
+    font-weight:600;
+    color:var(--tint);
+  }
+  .intro-foot {
+    flex:none;
+    display:flex;
+    align-items:center;
+    gap:var(--sp-4);
+    padding:var(--sp-3) var(--gutter) var(--sp-5);
+  }
+  .intro-dots { flex:1 1 auto; display:flex; justify-content:center; gap:var(--sp-2); }
+  .intro-dots button {
+    position:relative;
+    width:8px; height:8px;
+    border-radius:var(--r-pill);
+    background:var(--label-4);
+    transition:background-color var(--t-throw) var(--e-ios), transform var(--t-throw) var(--e-ios);
+  }
+  .intro-dots button[aria-current=true] { background:var(--tint); transform:scale(1.25); }
+  .intro-dots button::before { content:''; position:absolute; inset:-18px -10px; }
+  .intro-skip { flex:none; min-width:64px; text-align:left; }
+  .intro-next { flex:none; min-width:64px; text-align:right; }
+
+  /* ========================================================= count-in */
+
+  .countin {
+    position:fixed;
+    top:0; left:0; right:0;
+    height:100vh;
+    z-index:75;
+    display:flex;
+    flex-direction:column;
+    align-items:center;
+    justify-content:center;
+    gap:var(--sp-5);
+    background:color-mix(in srgb, var(--bg) 88%, transparent);
+    backdrop-filter:blur(14px);
+    -webkit-backdrop-filter:blur(14px);
+  }
+  @supports (height:100dvh) { .countin { height:100dvh; } }
+  .countin[hidden] { display:none; }
+  .countin b {
+    font-family:var(--mono);
+    font-size:clamp(96px, 34vw, 200px);
+    font-variation-settings:'wght' 700;
+    line-height:1;
+    color:var(--lamp);
+    font-variant-numeric:tabular-nums;
+  }
+  .countin small { font-size:var(--fs-footnote); font-weight:600; color:var(--label-2); }
+
+  /* ===================================================== landscape */
+
+  /* A phone on its side is 390 points tall with the chrome taking a third of
+     it, so the vertical stack has to become a pair of columns: the hardware on
+     one side, everything you read about it on the other. This is the only
+     layout branch in the app. */
+  @media (orientation:landscape) and (max-height:520px) {
+    .screen[data-screen=play] .screen-inner {
+      display:grid;
+      grid-template-columns:minmax(0, 1.15fr) minmax(0, 1fr);
+      align-items:start;
+      gap:var(--sp-3) var(--sp-2);
+      max-width:none;
+      padding-top:var(--sp-2);
+    }
+    .screen[data-screen=play] .parts-wrap { grid-column:1 / -1; }
+    .screen[data-screen=play] .rig-block { grid-row:2 / span 3; }
+    .nav-inner { min-height:44px; }
+    .nav-meta { font-size:var(--fs-caption2); }
+    .dock { min-height:48px; }
+    /* Shorter, but never below the floor: the glyph and the gap give the room
+       back, not the target. */
+    .tab { padding:0 2px; gap:0; }
+    .tab .i { width:22px; height:22px; }
+    .tab span { font-size:0.5625rem; }
+  }
+
+  /* On a big screen the app stays an app: it centres rather than stretching,
+     and the two columns of the landscape phone become the natural desk. */
+  @media (min-width:900px) {
+    .screen[data-screen=play] .screen-inner {
+      display:grid;
+      grid-template-columns:minmax(0, 1.2fr) minmax(0, 1fr);
+      align-items:start;
+      gap:var(--sp-5) var(--sp-4);
+      max-width:1100px;
+    }
+    .screen[data-screen=play] .parts-wrap { grid-column:1 / -1; }
+    .screen[data-screen=play] .rig-block { grid-row:2 / span 3; }
+  }
+}

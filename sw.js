@@ -1,26 +1,16 @@
-/* Downbeat's offline shell. The song itself is also saved in localStorage by
-   ui.js, so an interrupted connection loses neither the app nor the work. */
-const CACHE = 'downbeat-shell-v3';
-/* The fetch handler below returns early for cross-origin requests, so anything
-   not in this array and not same-origin simply does not exist offline. That is
-   why the two typefaces are here: without them the installed app — which is
-   this product's primary form — would fall back to system faces in the one
-   context it was built for. */
+/* Downbeat's offline shell. An installed app has to work with no connection —
+   that is most of the point of installing it — so the whole shell is cached on
+   first run and served from the cache whenever the network fails. */
+const CACHE = 'downbeat-shell-v4';
 const SHELL = [
   './',
   './index.html',
   './manifest.webmanifest',
   './css/tokens.css',
   './css/base.css',
-  './css/layout.css',
-  './css/controls.css',
-  './css/lane.css',
-  './css/run.css',
-  './css/faceplate.css',
-  './css/sheets.css',
-  './css/overlays.css',
-  './css/motion.css',
-  './css/responsive.css',
+  './css/components.css',
+  './css/screens.css',
+  './css/device.css',
   './css/a11y.css',
   './fonts/archivo-latin.woff2',
   './fonts/archivo-latin-ext.woff2',
@@ -36,6 +26,7 @@ const SHELL = [
   './src/devices.js',
   './src/arrange.js',
   './src/library.js',
+  './src/ios.js',
   './src/ui.js',
   './icons/icon-180.png',
   './icons/icon-192.png',
@@ -43,8 +34,21 @@ const SHELL = [
   './icons/icon-maskable-512.png'
 ];
 
+/* cache.addAll() is atomic: one 404 rejects the whole install and the worker
+   never activates — with no visible symptom, because the page swallows the
+   registration rejection. The document and the code it needs are required; the
+   fonts and icons are best-effort, so a missing icon can never cost the app
+   its offline mode. */
+const REQUIRED = SHELL.filter((url) => /\.(html|css|js)$|\/$/.test(url));
+const OPTIONAL = SHELL.filter((url) => REQUIRED.indexOf(url) < 0);
+
 self.addEventListener('install', (event) => {
-  event.waitUntil(caches.open(CACHE).then((cache) => cache.addAll(SHELL)).then(() => self.skipWaiting()));
+  event.waitUntil(
+    caches.open(CACHE)
+      .then((cache) => cache.addAll(REQUIRED).then(() =>
+        Promise.all(OPTIONAL.map((url) => cache.add(url).catch(() => null)))))
+      .then(() => self.skipWaiting())
+  );
 });
 
 self.addEventListener('activate', (event) => {

@@ -19,6 +19,16 @@
   const T = global.Theory;
   const mod = T.mod;
 
+  /* A finger has no hover, but WebKit synthesises a mouseenter on tap and
+     sends no matching mouseleave until you touch something else — so the
+     preview highlight stays lit on whatever you last touched, and the display
+     keeps printing its note. Binding the pair only where a real pointer can
+     hover is the fix; touch already has the click path, which strikes the pad
+     and releases on its own timer. */
+  const HOVERS = typeof global.matchMedia === 'function'
+    ? global.matchMedia('(hover: hover) and (pointer: fine)').matches
+    : true;
+
   const TRACKS = [
     { id: 'melody', label: 'Melody' },
     { id: 'counter', label: 'Counter' },
@@ -1266,8 +1276,7 @@
         face.link(id, true, !!event && event.type === 'focus' && keyFocused(el));
       };
       const leave = () => { face.clearPreview(); face.link(id, false); };
-      el.addEventListener('mouseenter', enter);
-      el.addEventListener('mouseleave', leave);
+      if (HOVERS) { el.addEventListener('mouseenter', enter); el.addEventListener('mouseleave', leave); }
       el.addEventListener('focus', enter);
       el.addEventListener('blur', leave);
     });
@@ -1448,8 +1457,7 @@
          play" is exactly the readout worth having. */
       const enter = () => { markLink(chip, 'self', true); face.preview(id ? [id] : [], name); };
       const leave = () => { markLink(chip, 'self', false); face.clearPreview(); };
-      chip.addEventListener('mouseenter', enter);
-      chip.addEventListener('mouseleave', leave);
+      if (HOVERS) { chip.addEventListener('mouseenter', enter); chip.addEventListener('mouseleave', leave); }
       chip.addEventListener('focus', enter);
       chip.addEventListener('blur', leave);
       chip.addEventListener('click', () => {
@@ -1466,8 +1474,7 @@
       const ids = (card.dataset.lights || '').split(' ').filter(Boolean);
       const enter = () => { markLink(card, 'self', true); face.preview(ids, card.dataset.chord); };
       const leave = () => { markLink(card, 'self', false); face.clearPreview(); };
-      card.addEventListener('mouseenter', enter);
-      card.addEventListener('mouseleave', leave);
+      if (HOVERS) { card.addEventListener('mouseenter', enter); card.addEventListener('mouseleave', leave); }
       card.addEventListener('focus', enter);
       card.addEventListener('blur', leave);
       card.addEventListener('click', () => {
