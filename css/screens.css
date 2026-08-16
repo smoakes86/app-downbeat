@@ -499,10 +499,20 @@
   .map-key span { display:inline-flex; align-items:center; gap:5px; font-size:var(--fs-caption2); color:var(--label-2); }
   .map-key i { width:9px; height:9px; border-radius:2px; background:var(--tk); }
 
+  /* Where the transport is, as against what you have auditioned. The
+     auditioned section wears the tint because you put it there; the section
+     playing wears the part colour, because it is the same fact the pads and
+     the lane are reporting at the same moment, from the same clock. */
+  .map-sec.now { background:var(--part-fill); box-shadow:inset 0 0 0 2px var(--part); }
+  .map-sec.now .map-sec-name { color:var(--part-ink); }
+
   .section-row .row-icon { background:var(--fill-3); color:var(--label-2); font-size:var(--fs-caption2); font-weight:700; }
   .section-row[aria-pressed=true] { background:var(--tint-fill); }
   .section-row[aria-pressed=true] .row-icon { background:var(--tint); color:var(--on-tint-fill); }
   .section-row[aria-pressed=true] .row-title { color:var(--tint); font-weight:600; }
+  .section-row.now { background:var(--part-fill); }
+  .section-row.now .row-icon { background:var(--part); color:var(--on-part); }
+  .section-row.now .row-title { color:var(--part-ink); font-weight:600; }
   .section-row .row-chevron { width:12px; height:12px; fill:var(--label-3); }
   .section-row[aria-pressed=true] .row-chevron { fill:var(--tint); }
 

@@ -185,6 +185,31 @@ lands mid-progression. A map drawn to scale shows which of the five parts
 play in each section, and every section is tappable: it mutes the parts that
 section drops so you hear the idea instead of just reading it.
 
+**And it plays.** *Play the arrangement* runs the whole form — every section
+in order, at its own length, with its parts dropping in and out on the bar.
+The section you are inside lights up in the map and in the list under it, and
+the transport reads `Chorus · Melody` over `Bar 22 of 52` rather than
+counting round a four-bar loop forever.
+
+A section that drops the drums is a section with no drum events in it, not a
+section played with the drum bus turned down. The difference is audible at the
+seam: a bus ducked on the bar line cuts the tail of whatever was still ringing
+from the section before, and the scheduler commits notes a lookahead window
+early, so *mute it when the loop wraps* mutes it slightly before the wrap you
+can hear. Laying the form out as one flat sequence is exact by construction —
+a verse/chorus over a four-bar loop is thirteen passes of a hundred-odd
+events, which is nothing.
+
+The Play screen keeps drawing the loop while the form runs: the faceplate, the
+run of pads and the shape are all pictures of one pass, so the playhead is
+folded back into it. Otherwise the pads would stop lighting at bar five of a
+fifty-two bar song.
+
+Arming persists, so the transport's own play button gives you the form too,
+and auditioning a section is how you go back to the loop — the opposite
+request, so it doubles as the way out, and the two states can never both be on
+screen claiming to be true.
+
 **Saving and sharing.** A sketch is stored as the recipe that produced it —
 genre, key, scale choice, energy, length, tempo and the two seeds — rather
 than as a dump of notes. Reloading one replays exactly the same decisions, so
@@ -256,7 +281,8 @@ reads `OFF`.
 | Device switcher | Which of the two units you are playing it on. It stays put as you switch parts |
 | Solo | Hear only the part you are on. It follows the selection, and gives your mix back when you let it go |
 | Loop | Round and round, or once through |
-| Arrangement sections | Tap one to hear it with its parts dropped |
+| Play the arrangement | The whole form, section by section, from the Arrange tab |
+| Arrangement sections | Tap one to hear it with its parts dropped — and to come back off the form |
 | Share | The system share sheet: link, text, MIDI, or save to the library |
 | Undo | Appears in the title bar whenever a change can be taken back |
 
@@ -301,7 +327,10 @@ found:
 - **function** — taps through every control on every screen and asserts the
   result: the playhead moves and sits over the grid it marks, chips and lane
   notes light under playback, solo survives a regenerate, a share link boots,
-  a draft survives a reload, swipe-to-delete opens and confirms. The mix is
+  a draft survives a reload, swipe-to-delete opens and confirms. The
+  arrangement is checked as a layout rather than by listening: in every genre,
+  every section contains exactly the parts the form lists and no others, on
+  every repeat, in time order, for the full length the plan claims. The mix is
   checked exhaustively: every one of the 2ⁿ combinations of the parts a song
   has, driven a tap at a time and asserted against what the engine is
   actually playing.

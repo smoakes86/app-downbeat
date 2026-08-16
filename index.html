@@ -309,14 +309,22 @@
         </section>
       </main>
 
-      <!-- The Song screen's primary action, as its own row of the shell rather
-           than as something sticky inside the scroller. A sticky footer covers
-           whatever is under it, and the row it covers on a phone is always the
-           last one you were reaching for. -->
-      <div class="cta-bar" id="songCta" hidden>
-        <button class="btn btn-filled btn-lg btn-block" id="generateButton">
+      <!-- The active screen's primary action, as its own row of the shell
+           rather than as something sticky inside the scroller. A sticky footer
+           covers whatever is under it, and the row it covers on a phone is
+           always the last one you were reaching for.
+
+           One row, not one per screen: two rows of chrome above the transport
+           is a phone with no app left on it. Whichever screen owns an action
+           shows its own button here. -->
+      <div class="cta-bar" id="cta" hidden>
+        <button class="btn btn-filled btn-lg btn-block" id="generateButton" data-cta="song">
           <svg class="i" aria-hidden="true" focusable="false"><use href="#i-sparkle"></use></svg>
           Write a new song
+        </button>
+        <button class="btn btn-filled btn-lg btn-block" id="arrangeButton" data-cta="arrange" hidden>
+          <svg class="i" aria-hidden="true" focusable="false"><use href="#i-play"></use></svg>
+          <span id="arrangeButtonText">Play the arrangement</span>
         </button>
       </div>
 

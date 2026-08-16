@@ -486,6 +486,170 @@ await check('arrange reset', async () => {
   await page.waitForTimeout(300);
 });
 
+/* ------------------------------------------------ playing the arrangement
+
+   The claim is that each section plays its own parts and no others, which is
+   a property of the laid-out events rather than anything observable from
+   outside while it runs — so it is asserted on the layout, over every genre,
+   rather than by listening to one song and hoping. */
+await check('the arrangement lays out as the form describes', async () => {
+  const bad = await page.evaluate(() => {
+    const wrong = [];
+    let sections = 0;
+    window.Genres.order.forEach((g) => {
+      const song = window.Compose.compose({ genre: g, keyPc: 0 });
+      const plan = window.Arrange.plan(song);
+      const laid = window.Engine.arrange(song, plan);
+      if (laid.totalSteps !== plan.totalBars * 16) {
+        wrong.push(`${g}: ${laid.totalSteps} steps for ${plan.totalBars} bars`);
+      }
+      let last = -1;
+      laid.events.forEach((e) => {
+        if (e.step < last) wrong.push(`${g}: events out of order at ${e.step}`);
+        last = e.step;
+      });
+      plan.sections.forEach((section, i) => {
+        sections++;
+        const from = section.start * 16;
+        const to = from + section.bars * 16;
+        const got = [...new Set(laid.events.filter((e) => e.step >= from && e.step < to).map((e) => e.track))];
+        const extra = got.filter((t) => section.tracks.indexOf(t) < 0);
+        const missing = section.tracks.filter((t) => got.indexOf(t) < 0);
+        if (extra.length) wrong.push(`${g}/${section.name}: plays ${extra}, which the form drops`);
+        if (missing.length) wrong.push(`${g}/${section.name}: silent ${missing}, which the form plays`);
+        if (laid.spans[i].start !== from) wrong.push(`${g}/${section.name}: span at ${laid.spans[i].start}, form says ${from}`);
+        /* Every repeat, not only the first: an off-by-one in the pass loop
+           would leave the second half of every doubled section empty. */
+        if (section.loops > 1) {
+          const first = laid.events.filter((e) => e.step >= from && e.step < from + song.totalSteps).length;
+          const lastPass = laid.events.filter((e) => e.step >= to - song.totalSteps && e.step < to).length;
+          if (first !== lastPass) wrong.push(`${g}/${section.name}: ${first} events in pass 1, ${lastPass} in the last`);
+        }
+      });
+    });
+    return { wrong: wrong.slice(0, 4), total: wrong.length, sections };
+  });
+  if (bad.total) throw new Error(`${bad.total} problems, e.g. ${bad.wrong[0]}`);
+  if (bad.sections < 40) throw new Error(`only ${bad.sections} sections swept`);
+});
+
+/* The loop's own length, measured rather than assumed: the song may be four
+   bars or twelve by the time the driver gets here, so every "is this the form
+   or the loop" assertion below compares against this. */
+let loopSpan = 0;
+await check('measure the loop', async () => {
+  await tap('#playButton');
+  await page.waitForTimeout(700);
+  loopSpan = await page.evaluate(() => window.Engine.span());
+  await tap('#playButton');
+  await page.waitForTimeout(400);
+  if (!loopSpan) throw new Error('the loop reported no length');
+});
+
+await check('play the arrangement', async () => {
+  await tap('.tab[data-tab="arrange"]');
+  await tap('#arrangeButton');
+  await page.waitForTimeout(2600);
+  const live = await page.evaluate(() => ({
+    playing: window.Engine.isPlaying(),
+    span: window.Engine.span(),
+    section: (window.Engine.sectionAt(window.Engine.position()) || {}).name,
+    marked: document.querySelectorAll('#arrangeMap .map-sec.now').length,
+    rows: document.querySelectorAll('#arrangeSteps .section-row.now').length,
+    pos: document.querySelector('#dockPos').textContent,
+    part: document.querySelector('#dockPart').textContent,
+    cta: document.querySelector('#arrangeButtonText').textContent
+  }));
+  if (!live.playing) throw new Error('the arrangement did not start');
+  if (live.span <= loopSpan) throw new Error(`span is ${live.span} steps — the loop alone is ${loopSpan}`);
+  if (live.span % loopSpan) throw new Error(`span ${live.span} is not a whole number of ${loopSpan}-step loops`);
+  if (live.marked !== 1) throw new Error(`${live.marked} sections marked as playing`);
+  if (live.rows !== 1) throw new Error(`${live.rows} rows marked as playing`);
+  if (!live.section || live.part.indexOf(live.section) !== 0) {
+    throw new Error(`transport says "${live.part}", engine is in "${live.section}"`);
+  }
+  if (!/of \d+ ·/.test(live.pos)) throw new Error(`transport reads "${live.pos}"`);
+  if (live.cta !== 'Stop the arrangement') throw new Error(`the button still reads "${live.cta}"`);
+  await shot('arrange-playing');
+});
+
+await check('the arrangement moves on to the next section', async () => {
+  const first = await page.evaluate(() => (window.Engine.sectionAt(window.Engine.position()) || {}).id);
+  /* The first section of every form is one pass of the loop, so a section
+     change is a few seconds away at any tempo this app writes. */
+  const moved = await page.evaluate((from) => new Promise((done) => {
+    const started = Date.now();
+    const poll = setInterval(() => {
+      const at = (window.Engine.sectionAt(window.Engine.position()) || {}).id;
+      if (at !== from) { clearInterval(poll); done(at); }
+      else if (Date.now() - started > 25000) { clearInterval(poll); done(null); }
+    }, 120);
+  }), first);
+  if (!moved) throw new Error(`still in ${first} after 25s`);
+  const marked = await page.evaluate(() => {
+    const el = document.querySelector('#arrangeMap .map-sec.now');
+    return el ? el.dataset.section : null;
+  });
+  if (marked !== moved) throw new Error(`engine is in ${moved}, the map marks ${marked}`);
+});
+
+await check('the Play screen still follows the loop, not the form', async () => {
+  await tap('.tab[data-tab="play"]');
+  await page.waitForTimeout(900);
+  /* The faceplate, the lane and the bar dots all draw one pass of the loop.
+     Folding the position is what keeps them lighting past bar five of a
+     fifty-two bar form. */
+  const seen = await page.evaluate(() => new Promise((done) => {
+    let lit = 0;
+    let dots = 0;
+    let frames = 0;
+    const tick = () => {
+      frames++;
+      lit += document.querySelectorAll('.seq-chip.now, .seq-chord.now').length ? 1 : 0;
+      dots = Math.max(dots, document.querySelectorAll('#dockBars .on').length);
+      if (frames < 90) requestAnimationFrame(tick);
+      else done({ lit, dots, head: Number(document.querySelector('.lane-head')?.style.getPropertyValue('--head') || -1) });
+    };
+    requestAnimationFrame(tick);
+  }));
+  if (!seen.lit) throw new Error('nothing in the run lit during arrangement playback');
+  if (seen.dots !== 1) throw new Error(`${seen.dots} bar dots lit`);
+  if (!(seen.head >= 0 && seen.head <= 1)) throw new Error(`lane head is at ${seen.head}, outside the loop`);
+});
+
+await check('stopping from the transport stops the arrangement', async () => {
+  await tap('#playButton');
+  await page.waitForTimeout(500);
+  const after = await page.evaluate(() => ({
+    playing: window.Engine.isPlaying(),
+    marked: document.querySelectorAll('.map-sec.now, .section-row.now').length,
+    pos: document.querySelector('#dockPos').textContent
+  }));
+  if (after.playing) throw new Error('still playing');
+  if (after.marked) throw new Error(`${after.marked} sections still marked as playing`);
+  if (!/bars/.test(after.pos)) throw new Error(`transport reads "${after.pos}"`);
+});
+
+await check('it stays armed, and auditioning a section disarms it', async () => {
+  await tap('#playButton');
+  await page.waitForTimeout(600);
+  const armed = await page.evaluate(() => window.Engine.span());
+  await tap('#playButton');
+  await page.waitForTimeout(400);
+  if (armed <= loopSpan) throw new Error(`the transport went back to the loop (${armed} steps)`);
+
+  await tap('.tab[data-tab="arrange"]');
+  await page.locator('#arrangeMap .map-sec').first().tap();
+  await page.waitForTimeout(400);
+  await tap('#playButton');
+  await page.waitForTimeout(600);
+  const loop = await page.evaluate(() => window.Engine.span());
+  await tap('#playButton');
+  await page.waitForTimeout(300);
+  if (loop !== loopSpan) throw new Error(`auditioning left the form armed (${loop} steps, loop is ${loopSpan})`);
+  await tap('#arrangeReset');
+});
+
 /* ----------------------------------------------------------- library */
 await check('library tab', async () => {
   await tap('.tab[data-tab="library"]');

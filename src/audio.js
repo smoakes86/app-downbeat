@@ -389,6 +389,13 @@
   let stepDuration = 0.125;
   let currentSong = null;
   let looping = true;
+  /* How long one pass through the transport is, in steps. The loop's own
+     length when you are playing the loop, and the whole arrangement's when you
+     are playing that — everything that wraps, ends or reports a position
+     measures against this rather than against the song, which only ever knew
+     about the loop. */
+  let spanSteps = 0;
+  let sections = null;
   let onStop = null;
   let onLoop = null;
 
@@ -414,6 +421,45 @@
     return list.sort((a, b) => a.step - b.step);
   }
 
+  /* The arrangement, laid out flat.
+
+     A section that drops the drums is a section with no drum events in it —
+     not a section played with the drum bus turned down. The difference matters
+     at the seam: a bus ducked on the bar line cuts the tail of whatever was
+     still ringing from the section before, and the scheduler commits notes up
+     to a lookahead window early, so "mute it when the loop wraps" mutes it
+     slightly before the wrap you can hear. Scheduling only the notes that
+     belong is exact by construction and costs nothing — a verse-chorus form
+     over a four-bar loop is thirteen passes of a hundred-odd events.
+
+     The section id rides along on each event so the transport can say what is
+     playing without recomputing it from the clock. */
+  function buildArrangement(song, plan) {
+    const base = buildEvents(song);
+    const loopSteps = song.totalSteps;
+    const list = [];
+    const spans = [];
+    let at = 0;
+    plan.sections.forEach((section) => {
+      const on = {};
+      section.tracks.forEach((id) => { on[id] = true; });
+      spans.push({ id: section.id, name: section.name, start: at, steps: section.loops * loopSteps });
+      for (let pass = 0; pass < section.loops; pass++) {
+        const offset = at + pass * loopSteps;
+        base.forEach((e) => {
+          if (!on[e.track]) return;
+          const copy = {};
+          for (const k in e) copy[k] = e[k];
+          copy.step = e.step + offset;
+          list.push(copy);
+        });
+      }
+      at += section.loops * loopSteps;
+    });
+    list.sort((a, b) => a.step - b.step);
+    return { events: list, totalSteps: at, spans };
+  }
+
   /* Swing pushes the offbeats later. Which subdivision counts as an offbeat
      depends on whether the genre swings its eighths or its sixteenths. */
   function swingOffset(song, step) {
@@ -429,7 +475,7 @@
   function tick() {
     if (!currentSong) return;
     const horizon = ctx.currentTime + SCHEDULE_AHEAD;
-    const totalSteps = currentSong.totalSteps;
+    const totalSteps = spanSteps;
 
     while (cursor < events.length && timeOf(events[cursor].step) < horizon) {
       const event = events[cursor];
@@ -467,7 +513,16 @@
     looping = opts.loop !== false;
     onStop = opts.onStop || null;
     onLoop = opts.onLoop || null;
-    events = buildEvents(song);
+    if (opts.arrangement) {
+      const laid = buildArrangement(song, opts.arrangement);
+      events = laid.events;
+      spanSteps = laid.totalSteps;
+      sections = laid.spans;
+    } else {
+      events = buildEvents(song);
+      spanSteps = song.totalSteps;
+      sections = null;
+    }
     stepDuration = 60 / song.bpm / 4;
     loopStart = ctx.currentTime + 0.14;
     cursor = 0;
@@ -506,6 +561,7 @@
     currentSong = null;
     events = [];
     cursor = 0;
+    sections = null;
     if (wasPlaying) silence();
     if (!silent && onStop) onStop();
     if (!silent) onStop = null;
@@ -530,7 +586,22 @@
     if (!currentSong || !ctx) return 0;
     const elapsed = ctx.currentTime - outputDelay() - loopStart;
     if (elapsed < 0) return 0;
-    return Math.min(currentSong.totalSteps, elapsed / stepDuration);
+    return Math.min(spanSteps, elapsed / stepDuration);
+  }
+
+  /* How long the thing being played is, and where its sections fall — null
+     when the transport is on the bare loop. The caller asks rather than
+     assuming, because the same play button now drives two different lengths. */
+  function span() {
+    return spanSteps;
+  }
+
+  function sectionAt(step) {
+    if (!sections) return null;
+    for (let i = sections.length - 1; i >= 0; i--) {
+      if (step >= sections[i].start) return sections[i];
+    }
+    return sections[0];
   }
 
   function setLoop(value) {
@@ -549,7 +620,13 @@
 
   // Deliberately not called `Audio` — that name is already taken in a browser.
   global.Engine = {
-    ensure, start, stop, isPlaying, position, setLoop, setMute, isMuted,
+    ensure, start, stop, isPlaying, position, span, sectionAt,
+    setLoop, setMute, isMuted,
+    /* Pure, and exported because the claim the arrangement makes — this
+       section plays these parts and no others — is a property of the laid-out
+       events rather than of anything you can observe from outside while it
+       runs. Callers get the layout without the transport having to be live. */
+    arrange: buildArrangement,
     playNote, playDrum, preview, PATCHES, TRACKS
   };
 })(window);
