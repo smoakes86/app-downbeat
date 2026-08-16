@@ -147,12 +147,25 @@
         <section class="screen is-active" data-screen="play" id="screenPlay" role="tabpanel" aria-label="Play">
           <div class="screen-inner">
 
-            <!-- Which part you are playing. The thumb takes that part's colour,
-                 so the control is also the legend for the five colours used
-                 everywhere else on the screen. -->
-            <div class="seg-ctl-wrap parts-wrap">
-              <div class="seg-ctl seg-parts" id="parts" role="radiogroup" aria-label="Which part you are playing"></div>
-            </div>
+            <!-- Two questions about the same five parts, asked in the same
+                 order, under one heading: which one you are PLAYING, and which
+                 ones you are HEARING. -->
+            <section class="block parts-block">
+              <div class="block-head">
+                <h3 class="group-title">Parts</h3>
+                <button class="block-action" id="mixReset" hidden>Every part on</button>
+              </div>
+
+              <!-- The thumb takes that part's colour, so the control is also
+                   the legend for the five colours used everywhere else. -->
+              <div class="seg-ctl-wrap parts-wrap">
+                <div class="seg-ctl seg-parts" id="parts" role="radiogroup" aria-label="Which part you are playing"></div>
+              </div>
+
+              <div class="mix-wrap">
+                <div class="mix" id="mix" role="group" aria-label="Mix"></div>
+              </div>
+            </section>
 
             <section class="block rig-block">
               <div class="block-head">

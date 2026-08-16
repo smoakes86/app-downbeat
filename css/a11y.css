@@ -16,8 +16,11 @@
       animation-iteration-count:1 !important;
       scroll-behavior:auto !important;
     }
+    /* .mix-bar is here for the same reason as the segmented thumb: its whole
+       animation is a length travelling, and the state it reports is legible
+       the instant it arrives. */
     .sheet, .action-sheet, .scrim, .screen, .toast, .seg-thumb, .swipe-body,
-    .alert-card {
+    .alert-card, .mix-bar {
       transition-duration:var(--t-least) !important;
     }
     /* The alert is the one surface that deliberately zooms rather than slides,

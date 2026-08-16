@@ -200,6 +200,83 @@ await check('solo off', async () => {
   const muted = await page.evaluate(() => ['melody','counter','chords','bass','drums'].filter((t) => window.Engine.isMuted(t)));
   if (muted.length !== 0) throw new Error(`${muted.length} tracks still muted after solo off`);
 });
+
+/* ------------------------------------------------------------- the mix
+
+   The point of the feature is that ANY combination is reachable, so the check
+   is not "a mute mutes" — it is every one of the 2^n combinations of the parts
+   this song actually has, each asserted against the engine. */
+const mutedNow = () => page.evaluate(() =>
+  ['melody','counter','chords','bass','drums'].filter((t) => window.Engine.isMuted(t)).sort());
+
+await check('every combination of parts', async () => {
+  const live = await page.evaluate(() => [...document.querySelectorAll('.mix-chip')]
+    .filter((c) => !c.dataset.empty).map((c) => c.dataset.part));
+  if (live.length < 4) throw new Error(`only ${live.length} parts available to mix`);
+
+  for (let mask = 0; mask < (1 << live.length); mask++) {
+    const want = live.filter((_, i) => mask & (1 << i)).sort();
+    /* Drive it the way a thumb would rather than by calling in: set each chip
+       to the state this combination needs, one tap at a time. */
+    for (const id of live) {
+      const on = await page.locator(`.mix-chip[data-part="${id}"]`).getAttribute('aria-checked');
+      if ((on === 'false') !== want.includes(id)) await tap(`.mix-chip[data-part="${id}"]`);
+    }
+    const got = await mutedNow();
+    if (got.join() !== want.join()) throw new Error(`combination ${mask}: wanted [${want}] off, engine has [${got}]`);
+  }
+  await shot('mix-all-off');
+});
+
+await check('every part on', async () => {
+  await tap('#mixReset');
+  const got = await mutedNow();
+  if (got.length) throw new Error(`[${got}] still off after "Every part on"`);
+  const off = await page.locator('.mix-chip[aria-checked="false"]:not([data-empty])').count();
+  if (off) throw new Error(`${off} chips still read as off`);
+  await shot('mix-reset');
+});
+
+await check('solo overrides the mix and then gives it back', async () => {
+  await tap('.mix-chip[data-part="chords"]');
+  await tap('#soloButton');
+  const under = await mutedNow();
+  if (under.includes('melody')) throw new Error('solo silenced the part it is soloing');
+  if (under.length !== 4) throw new Error(`solo muted ${under.length} tracks, expected 4`);
+  await tap('#soloButton');
+  const back = await mutedNow();
+  if (back.join() !== 'chords') throw new Error(`mix came back as [${back}], expected chords alone`);
+});
+
+await check('the mix survives a regenerate', async () => {
+  await tap('.tab[data-tab="song"]');
+  await tap('#generateButton');
+  await page.waitForTimeout(600);
+  const kept = await mutedNow();
+  if (!kept.includes('chords')) throw new Error(`chords came back on after a regenerate: [${kept}]`);
+  await tap('.tab[data-tab="play"]');
+  await tap('#mixReset');
+});
+
+await check('a part with nothing in it says so', async () => {
+  const empty = await page.locator('.mix-chip[data-empty="true"]').count();
+  if (empty) {
+    await tap('.mix-chip[data-empty="true"]');
+    const muted = await mutedNow();
+    if (muted.length) throw new Error(`tapping an empty part muted [${muted}]`);
+  }
+});
+
+await check('shift-digit toggles a part', async () => {
+  await page.keyboard.press('Shift+Digit3');
+  await page.waitForTimeout(200);
+  const got = await mutedNow();
+  if (got.join() !== 'chords') throw new Error(`Shift+3 gave [${got}], expected chords`);
+  await page.keyboard.press('Shift+Digit3');
+  await page.waitForTimeout(200);
+  const back = await mutedNow();
+  if (back.length) throw new Error(`Shift+3 again left [${back}] off`);
+});
 await check('loop off', async () => { await tap('#loopButton'); await tap('#loopButton'); });
 await check('stop', async () => {
   await tap('#playButton');

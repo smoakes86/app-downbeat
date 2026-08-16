@@ -57,6 +57,15 @@ everywhere else. Tapping *Counter* when the song has no second line writes one
 rather than refusing — a dead segment can only tell you that you cannot have the
 thing.
 
+**Under it, on the same five columns, is the mix** — what you are *hearing*, as
+against what you are looking at. Any combination is legal, including none of
+them, which is why it is five switches rather than a sixth segmented control.
+Solo sits above it as a momentary override: it silences everything but the part
+you are on while it is held, and hands your mix back untouched when you let it
+go. Nothing about the mix is remembered between launches. Opening the app to a
+part you silenced last week, with nothing on screen having changed, is a bug
+report waiting to happen.
+
 **The faceplate is fitted, not squeezed.** A plate is a fixed number of user
 units wide — 356 for the EP-133, 682 for the FM-1 — so "make it the width of the
 screen" produces two very different objects. `fitFace()` measures the opening
@@ -223,15 +232,18 @@ every step chip in the run.
 | New melody / New chords | Reroll one half, keep the other |
 | Write a new song | Rerolls both seeds |
 | Part switcher | Which part you are playing — the faceplate, the run and the shape all follow |
+| Mix | Five toggles under the switcher: any combination of the parts, on or off |
+| Every part on | Appears beside *Parts* whenever something is off, and puts the whole song back |
 | Device switcher | Which of the two units you are playing it on. It stays put as you switch parts |
-| Solo | Hear only the part you are on. It follows the selection |
+| Solo | Hear only the part you are on. It follows the selection, and gives your mix back when you let it go |
 | Loop | Round and round, or once through |
 | Arrangement sections | Tap one to hear it with its parts dropped |
 | Share | The system share sheet: link, text, MIDI, or save to the library |
 | Undo | Appears in the title bar whenever a change can be taken back |
 
 With a hardware keyboard: `Space` plays and stops, `G` writes a new song,
-`1`–`5` pick a part, `⌘Z` undoes, `Esc` closes whatever is open.
+`1`–`5` pick a part, `⇧1`–`⇧5` switch that part off and on again, `⌘Z` undoes,
+`Esc` closes whatever is open.
 
 ## Accessibility
 
@@ -269,7 +281,10 @@ found:
 - **function** — taps through every control on every screen and asserts the
   result: the playhead moves and sits over the grid it marks, chips and lane
   notes light under playback, solo survives a regenerate, a share link boots,
-  a draft survives a reload, swipe-to-delete opens and confirms.
+  a draft survives a reload, swipe-to-delete opens and confirms. The mix is
+  checked exhaustively: every one of the 2ⁿ combinations of the parts a song
+  has, driven a tap at a time and asserted against what the engine is
+  actually playing.
 - **layout** — every tab at every size, with the safe-area insets an iPhone
   actually reports forced in, asserting no horizontal overflow, no page offset,
   no control under the notch or the home indicator, and nothing below 44pt —

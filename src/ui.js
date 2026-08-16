@@ -118,6 +118,13 @@
   let arrangement = null;
   let activeSection = null;
   let soloOn = false;
+  /* Which parts you are HEARING, as against which one you are looking at. They
+     are different questions and always were — the part switcher answers the
+     second one — but until now the only answer to the first was "this one" or
+     "all of them". Deliberately not persisted across launches: opening the app
+     to a part you silenced last week, with nothing on screen having changed,
+     is a bug report waiting to happen. */
+  const mutes = { melody: false, counter: false, chords: false, bass: false, drums: false };
   let loopOn = true;
   let tempoTouched = false;
   let countInBars = Number(store.get(STORE.countIn) || 1);
@@ -221,10 +228,10 @@
 
     /* The new song has its own sections, so whatever was soloed out by the old
        one is meaningless — but solo is a property of the player, not of the
-       song, and it has to survive. applySolo() re-derives every mute from
-       scratch: with no section active it is exactly a reset, and with solo on
-       it puts solo back rather than quietly dropping it. */
-    applySolo();
+       song, and it has to survive — as does whatever you switched off in the
+       mix. applyMutes() re-derives every track from scratch, so both come back
+       rather than being quietly dropped. */
+    applyMutes();
 
     renderSong();
     saveDraft();
@@ -256,6 +263,7 @@
 
     keepingFocus(() => {
       renderParts();
+      renderMix();
       renderPart();
       renderSongScreen();
       renderArrange();
@@ -388,9 +396,91 @@
     app.dataset.part = id;
     if (partsControl) partsControl.select(id);
     renderPart();
-    if (soloOn) applySolo();
+    if (soloOn) applyMutes();
     syncTransportReadout();
     announce(`${PARTS.find((p) => p.id === id).label} selected`);
+  }
+
+  /* The mix. Five toggles, on the same five columns as the switcher above
+     them, so each one sits under the part it silences: the top row is what you
+     are looking at and the row under it is what you are hearing.
+
+     Not a segmented control, because this is not a choice between five things
+     — every combination is legal, including none of them. */
+  function renderMix() {
+    const box = $('#mix');
+    const has = (id) => {
+      if (id === 'counter') return !!(song.counter && song.counter.length);
+      if (id === 'drums') return !!(song.drums && song.drums.length);
+      return true;
+    };
+
+    /* Built once, then only ever updated. The five chips are the same five
+       chips for the life of the app, and rebuilding them on every toggle would
+       throw focus to <body> on the very keypress that flipped one — the switch
+       you just operated would stop being the switch you are on. */
+    if (box.childElementCount !== PARTS.length) {
+      box.innerHTML = PARTS.map((p) => (
+        `<button type="button" class="mix-chip" role="switch" data-part="${p.id}" ` +
+        `style="--tint-part:var(--t-${p.id});--tint-ink:var(--t-${p.id}-ink)">` +
+        `<span class="mix-name">${p.short}</span><i class="mix-bar" aria-hidden="true"></i></button>`
+      )).join('');
+    }
+
+    PARTS.forEach((p, i) => {
+      const chip = box.children[i];
+      const empty = !has(p.id);
+      chip.setAttribute('aria-checked', !empty && !mutes[p.id] ? 'true' : 'false');
+      /* Not `disabled`: a disabled control is skipped by the keyboard and says
+         nothing, and "there is no countermelody in this sketch" is the one
+         thing worth being told here. */
+      chip.setAttribute('aria-disabled', empty ? 'true' : 'false');
+      if (empty) chip.dataset.empty = 'true'; else delete chip.dataset.empty;
+      chip.setAttribute('aria-label', empty
+        ? `${p.label} — none in this sketch`
+        : `${p.label} ${mutes[p.id] ? 'off' : 'on'}`);
+    });
+
+    const off = PARTS.filter((p) => has(p.id) && mutes[p.id]).length;
+    $('#mixReset').hidden = !off && !activeSection;
+    box.setAttribute('aria-label', off ? `Mix — ${off} of five parts off` : 'Mix — every part on');
+  }
+
+  function toggleMute(id) {
+    /* Solo is an override, so a tap on the mix while it is on would appear to
+       do nothing. Releasing it first is what the tap plainly means. */
+    if (soloOn) {
+      soloOn = false;
+      $('#soloButton').setAttribute('aria-pressed', 'false');
+    }
+    mutes[id] = !mutes[id];
+    applyMutes();
+    UI.haptic(6);
+    /* Only when the switch is not the thing you are on. A focused switch
+       reports its own state change, and the live region on top of it says
+       everything twice. */
+    const chip = $(`.mix-chip[data-part="${id}"]`);
+    if (chip !== doc.activeElement) {
+      const label = PARTS.find((p) => p.id === id).label;
+      announce(`${label} ${mutes[id] ? 'off' : 'on'}`);
+    }
+  }
+
+  function allPartsOn() {
+    PARTS.forEach((p) => { mutes[p.id] = false; });
+    if (activeSection) {
+      activeSection = null;
+      doc.querySelectorAll('#arrangeMap [data-section], #arrangeSteps [data-section]')
+        .forEach((node) => node.setAttribute('aria-pressed', 'false'));
+      $('#arrangeReset').hidden = true;
+    }
+    if (soloOn) {
+      soloOn = false;
+      $('#soloButton').setAttribute('aria-pressed', 'false');
+    }
+    applyMutes();
+    UI.haptic(10);
+    toast('Every part on');
   }
 
   function stepPart(direction) {
@@ -463,11 +553,21 @@
        than under it, so height costs less and the plate can spend the width it
        has been given, up to a ceiling that stops a wide desk drawing a
        metre-high sampler. A phone never reaches this: the app is portrait
-       only, and css/screens.css says so rather than laying one out. */
+       only, and css/screens.css says so rather than laying one out.
+
+       Everything the parts block grew beyond the bare switcher — its heading
+       and the mix row under it — is measured rather than assumed, and comes
+       off the plate on one column. It sits above the plate and pushes it down
+       by exactly that much, and adding a row of controls above the hero should
+       not quietly cost you the bottom of the hero. */
     const twoColumn = global.matchMedia('(min-width: 900px)').matches;
+    const block = $('.parts-block');
+    const wrap = $('.parts-wrap');
+    const overhead = twoColumn || !block || !wrap
+      ? 0 : Math.max(0, block.offsetHeight - wrap.offsetHeight);
     const ceiling = twoColumn
       ? Math.min(global.innerHeight * 1.15, 620)
-      : Math.min(global.innerHeight * 0.44, 460);
+      : Math.min(global.innerHeight * 0.44, 460) - overhead;
 
     const fitWidth = available / box[2];
     const fitHeight = ceiling / box[3];
@@ -722,8 +822,11 @@
     /* Solo and an auditioned section both silence tracks, and both are set on
        a screen you are not looking at while you play. The transport is the one
        thing always in view, so it is where they have to be visible. */
+    const off = PARTS.filter((p) => mutes[p.id]);
     const note = soloOn ? ' · solo'
-      : (activeSection && activeSection.muted.length ? ' · ' + activeSection.name : '');
+      : off.length === 1 ? ` · ${off[0].label.toLowerCase()} off`
+        : off.length ? ` · ${off.length} parts off`
+          : (activeSection && activeSection.muted.length ? ' · ' + activeSection.name : '');
     $('#dockPart').textContent = label + note;
     if (!Engine.isPlaying()) {
       $('#dockPos').textContent = `${song.bars} bars · ${song.bpm} BPM`;
@@ -899,10 +1002,18 @@
 
   /* ------------------------------------------------------------- solo */
 
-  function applySolo() {
+  /* Three things can silence a track and they are not equals. Solo is a
+     momentary override — it silences everything else while it is held on and
+     gives your own mix back untouched when it is released. Under it, a track
+     is off if you switched it off or if the section you are auditioning drops
+     it. One function derives all of it, so there is one place the answer to
+     "why can I not hear the bass" is written. */
+  function applyMutes() {
     Devices.TRACKS.forEach((t) => {
-      Engine.setMute(t.id, soloOn ? t.id !== part : sectionMuted(t.id));
+      Engine.setMute(t.id, soloOn ? t.id !== part : (mutes[t.id] || sectionMuted(t.id)));
     });
+    renderMix();
+    syncTransportReadout();
   }
 
   function sectionMuted(id) {
@@ -1168,7 +1279,7 @@
     activeSection = already ? null : section;
     soloOn = false;
     $('#soloButton').setAttribute('aria-pressed', 'false');
-    applySolo();
+    applyMutes();
     doc.querySelectorAll('#arrangeMap [data-section], #arrangeSteps [data-section]').forEach((node) => {
       node.setAttribute('aria-pressed', !already && node.dataset.section === id ? 'true' : 'false');
     });
@@ -1643,7 +1754,7 @@
   $('#soloButton').addEventListener('click', function () {
     soloOn = !soloOn;
     this.setAttribute('aria-pressed', soloOn ? 'true' : 'false');
-    applySolo();
+    applyMutes();
     UI.haptic(6);
     syncTransportReadout();
     toast(soloOn ? `Solo — ${PARTS.find((p) => p.id === part).label} only` : 'All parts');
@@ -1658,6 +1769,18 @@
   $('#shareButton').addEventListener('click', openShare);
   $('#undoButton').addEventListener('click', undo);
   $('#setupButton').addEventListener('click', openSetup);
+
+  $('#mix').addEventListener('click', (event) => {
+    const chip = event.target.closest('.mix-chip');
+    if (!chip) return;
+    if (chip.dataset.empty) {
+      const label = PARTS.find((p) => p.id === chip.dataset.part).label;
+      toast(`No ${label.toLowerCase()} in this sketch`);
+      return;
+    }
+    toggleMute(chip.dataset.part);
+  });
+  $('#mixReset').addEventListener('click', allPartsOn);
 
   $('#tabbar').addEventListener('click', (event) => {
     const button = event.target.closest('.tab');
@@ -1825,6 +1948,18 @@
       else if (!$('#intro').hidden) finishIntro();
       else UI.close();
     } else if (event.key >= '1' && event.key <= '5') { setTab('play'); setPart(PARTS[Number(event.key) - 1].id); }
+    else if (event.code && /^Digit[1-5]$/.test(event.code) && event.shiftKey) {
+      /* Shift and the same digit: the part you would have selected, silenced.
+         event.code rather than event.key, because shifting a digit gives you
+         a punctuation mark and the layout decides which one. Whether the part
+         is there at all is a question the row already answers, so ask it
+         rather than working it out a second time. */
+      const target = PARTS[Number(event.code.slice(5)) - 1];
+      const chip = $(`.mix-chip[data-part="${target.id}"]`);
+      if (!chip || chip.dataset.empty) return;
+      setTab('play');
+      toggleMute(target.id);
+    }
     else if (event.key === 'g' || event.key === 'G') { regenerate(); toast('New song'); }
     else if (event.key === 'ArrowRight' && event.altKey) stepPart(1);
     else if (event.key === 'ArrowLeft' && event.altKey) stepPart(-1);

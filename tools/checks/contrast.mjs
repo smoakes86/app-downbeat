@@ -12,6 +12,15 @@ for (const scheme of ['dark', 'light']) {
   await p.waitForTimeout(800);
   if (await p.locator('#introSkip').isVisible()) { await p.locator('#introSkip').click(); await p.waitForTimeout(400); }
 
+  /* A control that is only ever sampled in its default state is only half
+     checked. Switch two parts off so the mix row has an on chip and an off
+     chip on screen at the same time. */
+  await p.evaluate(() => {
+    document.querySelector('.mix-chip[data-part=chords]')?.click();
+    document.querySelector('.mix-chip[data-part=drums]')?.click();
+  });
+  await p.waitForTimeout(400);
+
   // Every text node in the app, with its computed colour composited onto the
   // nearest painted background.
   const samples = await p.evaluate(() => {

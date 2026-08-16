@@ -164,12 +164,21 @@
     return buffer;
   }
 
+  /* Ramped, not switched. A gain that jumps to zero cuts every voice mid-cycle
+     and the discontinuity is an audible click — on a sustained pad it is a
+     thump. 12ms is under a frame and far too short to hear as a fade, which is
+     what a mute should sound like: nothing. */
   function applyMute(track) {
     const bus = buses[track];
     if (!bus) return;
     const level = muted[track] ? 0 : 1;
-    bus.out.gain.value = level;
-    bus.send.gain.value = level;
+    if (!ctx) { bus.out.gain.value = level; bus.send.gain.value = level; return; }
+    const at = ctx.currentTime;
+    [bus.out.gain, bus.send.gain].forEach((gain) => {
+      gain.cancelScheduledValues(at);
+      gain.setValueAtTime(gain.value, at);
+      gain.linearRampToValueAtTime(level, at + 0.012);
+    });
   }
 
   function setMute(track, value) {
