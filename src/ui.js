@@ -639,13 +639,30 @@
     if (mounted && !Engine.isPlaying()) mounted.update(null);
   }
 
+  /* What the run is, in the header above it. "Out of range" used to cover two
+     very different problems: a note the grid has no pad for at all, and a note
+     that is simply past the end of the twelve you can see. The second one is
+     playable — shift the bank and press the same pad — so it gets counted
+     separately and in the direction you would shift, which is what the ↑ and ↓
+     on the chips are saying one at a time. */
   function runNoteFor(view) {
     if (part === 'drums') return `${view.mapping.voices.length} voices`;
     if (part === 'chords') return `${(song.spans || []).length} chords`;
     const events = view.mapping.events || [];
-    const off = events.filter((e) => !view.mapping.idFor(e.midi)).length;
-    if (off) return `${events.length} notes · ${off} out of range`;
-    return `${events.length} notes`;
+    let off = 0;
+    let up = 0;
+    let down = 0;
+    events.forEach((e) => {
+      const info = view.mapping.idFor(e.midi);
+      if (!info) off++;
+      else if (info.oct > 0) up++;
+      else if (info.oct < 0) down++;
+    });
+    const bits = [`${events.length} notes`];
+    if (up) bits.push(`${up} up`);
+    if (down) bits.push(`${down} down`);
+    if (off) bits.push(`${off} out of range`);
+    return bits.join(' · ');
   }
 
   let setupSteps = [];

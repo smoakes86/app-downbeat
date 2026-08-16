@@ -29,6 +29,33 @@ for (const dev of ['ep133', 'fm1']) {
   await tap(`#devices button[data-value="${dev}"]`);
   for (const part of ['counter', 'chords', 'bass', 'drums', 'melody']) await tap(`#parts button[data-value="${part}"]`);
 }
+/* States that depend on the song rather than on a control: a note off the ends
+   of the pads, and a note the scale grid has no pad for at all. One song in
+   several has neither, and a class that exists only in a state this crawl
+   never reaches reads here as a dead rule somebody should delete. */
+await tap('#devices button[data-value="ep133"]');
+let sawShift = false;
+let sawOff = false;
+for (let i = 0; i < 20 && !(sawShift && sawOff); i++) {
+  for (const part of ['melody', 'bass', 'chords']) {
+    await tap(`#parts button[data-value="${part}"]`);
+    const got = await page.evaluate(() => {
+      const chip = document.querySelector('.seq-chip[data-oct]');
+      if (chip) chip.focus();
+      return { shift: !!chip, off: !!document.querySelector('.seq-chip.is-off') };
+    });
+    await page.waitForTimeout(260);
+    await collect();
+    sawShift = sawShift || got.shift;
+    sawOff = sawOff || got.off;
+  }
+  if (sawShift && sawOff) break;
+  await tap('.tab[data-tab="song"]');
+  await tap('#generateButton');
+  await page.waitForTimeout(400);
+  await tap('.tab[data-tab="play"]');
+}
+if (!sawShift || !sawOff) console.log(`note: crawl never reached ${sawShift ? '' : 'a shifted chip '}${sawOff ? '' : 'an off-scale chip'}`);
 // Playing, soloing, looping.
 await tap('#playButton'); await page.waitForTimeout(2800); await collect();
 await tap('#soloButton'); await tap('#loopButton'); await collect();

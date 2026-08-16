@@ -263,6 +263,18 @@
     --t-bass:#B4D648;     --t-bass-ink:#C4E065;
     --t-drums:#F368B4;    --t-drums-ink:#F78BC6;
 
+    /* Out of bank. A note the run cannot reach without shifting the whole grid
+       lights its pad in one of these instead of in the part colour: amber for
+       the bank above, periwinkle for the bank below. Two hues rather than one,
+       because up and down are two different presses.
+
+       They sit in the two gaps the five track pigments leave — 40° and 260° —
+       so neither can be mistaken for the part being played, whichever part
+       that is. Bright in both appearances, like the tracks, so --on-part is
+       the ink on them too. */
+    --oct-up:#EFA83A;     --oct-up-ink:#F2C070;
+    --oct-dn:#A996F5;     --oct-dn-ink:#BCADF8;
+
     /* The bass lane letters every note with the job it is doing. One hue
        stepped by lightness, because the roles are a ranking and not five
        categories — and a ranking that inverts between appearances is not a
@@ -360,6 +372,11 @@
     --t-chords:#1FA98A;   --t-chords-ink:#095C4B;
     --t-bass:#93B62A;     --t-bass-ink:#445905;
     --t-drums:#DE4E9B;    --t-drums-ink:#9B175E;
+
+    /* The lamp keeps its brightness in the light appearance — it is a lamp —
+       while the ink darkens like every other -ink here. */
+    --oct-up:#E39A1C;     --oct-up-ink:#7A4A00;
+    --oct-dn:#9B86F0;     --oct-dn-ink:#4634A8;
 
     --shadow-1:0 1px 3px rgba(120,112,94,.22);
     --shadow-2:0 4px 16px rgba(120,112,94,.24);
