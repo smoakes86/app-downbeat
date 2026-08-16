@@ -758,12 +758,73 @@ await check('a hard hit is brighter than a soft one, not only louder', async () 
 /* Same recipe, same beat — or a share link stops being note for note. */
 await check('the beat is reproducible from the seed', async () => {
   const same = await page.evaluate(() => {
-    const a = window.Compose.compose({ genre: 'house', harmonySeed: 12345, melodySeed: 999 });
-    const b = window.Compose.compose({ genre: 'house', harmonySeed: 12345, melodySeed: 999 });
+    const opts = { genre: 'house', harmonySeed: 12345, melodySeed: 999, drumSeed: 4242 };
     const sig = (s) => s.beatName + '|' + s.drums.map((d) => `${d.step}:${d.instrument}:${d.velocity.toFixed(3)}`).join(',');
-    return sig(a) === sig(b);
+    return sig(window.Compose.compose(opts)) === sig(window.Compose.compose(opts));
   });
   if (!same) throw new Error('the same seed gave two different beats');
+});
+
+/* Three seeds, three things you can reroll one at a time. Before this the
+   beat was derived from the harmony seed, so new chords silently meant a new
+   beat and new melody could never give you one. */
+await check('the beat, the chords and the melody reroll independently', async () => {
+  const bad = await page.evaluate(() => {
+    const wrong = [];
+    const drums = (s) => s.beatName + '|' + s.drums.map((d) => `${d.step}:${d.instrument}`).join(',');
+    const mel = (s) => s.melody.map((n) => `${n.start}:${n.midi}`).join(',');
+    const harm = (s) => s.spans.map((x) => x.chord.symbol).join(',');
+    const base = { genre: 'pop', bars: 4, harmonySeed: 111, melodySeed: 222, drumSeed: 333 };
+    const a = window.Compose.compose(base);
+    const beat = window.Compose.compose(Object.assign({}, base, { drumSeed: 999 }));
+    const melody = window.Compose.compose(Object.assign({}, base, { melodySeed: 999 }));
+    const chords = window.Compose.compose(Object.assign({}, base, { harmonySeed: 999 }));
+    if (drums(a) === drums(beat)) wrong.push('a new drum seed gave the same beat');
+    if (mel(a) !== mel(beat)) wrong.push('a new drum seed moved the melody');
+    if (harm(a) !== harm(beat)) wrong.push('a new drum seed moved the chords');
+    if (drums(a) !== drums(melody)) wrong.push('a new melody seed moved the beat');
+    if (drums(a) !== drums(chords)) wrong.push('a new harmony seed moved the beat');
+    return wrong;
+  });
+  if (bad.length) throw new Error(bad.join('; '));
+});
+
+/* Every sketch anyone has already saved or shared was written before the beat
+   had a seed of its own. Those recipes carry no `d`, and they have to come
+   back the way they went in. */
+await check('a recipe from before the drum seed still reproduces', async () => {
+  const out = await page.evaluate(() => {
+    const song = window.Compose.compose({ genre: 'lofi', bars: 4, harmonySeed: 8675309, melodySeed: 42 });
+    const recipe = window.Library.recipeOf(song);
+    if (recipe.d === undefined) return { carried: false };
+    const older = Object.assign({}, recipe);
+    delete older.d;
+    const opts = window.Library.optionsOf(older);
+    return { carried: true, derived: opts.drumSeed, want: (Number(recipe.h) ^ 0xc2b2ae35) >>> 0 };
+  });
+  if (!out.carried) throw new Error('the recipe does not carry the drum seed');
+  if (out.derived !== out.want) {
+    throw new Error(`a recipe with no drum seed derives ${out.derived}, the old expression gave ${out.want}`);
+  }
+});
+
+await check('New beat keeps the song', async () => {
+  await tap('.tab[data-tab="song"]');
+  const before = await page.evaluate(() => {
+    const el = document.querySelector('#songTitle');
+    return { title: el.textContent, meta: document.querySelector('#songMeta').textContent };
+  });
+  const row = page.locator('#rewriteList .row', { hasText: 'New beat' }).first();
+  if (!await row.count()) throw new Error('there is no New beat control');
+  await row.tap();
+  await page.waitForTimeout(600);
+  const after = await page.evaluate(() => ({
+    title: document.querySelector('#songTitle').textContent,
+    meta: document.querySelector('#songMeta').textContent
+  }));
+  if (after.title !== before.title) throw new Error(`the title changed: "${before.title}" -> "${after.title}"`);
+  if (after.meta !== before.meta) throw new Error(`the song changed: "${before.meta}" -> "${after.meta}"`);
+  await tap('.tab[data-tab="play"]');
 });
 
 /* The kit listening to the band, rather than four layers that happen to start

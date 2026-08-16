@@ -163,6 +163,51 @@ step off it, because busy and loud are not the same axis: *Slow & heavy* plays
 almost nothing and hits it hard, *Busy but hushed* is full of notes and quiet
 with it.
 
+**The beat is written, not looked up.** Each genre carries three or four named
+beats — *Boom-bap*, *Two feel*, *Four to the floor* — and the composer draws
+one, so two songs in a genre no longer arrive with the identical drum part.
+Sixteen of them run two or four bars, because a four-bar loop that is one bar
+played four times is a loop you stop hearing. Bossa's clave is a genuine
+two-bar figure, three strokes then two, in both 3-2 and 2-3.
+
+Every hit is played rather than stamped. Each voice has its own idea of which
+positions matter — the bar's strongest position is beat one, but the snare's is
+the backbeat, and wherever the snare lands *on a beat* is the backbeat, which
+is beat three in a half-time feel. The loop leans into the bar the melody
+already peaks in, so the band arrives together, and eases off after it rather
+than dropping away. Then ±3.5% of humanising, so no two hits in a loop are
+identical: a loop went from two distinct velocities to forty.
+
+**Feel is separate from swing.** Swing moves the offbeats of every part at
+once; feel moves *one voice* against the others while the grid stays put, and
+no amount of swing produces it. A lo-fi snare 24ms behind a hat that is not
+behind is the whole sound of the genre. Funk and house push the hats in front;
+jazz pushes the ride and drags the snare, which is what comping is. The kick
+is left alone — it is the floor, and if it moves nothing has moved relative to
+it. Milliseconds rather than a fraction of a beat, because push and drag is
+motor timing and stays roughly constant as the tempo changes.
+
+**Five kits.** A pattern says what is hit; a kit says what it sounds like, and
+that is at least as much of what makes a beat belong to a genre. Jazz and
+bossa play brushes, where the snare is nearly all noise and no body. House and
+synthwave are machines and do not pretend otherwise. Trap gets an 808 — a kick
+that is a bass note rather than a thump, with the click pulled back so the
+attack stops fighting the sub it introduces. Velocity opens the timbre as well
+as the gain: hit something harder and it gets brighter and rings longer, which
+is what stops a ghost note being the same sound turned down.
+
+**Fills have more than one idea.** Rock goes round the toms, jazz and blues
+trade kick against snare, lo-fi flams, and house and trap *drop* — everything
+stops for the last beat and the hole is the fill. They land at the end of a
+**section**, not of every loop inside one, because a fill announces a change
+and a two-loop verse filled halfway announces one that is not coming.
+
+**And the kit hears the band.** It marks the chord changes, puts a kick under
+a change that lands on a bar line with nothing there, and plays harder where
+it locks with the bass — about two kicks in three. It does not rewrite the
+pattern: the beats are hand-written and idiomatic, and a generator that
+second-guesses them ends up with neither the pattern nor an idea of its own.
+
 **One part at a time, on the grid.** Melody, countermelody and chords are
 pitched blocks against the bars; the bass letters every note with the job it is
 doing — `R` root, `3` third, `5` fifth, `→` an approach note leaning into the
@@ -211,7 +256,7 @@ request, so it doubles as the way out, and the two states can never both be on
 screen claiming to be true.
 
 **Saving and sharing.** A sketch is stored as the recipe that produced it —
-genre, key, scale choice, energy, length, tempo and the two seeds — rather
+genre, key, scale choice, energy, length, tempo and the three seeds — rather
 than as a dump of notes. Reloading one replays exactly the same decisions, so
 it comes back note for note, and the recipe is small enough to live in a URL:
 Share hands the link to the system share sheet, which can put it in Messages,
@@ -273,7 +318,7 @@ reads `OFF`.
 | Second melody | Adds a countermelody under the tune |
 | Tempo | A slider across the genre's own range, plus tap tempo, and one row to put it back on the genre without changing a note |
 | Count-in | Off, one bar or two |
-| New melody / New chords | Reroll one half, keep the other |
+| New melody / New chords / New beat | Three seeds, rerolled one at a time |
 | Write a new song | Rerolls both seeds |
 | Part switcher | Which part you are playing — the faceplate, the run and the shape all follow |
 | Mix | Five toggles under the switcher: any combination of the parts, on or off |
@@ -328,6 +373,11 @@ found:
   result: the playhead moves and sits over the grid it marks, chips and lane
   notes light under playback, solo survives a regenerate, a share link boots,
   a draft survives a reload, swipe-to-delete opens and confirms. The
+  The beats are checked as claims about how they are played rather than as
+  counts: the backbeat is the loudest snare, the hats are not flat across the
+  beat, the loop lifts, every voice sits where its genre's feel asks it to,
+  every voice sounds in every kit, a crash marks a section rather than a bar,
+  and the three seeds reroll three independent things. The
   arrangement is checked as a layout rather than by listening: in every genre,
   every section contains exactly the parts the form lists and no others, on
   every repeat, in time order, for the full length the plan claims. The mix is

@@ -1616,6 +1616,11 @@
 
     const harmonySeed = opts.harmonySeed === undefined ? Math.floor(Math.random() * 1e9) : opts.harmonySeed;
     const melodySeed = opts.melodySeed === undefined ? Math.floor(Math.random() * 1e9) : opts.melodySeed;
+    /* Its own seed, and the reason is a user-facing one: the beat used to be
+       derived from the harmony seed, so rerolling the chords silently rerolled
+       the beat and rerolling the melody never could. Neither is what anyone
+       asked for. Three independent things you can reroll one at a time. */
+    const drumSeed = opts.drumSeed === undefined ? Math.floor(Math.random() * 1e9) : opts.drumSeed;
     const harmonyRng = makeRng(harmonySeed);
     const melodyRng = makeRng(melodySeed);
 
@@ -1640,7 +1645,7 @@
        on the song: the run of pads, the set-up notes and the arrangement all
        have to describe the beat that is actually playing, not the genre's
        first one. */
-    const drumRng = makeRng(harmonySeed ^ 0xc2b2ae35);
+    const drumRng = makeRng(drumSeed);
     const beat = pickBeat(genre, drumRng);
     const drums = buildDrums({
       genre, totalBars, rng: drumRng, energy, beat,
@@ -1662,7 +1667,7 @@
       swing: genre.swing || 0,
       swingUnit: genre.swingUnit || 8,
       progression, spans, melody, counter, chordTrack, bass, drums, form,
-      harmonySeed, melodySeed, energy,
+      harmonySeed, melodySeed, drumSeed, energy,
       beat, beatName: beat.name || '',
       bassPlan: BASS_STYLES[genre.bass] || BASS_STYLES.roots,
       drumPlan: describeDrums(beat, energyMod)

@@ -297,13 +297,27 @@
     return Object.assign(opts, extra || {});
   }
 
-  /* Regenerate with the current draft but keep whichever seed was not asked to
-     change, so rerolling one half leaves the other where it was. */
+  /* Regenerate with the current draft, keeping whichever seeds were not asked
+     to change. Three of them now, not two, and the beat is kept by everything
+     except the one control that exists to change it — "New melody" should not
+     hand you a different drummer as well. */
   function regenerate(keep) {
     const opts = optionsFromDraft();
-    if (keep === 'harmony') opts.harmonySeed = song.harmonySeed;
-    if (keep === 'melody') opts.melodySeed = song.melodySeed;
-    if (keep === 'both') { opts.harmonySeed = song.harmonySeed; opts.melodySeed = song.melodySeed; opts.title = song.title; }
+    if (keep === 'harmony') { opts.harmonySeed = song.harmonySeed; opts.drumSeed = song.drumSeed; }
+    if (keep === 'melody') { opts.melodySeed = song.melodySeed; opts.drumSeed = song.drumSeed; }
+    if (keep === 'both') {
+      opts.harmonySeed = song.harmonySeed;
+      opts.melodySeed = song.melodySeed;
+      opts.drumSeed = song.drumSeed;
+      opts.title = song.title;
+    }
+    /* Everything but the beat: the song stays exactly where it is and a
+       different drummer walks in. */
+    if (keep === 'song') {
+      opts.harmonySeed = song.harmonySeed;
+      opts.melodySeed = song.melodySeed;
+      opts.title = song.title;
+    }
     const playing = Engine.isPlaying();
     generate(opts);
     if (playing) startPlayback(true);
@@ -1283,6 +1297,14 @@
     box.appendChild(actionRow('refresh', 'New chords', 'Keeps the melody line', () => {
       regenerate('melody');
       toast('New chords');
+    }));
+    /* The third thing you can reroll on its own, which until the beat had its
+       own seed was not a thing you could do at all. The toast names what you
+       got, because the beats have names and "New beat" on its own tells you
+       only that something changed. */
+    box.appendChild(actionRow('refresh', 'New beat', 'Keeps the whole song', () => {
+      regenerate('song');
+      toast(song.beatName ? `New beat — ${song.beatName}` : 'New beat');
     }));
   }
 

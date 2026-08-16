@@ -49,6 +49,10 @@
       c: song.counter && song.counter.length ? 1 : 0,
       h: song.harmonySeed,
       m: song.melodySeed,
+      /* The beat has its own seed now. Written as its own key rather than
+         folded into the harmony one, because the whole point is that it can
+         be rerolled without touching the chords. */
+      d: song.drumSeed,
       n: song.title || ''
     };
   }
@@ -64,6 +68,15 @@
       counter: !!Number(recipe.c),
       harmonySeed: Number(recipe.h),
       melodySeed: Number(recipe.m),
+      /* A recipe written before the beat had a seed of its own carries no `d`,
+         and the beat it played was derived from the harmony seed by exactly
+         this expression. Reproducing it here is what keeps every share link
+         and every saved sketch from before this change note for note — the
+         compatibility belongs in the decoder rather than in the composer,
+         which should not have to know that a previous format existed. */
+      drumSeed: recipe.d === undefined || recipe.d === null || recipe.d === ''
+        ? (Number(recipe.h) ^ 0xc2b2ae35) >>> 0
+        : Number(recipe.d),
       title: recipe.n || ''
     };
     // An empty scale means the song was generated on "Pick for me".
