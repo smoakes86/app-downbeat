@@ -301,7 +301,15 @@
   .dev-ring { fill:none; stroke:none; stroke-width:2.5; }
   .dev-pad:focus-visible .pad-ring,
   .dev-wkey:focus-visible .wkey-ring,
-  .dev-bkey:focus-visible .bkey-ring { stroke:var(--lamp); }
+  .dev-bkey:focus-visible .bkey-ring {
+    stroke:var(--lamp);
+    /* The amber alone is about 2:1 on a near-white cap, and it is the only
+       thing saying which pad has focus. The dark outer stroke is what makes it
+       read there — and on a black key, where the amber is the half that
+       works. */
+    paint-order:stroke;
+    filter:drop-shadow(0 0 0 var(--ep-ink)) drop-shadow(0 0 1.5px var(--ep-ink));
+  }
 
   .dev-pad:focus-visible:not([aria-disabled="true"]) .pad-spec { stroke:rgba(255,255,255,.95); }
   .dev-wkey:focus-visible:not([aria-disabled="true"]) .wkey-lip { stroke:rgba(255,255,255,.85); }

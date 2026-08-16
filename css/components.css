@@ -773,6 +773,5 @@
   .rail::-webkit-scrollbar { display:none; }
   .rail > * { scroll-snap-align:start; flex:none; }
 
-  :focus-visible { outline:none; box-shadow:var(--focus-ring); }
-  .list :focus-visible { border-radius:var(--r-xs); }
+  :focus-visible { outline:none; }
 }

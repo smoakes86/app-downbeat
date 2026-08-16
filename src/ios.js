@@ -70,15 +70,17 @@
 
   /* ---------------------------------------------------------------- toast */
 
-  let toastNode = null;
+  /* Created at load, not on first use. A live region that is inserted and
+     filled in the same task is not announced — the reader has not adopted it
+     yet — so the first piece of feedback in a session was silent. */
+  const toastNode = el('div', 'toast');
+  toastNode.setAttribute('role', 'status');
+  toastNode.setAttribute('aria-live', 'polite');
+  if (doc.body) doc.body.appendChild(toastNode);
+  else doc.addEventListener('DOMContentLoaded', () => doc.body.appendChild(toastNode));
   let toastTimer = 0;
 
   function toast(message, ms) {
-    if (!toastNode) {
-      toastNode = el('div', 'toast');
-      toastNode.setAttribute('role', 'status');
-      doc.body.appendChild(toastNode);
-    }
     toastNode.textContent = message;
     /* Reflow between the text and the class, or a second toast fired while the
        first is still up never re-runs the transition. */
@@ -367,7 +369,16 @@
       const card = el('div', 'alert-card');
       const copy = el('div', 'alert-copy');
       if (opts.title) { const b = el('b'); b.textContent = opts.title; copy.appendChild(b); }
-      if (opts.message) { const t = el('p'); t.textContent = opts.message; copy.appendChild(t); }
+      if (opts.message) {
+        const t = el('p');
+        t.textContent = opts.message;
+        /* Named and pointed at, or the line that says WHICH sketch is about to
+           be deleted is never read — the reader goes straight from the title
+           to the focused Delete button. */
+        t.id = 'alert-message';
+        node.setAttribute('aria-describedby', t.id);
+        copy.appendChild(t);
+      }
       card.appendChild(copy);
 
       if (opts.field) {

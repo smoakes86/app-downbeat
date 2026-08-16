@@ -16,9 +16,13 @@
       animation-iteration-count:1 !important;
       scroll-behavior:auto !important;
     }
-    .sheet, .action-sheet, .scrim, .screen, .toast, .seg-thumb, .swipe-body {
+    .sheet, .action-sheet, .scrim, .screen, .toast, .seg-thumb, .swipe-body,
+    .alert-card {
       transition-duration:var(--t-least) !important;
     }
+    /* The alert is the one surface that deliberately zooms rather than slides,
+       and a zoom is exactly what Reduce Motion is asking about. */
+    .alert-card { transform:none !important; }
     .sheet, .action-sheet { transform:none !important; }
     .sheet-host:not(.is-open) .sheet, .sheet-host:not(.is-open) .action-sheet { opacity:0; }
     .sheet-host.is-open .sheet, .sheet-host.is-open .action-sheet { opacity:1; }
@@ -40,7 +44,12 @@
       --separator:color-mix(in srgb, var(--label) 46%, transparent);
       --hairline:1px;
     }
-    .seq-chip, .seq-chord, .genre-card { box-shadow:inset 0 0 0 1px var(--separator); }
+    /* Firming up the resting edge must not overwrite a state ring: this layer
+       outranks the ones the selected and linked states are declared in, so the
+       states are excluded by selector rather than by specificity. */
+    .seq-chip:not(.now):not(.is-linked),
+    .seq-chord:not(.now):not(.is-linked),
+    .genre-card:not([aria-checked=true]) { box-shadow:inset 0 0 0 1px var(--separator); }
     .btn-grey { box-shadow:inset 0 0 0 1px var(--separator); }
   }
 
@@ -48,6 +57,15 @@
      all of which exist on iOS. One ring, and it never appears for a touch. */
   :focus { outline:none; }
   :focus-visible { outline:none; box-shadow:var(--focus-ring); z-index:2; position:relative; }
+  /* Rows live inside containers that must clip — the list for its rounded
+     corners, the swipe row for the body that slides out of it — so an outward
+     ring is simply not drawn there. Theirs is inset, and it has to be declared
+     in this layer: a11y is last, so a rule in `components` would lose to the
+     general one above however specific it was. */
+  .list :focus-visible, .swipe :focus-visible {
+    box-shadow:inset 0 0 0 3px var(--tint);
+    border-radius:var(--r-xs);
+  }
   /* The picker <select> is stretched transparently over its row, so a blanket
      position:relative here would drop it back into flow and unhook the row.
      Its ring is drawn on the row instead — see .row-select in components. */

@@ -153,6 +153,29 @@
   const escapeHtml = (value) => String(value).replace(/[&<>"']/g, (c) => (
     { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 
+  /* Re-render without dropping the keyboard. Every field on the Song screen
+     regenerates the song, and every regenerate rebuilds the list that field
+     lives in — so without this, changing the key sends focus to <body> and a
+     keyboard user has to tab back in from the top each time. The element is
+     found again by id, or by the value it carried inside the same container. */
+  function keepingFocus(render) {
+    const was = doc.activeElement;
+    const inApp = was && was !== doc.body && app.contains(was);
+    const id = inApp ? was.id : '';
+    const value = inApp ? (was.dataset.value || was.dataset.genre || '') : '';
+    const host = inApp && was.parentElement ? was.parentElement.id : '';
+
+    render();
+
+    if (!inApp) return;
+    let back = id ? doc.getElementById(id) : null;
+    if (!back && value && host) {
+      const scope = doc.getElementById(host);
+      if (scope) back = scope.querySelector(`[data-value="${value}"], [data-genre="${value}"]`);
+    }
+    if (back && typeof back.focus === 'function') back.focus({ preventScroll: true });
+  }
+
   function announce(message) {
     const live = $('#live');
     live.textContent = '';
@@ -231,13 +254,15 @@
     $('#songMeta').textContent = meta;
     doc.title = `${song.title} — Downbeat`;
 
-    renderParts();
-    renderPart();
-    renderSongScreen();
-    renderArrange();
-    renderCurrentActions();
-    renderDockBars();
-    syncTransportReadout();
+    keepingFocus(() => {
+      renderParts();
+      renderPart();
+      renderSongScreen();
+      renderArrange();
+      renderCurrentActions();
+      renderDockBars();
+      syncTransportReadout();
+    });
   }
 
   function optionsFromDraft(extra) {
@@ -1102,8 +1127,10 @@
     map.innerHTML = arrangement.sections.map((s) => {
       const tracks = arrangement.tracks.map((t) =>
         `<i class="map-track${s.tracks.indexOf(t.id) >= 0 ? ' on' : ''}" style="--tk:var(--t-${t.id})"></i>`).join('');
+      const playing = s.tracks.map((id) => (PARTS.find((pt) => pt.id === id) || {}).label).filter(Boolean);
       return `<button type="button" class="map-sec" data-section="${s.id}" style="--w:${s.bars}" ` +
-        `aria-pressed="false" aria-label="${escapeHtml(s.name)}, ${s.bars} bars. Tap to hear it.">` +
+        `aria-pressed="false" aria-label="${escapeHtml(s.name)}, ${s.bars} bars. ` +
+        `${playing.length ? escapeHtml(playing.join(', ')) + '.' : 'Nothing plays.'} Activate to hear it.">` +
         `<span class="map-sec-name">${escapeHtml(s.name)}</span>` +
         `<span class="map-sec-bars">${s.bars} bars</span>` +
         `<span class="map-tracks">${tracks}</span></button>`;
@@ -1124,7 +1151,10 @@
       `<button type="button" class="row has-icon section-row" data-section="${s.id}" aria-pressed="false">` +
       `<span class="row-icon">${i + 1}</span>` +
       `<span class="row-text"><span class="row-title">${escapeHtml(s.name)} · ${s.bars} bars</span>` +
-      `<span class="row-sub" style="white-space:normal">${escapeHtml(s.how)}</span></span>` +
+      `<span class="row-sub" style="white-space:normal">${escapeHtml(s.how)}</span>` +
+      `<span class="sr-only">Plays: ${s.tracks.length
+        ? escapeHtml(s.tracks.map((id) => (PARTS.find((pt) => pt.id === id) || {}).label).filter(Boolean).join(', '))
+        : 'nothing'}.</span></span>` +
       '<svg class="row-chevron" aria-hidden="true" focusable="false"><use href="#i-play"></use></svg></button>').join('');
 
     $('#theoryText').innerHTML = song.theory || '';
@@ -1180,8 +1210,13 @@
     entries.forEach((entry) => {
       const wrap = doc.createElement('div');
       wrap.className = 'swipe';
+      /* Out of the tab order and out of the tree. It is revealed by a swipe,
+         it sits before the row it belongs to, and it announces itself as an
+         unqualified "Delete" — a keyboard or VoiceOver user reaches the same
+         action, named and confirmed, through the row's own action sheet. */
       wrap.innerHTML =
-        '<div class="swipe-actions"><button type="button" data-act="delete">Delete</button></div>' +
+        '<div class="swipe-actions" aria-hidden="true">' +
+        '<button type="button" data-act="delete" tabindex="-1">Delete</button></div>' +
         '<div class="swipe-body"></div>';
       const body = $('.swipe-body', wrap);
       const row = doc.createElement('button');
@@ -1463,6 +1498,10 @@
     if (!force && store.get(STORE.seen)) return;
     const intro = $('#intro');
     intro.hidden = false;
+    /* Focus first, inert second. Making the app inert while the focus is
+       still inside it drops focus to <body> and leaves a screen reader with
+       nowhere to be. */
+    $('#introNext').focus({ preventScroll: true });
     UI.setInert(true);
     global.requestAnimationFrame(() => intro.classList.add('is-open'));
     introPage = 0;
@@ -1484,6 +1523,11 @@
   }
 
   function syncIntro() {
+    Array.from(doc.querySelectorAll('.intro-page')).forEach((page, i) => {
+      const on = i === introPage;
+      page.toggleAttribute('inert', !on);
+      page.setAttribute('aria-hidden', on ? 'false' : 'true');
+    });
     Array.from($('#introDots').children).forEach((dot, i) =>
       dot.setAttribute('aria-current', i === introPage ? 'true' : 'false'));
     $('#introNext').textContent = introPage === 2 ? 'Start' : 'Next';
@@ -1623,6 +1667,25 @@
     if (button) { setTab(button.dataset.tab); UI.haptic(6); }
   });
 
+  /* One tab stop for the bar and arrow keys inside it. That is the pattern
+     role="tablist" is specified with, and the roving tabindex on its own is
+     only half of it — without the arrows, the three tabs that are not current
+     cannot be reached from a keyboard at all. */
+  $('#tabbar').addEventListener('keydown', (event) => {
+    const keys = { ArrowLeft: -1, ArrowRight: 1, Home: 'first', End: 'last' };
+    if (!(event.key in keys)) return;
+    const tabs = Array.from(doc.querySelectorAll('#tabbar .tab'));
+    const at = tabs.indexOf(doc.activeElement);
+    if (at < 0) return;
+    event.preventDefault();
+    const step = keys[event.key];
+    const next = step === 'first' ? tabs[0]
+      : step === 'last' ? tabs[tabs.length - 1]
+        : tabs[(at + step + tabs.length) % tabs.length];
+    next.focus();
+    setTab(next.dataset.tab);
+  });
+
   /* `scroll` does not bubble, so the listener has to capture — but that means
      it also fires for every nested horizontal scroller on the screen, and
      syncScrolled reads scrollTop. Filtering on the target keeps the flick of a
@@ -1639,6 +1702,18 @@
     laneScroll.addEventListener(name, () => { laneHeld = true; }, { passive: true }));
   ['pointerup', 'pointercancel', 'touchend', 'touchcancel'].forEach((name) =>
     laneScroll.addEventListener(name, () => { laneHeld = false; laneReleased = global.performance.now(); }, { passive: true }));
+
+  $('#genreRail').addEventListener('keydown', (event) => {
+    const step = { ArrowLeft: -1, ArrowRight: 1, ArrowUp: -1, ArrowDown: 1 }[event.key];
+    if (!step) return;
+    const cards = Array.from($('#genreRail').children);
+    const at = cards.indexOf(doc.activeElement);
+    if (at < 0) return;
+    event.preventDefault();
+    const next = cards[(at + step + cards.length) % cards.length];
+    next.focus();
+    next.click();
+  });
 
   $('#genreRail').addEventListener('click', (event) => {
     const card = event.target.closest('.genre-card');
@@ -1738,7 +1813,7 @@
        follows a link; a global shortcut that fires first takes the keyboard
        away from every control in the app. The shortcuts are for when nothing
        in particular is focused, which is the state you play in. */
-    if (target && target !== doc.body && target.closest &&
+    if (event.key !== 'Escape' && target && target !== doc.body && target.closest &&
         target.closest('button, a[href], summary, [role="switch"], [contenteditable]')) return;
     /* And they belong to the app, not to whatever is covering it. Escape is
        the exception: it is how you get the cover off. */

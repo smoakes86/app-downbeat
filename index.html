@@ -357,7 +357,10 @@
     </div>
 
     <section class="intro" id="intro" role="dialog" aria-modal="true" aria-label="Welcome to Downbeat" hidden>
-      <div class="intro-pages" id="introPages">
+      <!-- A scroll container with nothing focusable in it cannot be reached
+           from a keyboard. The tour is driven by the dots and Next rather than
+           by scrolling, but the scroller still has to be operable. -->
+      <div class="intro-pages" id="introPages" role="group" aria-label="Tour" tabindex="0">
         <div class="intro-page" data-page="0">
           <span class="intro-mark" data-beat="1" aria-hidden="true"></span>
           <p class="intro-eyebrow">Create</p>
