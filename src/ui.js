@@ -370,14 +370,25 @@
     if (box.length !== 4 || !box[2] || !box[3]) return;
 
     const available = Math.max(220, faceBay.clientWidth - 16);
-    const portrait = global.innerHeight >= global.innerWidth;
-    /* Under half the screen, and the number is not arbitrary: any taller and
-       the first row of the run falls entirely below the fold, and the run is
-       the half of this screen you read while your hands are busy. At 0.44 a
-       row of chips is visibly there to be scrolled to. */
-    const ceiling = portrait
-      ? Math.min(global.innerHeight * 0.44, 460)
-      : Math.max(150, global.innerHeight * 0.66);
+
+    /* Two different jobs, decided by whether the plate is sharing the screen
+       with the run or sitting in a column of its own.
+
+       ONE COLUMN. The plate takes under half the height, and the number is not
+       arbitrary: any taller and the first row of the run falls entirely below
+       the fold, and the run is the half of this screen you read while your
+       hands are busy. At 0.44 a row of chips is visibly there to be scrolled
+       to.
+
+       TWO COLUMNS — a phone on its side, a tablet, a desk. The run is beside
+       the plate rather than under it, so height costs nothing that matters and
+       the plate should spend the width it has been given. Held back only by a
+       ceiling that stops a wide desk drawing a metre-high sampler. */
+    const twoColumn = global.matchMedia(
+      '(min-width: 900px), (orientation: landscape) and (max-height: 520px)').matches;
+    const ceiling = twoColumn
+      ? Math.min(global.innerHeight * 1.4, 620)
+      : Math.min(global.innerHeight * 0.44, 460);
 
     const fitWidth = available / box[2];
     const fitHeight = ceiling / box[3];
