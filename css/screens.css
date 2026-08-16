@@ -31,7 +31,7 @@
   }
   .block-action::before { content:''; position:absolute; inset:-12px -8px; }
   .block-action:active { opacity:.4; }
-  .block-note { flex:none; font-size:var(--fs-caption); color:var(--label-3); }
+  .block-note { flex:none; font-size:var(--fs-caption); color:var(--label-2); }
 
   /* A card: the same rounded, inset, elevated surface as a grouped list, for
      content that is not a list of rows. */
@@ -222,7 +222,7 @@
     font-family:var(--mono);
     font-size:9px;
     font-variation-settings:'wght' 500;
-    color:var(--label-3);
+    color:var(--label-2);
   }
 
   .lane-head {
@@ -381,7 +381,7 @@
     -webkit-box-orient:vertical;
     overflow:hidden;
   }
-  .map-sec-bars { font-size:9px; color:var(--label-3); white-space:nowrap; }
+  .map-sec-bars { font-size:9px; color:var(--label-2); white-space:nowrap; }
   .map-tracks { display:flex; flex-direction:column; gap:2px; margin-top:2px; }
   .map-track { height:4px; border-radius:2px; background:var(--fill-4); }
   .map-track.on { background:var(--tk); }

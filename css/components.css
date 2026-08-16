@@ -117,7 +117,7 @@
     justify-content:center;
     gap:2px;
     padding:var(--sp-1) 2px;
-    color:var(--label-3);
+    color:var(--label-2);
     transition:color var(--t-lamp) var(--e-ios);
   }
   .tab .i { width:26px; height:26px; }
@@ -337,9 +337,10 @@
   .seg-ctl button::before { content:''; position:absolute; inset:-5px 0; }
   .seg-ctl button:active { opacity:.5; }
   .seg-ctl button[aria-disabled=true] { color:var(--label-3); }
-  /* Available but empty: dimmed so it reads as the odd one out, still live
-     because tapping it is how you fill it. */
-  .seg-ctl button[data-off=true] { color:var(--label-3); }
+  /* Available but empty: quieter than its neighbours so it reads as the odd
+     one out, but still a label you can read — it is live, and tapping it is
+     how you fill it. */
+  .seg-ctl button[data-off=true] { color:var(--label-2); font-weight:400; }
   /* A tab is selected and a radio is checked; this control is used as both. */
   .seg-ctl button[aria-selected=true], .seg-ctl button[aria-checked=true] { font-weight:640; }
 
@@ -451,7 +452,6 @@
 
   /* Filled — the one primary action on a screen, and never two at once. */
   .btn-filled { background:var(--tint); color:var(--on-tint-fill); }
-  body.light .btn-filled { color:#FFFFFF; }
   .btn-filled:active { opacity:1; transform:scale(.985); filter:brightness(.9); }
 
   /* Tinted — a secondary action that still needs a housing. */
