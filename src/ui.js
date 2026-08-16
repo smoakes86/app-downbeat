@@ -571,6 +571,12 @@
     lane.appendChild(laneHead);
 
     lane.setAttribute('aria-label', laneDescription());
+    /* A scroll container with nothing focusable inside it cannot be scrolled
+       from a keyboard at all. The lane is a picture, so the scroller itself
+       takes the tab stop and the arrow keys. */
+    laneScroll.tabIndex = 0;
+    laneScroll.setAttribute('role', 'group');
+    laneScroll.setAttribute('aria-label', laneDescription() + ' Scrollable.');
     $('#laneNote').textContent = laneNote();
   }
 
@@ -958,22 +964,27 @@
     return row;
   }
 
+  /* The row itself carries role="switch". Nesting a switch inside a button
+     makes two controls out of one, and the inner one has no accessible name
+     of its own — the label is in its sibling. Like this the row's own text is
+     the name and there is a single thing to tap, focus and toggle. */
   function switchRow(id, label, sub, checked, onChange) {
     const row = doc.createElement('button');
     row.type = 'button';
     row.className = 'row';
+    row.id = id;
+    row.setAttribute('role', 'switch');
+    row.setAttribute('aria-checked', checked ? 'true' : 'false');
     row.innerHTML =
       `<span class="row-text"><span class="row-title">${escapeHtml(label)}</span>` +
       `${sub ? `<span class="row-sub">${escapeHtml(sub)}</span>` : ''}</span>` +
-      `<span class="switch" id="${id}" role="switch" aria-checked="${checked ? 'true' : 'false'}"></span>`;
+      '<span class="switch" aria-hidden="true"></span>';
     row.addEventListener('click', () => {
-      const knob = $('#' + id, row);
-      const next = knob.getAttribute('aria-checked') !== 'true';
-      knob.setAttribute('aria-checked', next ? 'true' : 'false');
+      const next = row.getAttribute('aria-checked') !== 'true';
+      row.setAttribute('aria-checked', next ? 'true' : 'false');
       UI.haptic(6);
       onChange(next);
     });
-    row.setAttribute('aria-label', label);
     return row;
   }
 
@@ -1411,7 +1422,7 @@
     if (!id || id === tab) return;
     tab = id;
     store.set(STORE.tab, id);
-    Array.from($('#tabbar').children).forEach((button) => {
+    Array.from(doc.querySelectorAll('#tabbar .tab')).forEach((button) => {
       const on = button.dataset.tab === id;
       button.setAttribute('aria-selected', on ? 'true' : 'false');
       button.tabIndex = on ? 0 : -1;

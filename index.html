@@ -50,7 +50,6 @@
     <link rel="stylesheet" href="css/a11y.css">
   </head>
   <body>
-    <h1 class="sr-only">Downbeat</h1>
 
     <!-- One drawn icon language, on one 24px grid at one optical weight,
          inheriting currentColor. Unicode punctuation cannot do either: a
@@ -118,6 +117,9 @@
     <div class="app" id="app" data-part="melody">
 
       <header class="nav" id="nav">
+        <!-- The only place the product says its own name to a reader: the
+             wordmark is a drawing and the title bar carries the song. -->
+        <h1 class="sr-only">Downbeat</h1>
         <div class="nav-inner">
           <div class="nav-title">
             <h2 class="nav-name" id="songTitle">Downbeat</h2>
@@ -135,7 +137,7 @@
         </div>
       </header>
 
-      <div class="screens" id="screens">
+      <main class="screens" id="screens">
 
         <!-- ------------------------------------------------------- play -->
         <section class="screen is-active" data-screen="play" id="screenPlay" role="tabpanel" aria-label="Play">
@@ -288,7 +290,7 @@
             </section>
           </div>
         </section>
-      </div>
+      </main>
 
       <!-- The Song screen's primary action, as its own row of the shell rather
            than as something sticky inside the scroller. A sticky footer covers
@@ -303,7 +305,7 @@
 
       <!-- The transport. A performance tool has to be able to stop from
            wherever you are, so it never scrolls and never leaves. -->
-      <div class="dock" id="dock">
+      <div class="dock" id="dock" role="region" aria-label="Transport">
         <div class="dock-bars" id="dockBars" aria-hidden="true"></div>
         <button class="dock-play" id="playButton" aria-label="Play" aria-keyshortcuts="Space">
           <svg class="i" id="playIcon" aria-hidden="true" focusable="false"><use href="#i-play"></use></svg>
@@ -322,7 +324,12 @@
         </div>
       </div>
 
-      <nav class="tabbar" id="tabbar" role="tablist" aria-label="Sections">
+      <!-- A <nav> whose role is overridden by tablist stops being a landmark,
+           and then the tab bar is page content outside every landmark. The
+           navigation region and the tablist are two things, so they are two
+           elements. -->
+      <nav class="tabbar" id="tabbar" aria-label="Sections">
+        <div class="tabbar-inner" role="tablist" aria-label="Sections">
         <button class="tab" role="tab" data-tab="play" aria-selected="true" aria-controls="screenPlay">
           <svg class="i" aria-hidden="true" focusable="false"><use href="#i-pads"></use></svg><span>Play</span>
         </button>
@@ -335,7 +342,10 @@
         <button class="tab" role="tab" data-tab="library" aria-selected="false" aria-controls="screenLibrary" tabindex="-1">
           <svg class="i" aria-hidden="true" focusable="false"><use href="#i-library"></use></svg><span>Library</span>
         </button>
+        </div>
       </nav>
+
+      <span class="sr-only" id="live" role="status" aria-live="polite"></span>
     </div>
 
     <div class="countin" id="countIn" role="dialog" aria-modal="true" aria-label="Counting in" hidden>
@@ -380,8 +390,6 @@
         <button class="btn intro-next" id="introNext">Next</button>
       </div>
     </section>
-
-    <span class="sr-only" id="live" role="status" aria-live="polite"></span>
 
     <script src="src/theory.js"></script>
     <script src="src/genres.js"></script>
