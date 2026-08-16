@@ -1297,6 +1297,13 @@
        of how busy the hi-hat is. */
     const human = makeRng(Math.floor(rng.next() * 0x7fffffff));
     const climax = ctx.climax === undefined ? 0.66 : ctx.climax;
+    const feel = (G.FEEL && G.FEEL[genre.id]) || genre.feel || {};
+    /* One place, so that everything a kit plays sits in the same pocket. The
+       fill and the hat rolls used to push their events straight onto the grid
+       while the pattern around them leaned, which measured as a snare landing
+       twelve per cent short of the drag its genre asked for — the drummer
+       going rigid for the last bar and nowhere else. */
+    const nudgeFor = (voice) => ((feel[voice] || 0) + (human.next() - 0.5) * 5) / 1000;
 
     VOICE_IDS.forEach((instrument) => {
       const pattern = patterns[instrument];
@@ -1330,13 +1337,21 @@
            repeatedly, which is exactly what it is. */
         const jitter = 1 + (human.next() - 0.5) * 0.07;
         const velocity = base * energyMod.velocity * arcAt(step, totalSteps, climax) * jitter;
+        const voice = symbol === 'o' && instrument === 'hat' ? 'openHat' : instrument;
+        /* Where this hit sits against the grid: the genre's own feel for this
+           voice, plus a couple of milliseconds of wobble so that a run of
+           sixteen hats is a player rather than a metronome with a tone
+           generator on it. In seconds, because that is what the scheduler
+           speaks. */
+        const nudge = nudgeFor(voice);
         events.push({
           step,
-          instrument: symbol === 'o' && instrument === 'hat' ? 'openHat' : instrument,
+          instrument: voice,
           /* A ghost is a different musical object from a quiet hit, and only
              the pattern knows which this was. Carried out so that nothing
              downstream has to guess it back from the velocity. */
           ghost: symbol === 'g',
+          nudge,
           velocity: clamp(velocity, 0.14, 1)
         });
       }
@@ -1352,6 +1367,7 @@
           events.push({
             step: hat.step + d / divisions,
             instrument: 'hat',
+            nudge: nudgeFor('hat'),
             velocity: hat.velocity * (0.55 + d * 0.08)
           });
         }
@@ -1366,7 +1382,10 @@
       const lastBar = (totalBars - 1) * STEPS_PER_BAR;
       [12, 13, 14, 15].forEach((offset, i) => {
         if (rng.chance(0.7)) {
-          events.push({ step: lastBar + offset, instrument: 'snare', velocity: 0.45 + i * 0.12 });
+          events.push({
+            step: lastBar + offset, instrument: 'snare',
+            nudge: nudgeFor('snare'), velocity: 0.45 + i * 0.12
+          });
         }
       });
     }

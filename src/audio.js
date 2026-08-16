@@ -416,7 +416,12 @@
       list.push({ step: b.start, track: 'bass', patch: patches.bass || 'fingerBass', midi: b.midi, dur: b.dur, velocity: b.velocity });
     });
     song.drums.forEach((d) => {
-      list.push({ step: d.step, track: 'drums', drum: d.instrument, velocity: d.velocity });
+      list.push({
+        step: d.step, track: 'drums', drum: d.instrument, velocity: d.velocity,
+        /* Seconds off the grid, per hit. The grid stays where it is — this is
+           one voice moving against the others, which is what a feel is. */
+        nudge: d.nudge || 0
+      });
     });
     return list.sort((a, b) => a.step - b.step);
   }
@@ -468,8 +473,16 @@
     return step % 4 === 2 ? song.swing * stepDuration * 0.66 : 0;
   }
 
+  /* Where a step falls, and where an event falls — which are not the same
+     thing. The step is the grid, shared by every part and moved as a whole by
+     swing. The event may sit a few milliseconds off it, which is one voice
+     leaning against the others rather than the grid bending. */
   function timeOf(step) {
     return loopStart + step * stepDuration + swingOffset(currentSong, step);
+  }
+
+  function timeOfEvent(event) {
+    return timeOf(event.step) + (event.nudge || 0);
   }
 
   function tick() {
@@ -477,9 +490,9 @@
     const horizon = ctx.currentTime + SCHEDULE_AHEAD;
     const totalSteps = spanSteps;
 
-    while (cursor < events.length && timeOf(events[cursor].step) < horizon) {
+    while (cursor < events.length && timeOfEvent(events[cursor]) < horizon) {
       const event = events[cursor];
-      const when = timeOf(event.step);
+      const when = timeOfEvent(event);
       if (when >= ctx.currentTime - 0.02) {
         if (event.drum) {
           playDrum(event.drum, when, event.velocity);

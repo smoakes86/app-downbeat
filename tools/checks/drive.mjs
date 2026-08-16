@@ -621,6 +621,51 @@ await check('the beat is played, not stamped', async () => {
   if (out.length) throw new Error(out.join('; '));
 });
 
+/* Feel is one voice leaning against the others, so it is measured per voice
+   against what the genre asked for — and everything the kit plays has to lean
+   the same way, including the fill and the rolls, which is where this went
+   wrong first time. */
+await check('every voice sits where its genre asks', async () => {
+  const out = await page.evaluate(() => {
+    const avg = (a) => a.reduce((x, y) => x + y, 0) / a.length;
+    const bad = [];
+    window.Genres.order.forEach((g) => {
+      if (g === 'ambient') return;
+      const want = window.Genres.FEEL[g] || {};
+      const got = {};
+      for (let i = 0; i < 10; i++) {
+        window.Compose.compose({ genre: g, bars: 4 }).drums.forEach((d) => {
+          (got[d.instrument] = got[d.instrument] || []).push((d.nudge || 0) * 1000);
+        });
+      }
+      Object.keys(got).forEach((v) => {
+        if (got[v].length < 12) return;
+        const mean = avg(got[v]);
+        const target = want[v] || 0;
+        /* The jitter is ±2.5ms and averages out over dozens of hits; more
+           than a millisecond adrift means something is bypassing the feel. */
+        if (Math.abs(mean - target) > 1.3) {
+          bad.push(`${g}/${v}: asked ${target}ms, plays ${mean.toFixed(1)}ms`);
+        }
+      });
+    });
+    return bad.slice(0, 4);
+  });
+  if (out.length) throw new Error(out.join('; '));
+});
+
+await check('no two hits share a nudge', async () => {
+  const out = await page.evaluate(() => {
+    const s = window.Compose.compose({ genre: 'pop', bars: 4 });
+    const hats = s.drums.filter((d) => d.instrument === 'hat');
+    const distinct = new Set(hats.map((d) => (d.nudge || 0).toFixed(7))).size;
+    return { distinct, total: hats.length };
+  });
+  if (out.distinct < out.total * 0.9) {
+    throw new Error(`${out.distinct} distinct nudges over ${out.total} hats — the wobble is missing`);
+  }
+});
+
 await check('no two hits in a loop are identical', async () => {
   const out = await page.evaluate(() => {
     const thin = [];

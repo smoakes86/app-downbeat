@@ -27,6 +27,40 @@
     return out;
   };
 
+  /* Feel: how far behind or in front of the grid each voice sits, in
+     milliseconds. Positive drags, negative pushes.
+
+     This is the difference between a beat that is in time and one that is in
+     the pocket, and it is not swing — swing moves the offbeats of every part
+     at once, which the engine already does. This moves ONE VOICE against the
+     others and leaves the grid alone: a lo-fi snare twenty milliseconds late
+     against a hat that is not is the entire sound of the genre, and no amount
+     of swing produces it.
+
+     Milliseconds rather than a fraction of a beat, because a player's push
+     and drag is motor timing and stays roughly constant as the tempo moves —
+     which is also why the same twenty milliseconds reads as a lazy sprawl at
+     72 BPM and as an edge at 160.
+
+     The kick is left alone almost everywhere. It is the floor; if it moves,
+     nothing has moved relative to it and the feel just becomes latency. */
+  const FEEL = {
+    pop:       {},
+    lofi:      { snare: 24, rim: 20, hat: 6 },
+    rock:      { snare: -3 },
+    rnb:       { snare: 16, hat: 4 },
+    jazz:      { snare: 9, ride: -4 },
+    blues:     { snare: 11 },
+    house:     { hat: -4, openHat: -4, clap: 3 },
+    synthwave: {},
+    trap:      { hat: -2, snare: 6 },
+    funk:      { hat: -5, snare: 4 },
+    gospel:    { snare: 8, hat: 3 },
+    bossa:     { rim: 6, hat: -2 },
+    folk:      { snare: 5 },
+    ambient:   {}
+  };
+
   /* Drum patterns. One character per sixteenth; patterns are looped, so a
      16-step one repeats every bar and a 32- or 64-step one takes two or four
      bars to come round. 'x' hit, 'o' open/accent, 'g' ghost note, '.' silence.
@@ -663,6 +697,12 @@
     }
   };
 
+  /* Every genre knows its own key. The object is reached through GENRES[id]
+     almost everywhere, but anything handed the object alone — the drum
+     builder, given a genre and asked for its feel — had no way back to the
+     name without threading it through as a second argument. */
+  Object.keys(GENRES).forEach((id) => { GENRES[id].id = id; });
+
   /* Energy nudges the same genre toward calmer or busier output without
      changing what makes it that genre.
 
@@ -711,6 +751,7 @@
     ENERGY,
     CELLS,
     DRUM_VOICES,
+    FEEL,
     order: ['pop', 'lofi', 'rock', 'rnb', 'jazz', 'blues', 'house', 'synthwave', 'trap', 'funk', 'gospel', 'bossa', 'folk', 'ambient'],
     scalesFor: function (id) {
       const genre = GENRES[id];
