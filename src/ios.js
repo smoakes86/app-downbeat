@@ -154,14 +154,20 @@
       trap(node, event);
     });
 
-    /* Two frames: one for the node to be in the tree with its off-screen
-       transform applied, one for the class change to be a transition rather
-       than an initial value. */
+    /* Focus happens NOW, synchronously, inside the task the tap started.
+       WebKit only raises the software keyboard for a focus() with user
+       activation behind it, and two animation frames later there is none —
+       which is why the rename field used to come up with no keyboard and no
+       way to type into it. */
+    const target = node.querySelector('[data-autofocus]') || node;
+    if (target === node && target.tabIndex < 0) node.tabIndex = -1;
+    target.focus({ preventScroll: true });
+
+    /* Two frames for the animation only: one for the node to be in the tree
+       with its off-screen transform applied, one for the class change to be a
+       transition rather than an initial value. */
     global.requestAnimationFrame(() => global.requestAnimationFrame(() => {
       host.classList.add('is-open');
-      const target = node.querySelector('[data-autofocus]') || node;
-      if (target.tabIndex < 0 && target === node) node.tabIndex = -1;
-      target.focus({ preventScroll: true });
     }));
 
     return controller;
@@ -174,6 +180,12 @@
      away; anything less springs back. Both thresholds are the platform's. */
   function draggable(sheet, controller, scroller) {
     let startY = 0;
+    /* Two samples, one move apart. Writing the latest position into `lastY` on
+       every move and then measuring against it at release always produced a
+       velocity of zero, because pointerup carries the position the last
+       pointermove had already recorded. */
+    let prevY = 0;
+    let prevT = 0;
     let lastY = 0;
     let lastT = 0;
     let dy = 0;
@@ -194,8 +206,8 @@
       if (event.target.closest('button, a, input, select, textarea')) return;
       armed = from(event);
       if (!armed) return;
-      startY = lastY = event.clientY;
-      lastT = event.timeStamp;
+      startY = lastY = prevY = event.clientY;
+      lastT = prevT = event.timeStamp;
       dy = 0;
       active = false;
     });
@@ -217,6 +229,8 @@
          upward it resists, because there is nothing up there to go to. */
       dy = delta > 0 ? delta : delta / 6;
       sheet.style.transform = `translateY(${dy}px)`;
+      prevY = lastY;
+      prevT = lastT;
       lastY = event.clientY;
       lastT = event.timeStamp;
       event.preventDefault();
@@ -229,8 +243,8 @@
       active = false;
       sheet.classList.remove('is-dragging');
       sheet.style.transform = '';
-      const dt = Math.max(1, event.timeStamp - lastT);
-      const velocity = (event.clientY - lastY) / dt;
+      const dt = Math.max(1, lastT - prevT);
+      const velocity = (lastY - prevY) / dt;
       const height = sheet.offsetHeight || 1;
       if (dy > height * 0.25 || velocity > 0.5) controller.close();
     };

@@ -206,11 +206,12 @@
      the scale to get the units that produce it. The ceilings are the plate's
      own geometry — the point past which the glyphs stop fitting the object
      they are printed on — and with no observer var()'s fallback of 1
-     reproduces the literal sizes rather than breaking. */
-     The ceilings are the plate's own geometry, not taste, and on a phone they
-     are what actually bind: "teenage engineering" and "EP-133 K.O. II" share
-     one baseline 316 units apart and touch at 10 units, and the hint line over
-     the pads runs off the right edge of the chassis past 9.5. */
+     reproduces the literal sizes rather than breaking.
+
+     On a phone those ceilings are what actually bind: "teenage engineering"
+     and "EP-133 K.O. II" share one baseline 316 units apart and touch at 10
+     units, and the hint line over the pads runs off the right edge of the
+     chassis past 9.5. */
   .dev-ep .dev-brand, .dev-ep .dev-model { font-size:clamp(7px, calc(9px / var(--dev-u, 1)), 10px); }
   .dev-ep .dev-hintline { font-size:clamp(7px, calc(9px / var(--dev-u, 1)), 9.5px); }
   .dev-ep .pad-sub { font-size:clamp(7px, calc(9px / var(--dev-u, 1)), 11px); }

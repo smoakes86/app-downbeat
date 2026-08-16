@@ -36,6 +36,23 @@
     padding-top:var(--safe-t);
     background:var(--chrome-solid);
   }
+  /* apple-mobile-web-app-status-bar-style has three values and none of them
+     follows the appearance: black-translucent draws the clock, the signal bars
+     and the battery in WHITE, always. That is right over the dark room and
+     invisible over the light one, and there is no second meta tag to switch to
+     — iOS reads it once, at launch.
+
+     So the light appearance gives the status bar its own dark strip to sit on.
+     It is a deliberate band rather than an accident: the alternative is either
+     losing the under-the-clock layout that makes an installed app look like an
+     app, or shipping a light theme whose clock cannot be read. */
+  body.light .nav {
+    background:
+      linear-gradient(var(--chrome-solid) 0 0) padding-box,
+      linear-gradient(#26241F 0 0) border-box;
+    border-top:var(--safe-t) solid transparent;
+    padding-top:0;
+  }
 
   .nav-inner {
     min-height:var(--nav-h);
@@ -297,6 +314,9 @@
   }
   .row-select .row-value { color:var(--tint); display:flex; align-items:center; gap:2px; }
   .row-select:active { background:var(--fill-4); }
+  /* The <select> is transparent and stretched over the row, so its own focus
+     ring would be invisible. The row wears it instead. */
+  .row-select:has(select:focus-visible) { box-shadow:var(--focus-ring); border-radius:var(--r-xs); }
 
   /* ==================================================== segmented control */
 
@@ -476,10 +496,15 @@
   /* A UISheetPresentationController: the content is pushed up from the bottom
      edge behind a dimming scrim, it has a grabber, and it can be thrown away
      downwards. Everything modal in the app is one of these. */
+  /* Outside .app, so the horizontal insets .app pays for the shell have to be
+     paid again here — a sheet in landscape on a notched phone otherwise runs
+     its grabber and its buttons under the camera housing. */
   .sheet-host {
     position:fixed;
     top:0; left:0; right:0;
     height:100vh;
+    padding-left:var(--safe-l);
+    padding-right:var(--safe-r);
     z-index:60;
     display:flex;
     flex-direction:column;
@@ -488,9 +513,6 @@
   }
   @supports (height:100dvh) { .sheet-host { height:100dvh; } }
   .sheet-host[hidden] { display:none; }
-  /* The software keyboard: src/ios.js writes the overlap so a field-bearing
-     alert lifts clear of it instead of being covered by it. */
-  .sheet-host.is-alert { padding-bottom:calc(var(--sp-6) + var(--kb, 0px)); }
 
   .scrim {
     position:absolute; inset:0;
@@ -512,9 +534,11 @@
     pointer-events:auto;
     transform:translateY(100%);
     transition:transform var(--t-sheet) var(--e-ios);
-    /* The sheet is the drag surface: vertical gestures are the app's, not the
-       browser's, or a pull on the grabber scrolls the page behind it. */
-    touch-action:none;
+    /* The sheet is the drag surface: panning is the app's, not the browser's,
+       or a pull on the grabber scrolls the page behind it. `pinch-zoom` rather
+       than `none` — it withholds exactly the pans the drag handler needs and
+       keeps the zoom the viewport policy deliberately leaves enabled. */
+    touch-action:pinch-zoom;
     overflow:hidden;
   }
   .sheet-host.is-open .sheet { transform:translateY(0); }
@@ -548,7 +572,7 @@
     overflow-y:auto;
     -webkit-overflow-scrolling:touch;
     overscroll-behavior:contain;
-    touch-action:pan-y;
+    touch-action:pan-y pinch-zoom;
     padding-bottom:calc(var(--safe-b) + var(--sp-5));
     display:flex;
     flex-direction:column;
@@ -603,7 +627,15 @@
   /* A UIAlertController: centred, small, and it interrupts. Everything else in
      the app slides politely up from the bottom edge; a destructive
      confirmation is the one thing that should not. */
-  .sheet-host.is-alert { justify-content:center; align-items:center; padding:var(--sp-6); }
+  /* One rule, because a padding shorthand after a padding-bottom silently
+     puts the keyboard back over the field. src/ios.js writes --kb from
+     visualViewport, so a field-bearing alert lifts clear of the keys instead
+     of sitting behind them. */
+  .sheet-host.is-alert {
+    justify-content:center;
+    align-items:center;
+    padding:var(--sp-6) var(--sp-6) calc(var(--sp-6) + var(--kb, 0px));
+  }
 
   .alert { pointer-events:auto; width:min(270px, 100%); }
   .alert-card {
@@ -664,7 +696,10 @@
   .toast {
     position:fixed;
     left:50%;
-    bottom:calc(var(--safe-b) + var(--tab-h) + var(--dock-h) + var(--sp-3));
+    /* --cta-h is written by src/ui.js: the Song screen mounts an action bar
+       between the content and the transport, and a toast that lands on top of
+       the app's primary button is a toast in the worst possible place. */
+    bottom:calc(var(--safe-b) + var(--tab-h) + var(--dock-h) + var(--cta-h, 0px) + var(--sp-3));
     z-index:80;
     max-width:min(88vw, 420px);
     padding:var(--sp-3) var(--sp-5);

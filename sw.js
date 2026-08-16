@@ -65,25 +65,28 @@ self.addEventListener('fetch', (event) => {
   const url = new URL(request.url);
   if (url.origin !== self.location.origin) return;
 
-  if (request.mode === 'navigate') {
-    event.respondWith(
-      fetch(request)
-        .then((response) => {
-          const copy = response.clone();
-          caches.open(CACHE).then((cache) => cache.put('./index.html', copy));
-          return response;
-        })
-        .catch(() => caches.match('./index.html'))
-    );
-    return;
-  }
+  /* Stale-while-revalidate, for both the document and everything under it.
+
+     This used to be network-first, which on a good connection is invisible and
+     on a bad one is the whole experience: an installed app with its entire
+     shell already on disk would sit on a white screen waiting for a request
+     that was going to time out. The shell is versioned by CACHE, so serving
+     the copy we have is always serving a coherent app — and the fetch still
+     runs, so the next launch has whatever changed. */
+  const key = request.mode === 'navigate' ? './index.html' : request;
 
   event.respondWith(
-    fetch(request)
-      .then((response) => {
-        if (response.ok) caches.open(CACHE).then((cache) => cache.put(request, response.clone()));
-        return response;
-      })
-      .catch(() => caches.match(request))
+    caches.match(key).then((cached) => {
+      const network = fetch(request)
+        .then((response) => {
+          if (response.ok) {
+            const copy = response.clone();
+            caches.open(CACHE).then((cache) => cache.put(key, copy));
+          }
+          return response;
+        })
+        .catch(() => cached);
+      return cached || network;
+    })
   );
 });

@@ -183,6 +183,15 @@
     color:var(--on-part);
     opacity:1;
   }
+  /* Lit by the playhead. The lane already draws the line; this is what makes
+     it read as the music rather than as a ruler moving across a diagram. */
+  .lane-note.now {
+    opacity:1;
+    box-shadow:0 0 8px color-mix(in srgb, var(--part) 70%, transparent);
+    filter:brightness(1.25);
+  }
+  .drum-cell.now { opacity:1; box-shadow:0 0 7px color-mix(in srgb, var(--part) 75%, transparent); }
+
   .lane-note[data-role=root]   { background:var(--role-root); }
   .lane-note[data-role=third]  { background:var(--role-third); }
   .lane-note[data-role=fifth]  { background:var(--role-fifth); }
@@ -390,7 +399,12 @@
   .map-key span { display:inline-flex; align-items:center; gap:5px; font-size:var(--fs-caption2); color:var(--label-2); }
   .map-key i { width:9px; height:9px; border-radius:2px; background:var(--tk); }
 
-  .section-row .row-icon { background:var(--tint-fill); color:var(--tint); font-size:var(--fs-caption2); font-weight:700; }
+  .section-row .row-icon { background:var(--fill-3); color:var(--label-2); font-size:var(--fs-caption2); font-weight:700; }
+  .section-row[aria-pressed=true] { background:var(--tint-fill); }
+  .section-row[aria-pressed=true] .row-icon { background:var(--tint); color:var(--on-tint-fill); }
+  .section-row[aria-pressed=true] .row-title { color:var(--tint); font-weight:600; }
+  .section-row .row-chevron { width:12px; height:12px; fill:var(--label-3); }
+  .section-row[aria-pressed=true] .row-chevron { fill:var(--tint); }
 
   /* ===================================================== library screen */
 
@@ -434,6 +448,8 @@
     position:fixed;
     top:0; left:0; right:0;
     height:100vh;
+    padding-left:var(--safe-l);
+    padding-right:var(--safe-r);
     z-index:70;
     display:flex;
     flex-direction:column;
@@ -506,6 +522,8 @@
     position:fixed;
     top:0; left:0; right:0;
     height:100vh;
+    padding-left:var(--safe-l);
+    padding-right:var(--safe-r);
     z-index:75;
     display:flex;
     flex-direction:column;

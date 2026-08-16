@@ -73,10 +73,14 @@
      call it and a returning user keeps their library, appearance, draft and
      device choice; skip it and they silently lose all four. */
   const key = (name) => (global.Store ? global.Store.key(name) : 'downbeat.' + name);
+  /* These are the names the previous build wrote, not new ones. A rename here
+     is silent data loss: the user is re-onboarded, their hardware choice goes
+     back to the default and their draft disappears, with nothing to say why.
+     `devices.v1` held { track, device } as JSON, so it is read as JSON. */
   const STORE = {
-    device: key('device'),
+    device: key('devices.v1'),
     theme: key('theme'),
-    seen: key('onboarded'),
+    seen: key('onboarding.v1'),
     tab: key('tab'),
     draft: key('draft.v1'),
     countIn: key('count-in')
@@ -94,8 +98,21 @@
 
   let song = null;
   let part = 'melody';
-  let device = store.get(STORE.device) || Devices.DEFAULT_DEVICE;
-  if (!Devices.DEVICES[device]) device = Devices.DEFAULT_DEVICE;
+  let device = readDevice();
+  function readDevice() {
+    const raw = store.get(STORE.device);
+    if (!raw) return Devices.DEFAULT_DEVICE;
+    let id = raw;
+    if (raw.charAt(0) === '{') {
+      try {
+        const saved = JSON.parse(raw);
+        /* Earlier builds kept a device per track. Carry across whichever one
+           was last on screen. */
+        id = saved.device || (saved.devices && saved.devices[saved.track]) || '';
+      } catch (e) { id = ''; }
+    }
+    return Devices.DEVICES[id] ? id : Devices.DEFAULT_DEVICE;
+  }
   let tab = 'play';
   let mounted = null;          /* the Devices.mount updater for the live view */
   let arrangement = null;
@@ -246,14 +263,20 @@
 
   /* ------------------------------------------------------------- undo */
 
+  /* The RECIPE, not the options. A song's options carry its seeds only when
+     the caller happened to pin them — everywhere else they are the random
+     numbers Compose picked, and replaying without them composes a third,
+     unrelated song rather than restoring the one you just lost. The recipe is
+     what a save and a share link are made of, and it holds both. */
   function armUndo(previous) {
-    undoState = { opts: previous.opts, title: previous.title };
+    undoState = Library.recipeOf(previous);
     $('#undoButton').hidden = false;
   }
 
   function undo() {
     if (!undoState) return;
-    const opts = Object.assign({}, undoState.opts, { title: undoState.title, silentUndo: true });
+    const opts = Library.optionsOf(undoState);
+    opts.silentUndo = true;
     undoState = null;
     $('#undoButton').hidden = true;
     const playing = Engine.isPlaying();
@@ -265,6 +288,15 @@
     toast('Change undone');
   }
 
+  /* What the genre and feel would choose on their own — the same arithmetic
+     Compose does. */
+  function naturalTempo(genreId, energyId) {
+    const genre = G.GENRES[genreId];
+    const energy = G.ENERGY[energyId] || G.ENERGY.flow;
+    if (!genre) return null;
+    return Math.round(genre.tempo[0] + (genre.tempo[1] - genre.tempo[0]) * energy.tempo);
+  }
+
   function applyOptionsToDraft(opts) {
     draft.genre = opts.genre || draft.genre;
     draft.keyPc = opts.keyPc === undefined ? draft.keyPc : opts.keyPc;
@@ -273,7 +305,12 @@
     draft.bars = opts.bars === undefined || opts.bars === 'auto' ? 'auto' : String(opts.bars);
     draft.counter = !!opts.counter;
     draft.bpm = opts.bpm || null;
-    tempoTouched = !!opts.bpm;
+    /* Every recipe records a tempo, so `opts.bpm` on its own is no evidence
+       the user chose one — and treating it as evidence latched the tempo the
+       first time a draft was restored, after which no genre could ever set
+       its own again. Only a tempo the genre would not have picked counts. */
+    tempoTouched = !!opts.bpm && opts.bpm !== naturalTempo(draft.genre, draft.energy);
+    if (!tempoTouched) draft.bpm = null;
   }
 
   /* ========================================================= the parts */
@@ -288,8 +325,13 @@
       /* Counter is dimmed when the song has no second line, but it is NOT
          disabled: a dead segment can only tell you that you cannot have the
          thing, where a live one can go and get it. Tapping it writes the
-         countermelody and lands you on it. */
-      const off = p.id === 'counter' && !hasCounter;
+         countermelody and lands you on it.
+
+         Drums is dimmed on the one genre that has no kit at all — Ambient —
+         where there is nothing to go and get, so it stays selectable and its
+         lane says why. */
+      const off = (p.id === 'counter' && !hasCounter) ||
+        (p.id === 'drums' && !(song && song.drums && song.drums.length));
       return `<button type="button" role="radio" data-value="${p.id}" ` +
         `aria-checked="${p.id === part ? 'true' : 'false'}" tabindex="${p.id === part ? 0 : -1}"` +
         `${off ? ' data-off="true"' : ''}>${p.short}</button>`;
@@ -341,7 +383,7 @@
   function setDevice(id) {
     if (!Devices.DEVICES[id] || id === device) return;
     device = id;
-    store.set(STORE.device, id);
+    store.set(STORE.device, JSON.stringify({ track: part, device: id }));
     if (introDeviceControl) introDeviceControl.select(id);
     if (devicesControl) devicesControl.select(id);
     renderPart();
@@ -386,13 +428,16 @@
        to.
 
        TWO COLUMNS — a phone on its side, a tablet, a desk. The run is beside
-       the plate rather than under it, so height costs nothing that matters and
-       the plate should spend the width it has been given. Held back only by a
-       ceiling that stops a wide desk drawing a metre-high sampler. */
+       the plate rather than under it, so height costs less and the plate can
+       spend the width it has been given. Not without limit: a landscape phone
+       has about 250 points of scroller, and a plate five times that is a plate
+       nobody will scroll to the bottom of. 1.15 viewports is roughly one flick
+       to the pads, and the ceiling stops a wide desk drawing a metre-high
+       sampler. */
     const twoColumn = global.matchMedia(
       '(min-width: 900px), (orientation: landscape) and (max-height: 520px)').matches;
     const ceiling = twoColumn
-      ? Math.min(global.innerHeight * 1.4, 620)
+      ? Math.min(global.innerHeight * 1.15, 620)
       : Math.min(global.innerHeight * 0.44, 460);
 
     const fitWidth = available / box[2];
@@ -554,6 +599,7 @@
       const y = (e.midi - base) / span;
       const role = e.role ? (ROLE_CLASS[e.role] || 'other') : null;
       html += `<i class="lane-note"${role ? ` data-role="${role}"` : ''} ` +
+        `data-start="${e.start}" data-dur="${e.dur || 1}" ` +
         `style="--x:${e.start / total};--w:${(e.dur || 1) / total};--y:${y.toFixed(4)};--vel:${e.velocity || 0.8}">` +
         `${part === 'bass' ? (ROLE_LETTER[e.role] || '·') : ''}</i>`;
     });
@@ -576,7 +622,8 @@
     lane.style.setProperty('--lane-h', 'auto');
 
     if (!used.length) {
-      lane.insertAdjacentHTML('beforeend', '<p class="seq-empty">No drums in this sketch.</p>');
+      lane.insertAdjacentHTML('beforeend',
+        `<p class="seq-empty">${escapeHtml(song.genre.label)} has no kit — this one is played without drums.</p>`);
       return;
     }
 
@@ -595,7 +642,8 @@
         const velocity = hits[step];
         const cls = velocity === undefined ? '' :
           velocity <= 0.4 ? ' ghost' : velocity >= 0.9 ? ' on accent' : ' on';
-        cells += `<i class="drum-cell${cls}"${step % 4 === 0 && velocity === undefined ? ' data-beat' : ''}` +
+        cells += `<i class="drum-cell${cls}" data-step="${step}"` +
+          `${step % 4 === 0 && velocity === undefined ? ' data-beat' : ''}` +
           `${velocity === undefined ? '' : ` style="--vel:${velocity}"`}></i>`;
       }
       html += `<div class="drum-row"><b class="drum-label">${voice.label}</b>` +
@@ -636,7 +684,12 @@
 
   function syncTransportReadout() {
     const label = PARTS.find((p) => p.id === part).label;
-    $('#dockPart').textContent = soloOn ? label + ' · solo' : label;
+    /* Solo and an auditioned section both silence tracks, and both are set on
+       a screen you are not looking at while you play. The transport is the one
+       thing always in view, so it is where they have to be visible. */
+    const note = soloOn ? ' · solo'
+      : (activeSection && activeSection.muted.length ? ' · ' + activeSection.name : '');
+    $('#dockPart').textContent = label + note;
     if (!Engine.isPlaying()) {
       $('#dockPos').textContent = `${song.bars} bars · ${song.bpm} BPM`;
     }
@@ -674,11 +727,14 @@
     announce('Stopped');
   }
 
+  function setPlayGlyph(stopping, label) {
+    $('#playButton').setAttribute('aria-label', label || (stopping ? 'Stop' : 'Play'));
+    $('#playIcon').firstElementChild.setAttribute('href', stopping ? '#i-stop' : '#i-play');
+  }
+
   function setLive(on) {
     doc.body.classList.toggle('is-live', on);
-    const button = $('#playButton');
-    button.setAttribute('aria-label', on ? 'Stop' : 'Play');
-    $('#playIcon').firstElementChild.setAttribute('href', on ? '#i-stop' : '#i-play');
+    setPlayGlyph(on);
     if (on) {
       requestWakeLock();
       lastBar = -1;
@@ -688,6 +744,7 @@
       releaseWakeLock();
       if (raf) { global.cancelAnimationFrame(raf); raf = 0; }
       if (mounted) mounted.update(null);
+      markLaneStep(-1);
       if (laneHead) laneHead.style.setProperty('--head', 0);
       Array.from($('#dockBars').children).forEach((node) => node.classList.remove('on'));
       syncTransportReadout();
@@ -707,7 +764,7 @@
     const position = Engine.position();
     const step = Math.floor(position);
 
-    if (mounted && step !== lastStep) { mounted.update(step); lastStep = step; }
+    if (mounted && step !== lastStep) { mounted.update(step); markLaneStep(step); lastStep = step; }
     if (laneHead) laneHead.style.setProperty('--head', (position / song.totalSteps).toFixed(4));
     followLane(position);
 
@@ -719,6 +776,24 @@
       $('#dockPos').textContent = `Bar ${Math.min(bar + 1, song.bars)} of ${song.bars} · ${song.bpm} BPM`;
     }
     raf = global.requestAnimationFrame(frame);
+  }
+
+  /* Light whatever the playhead is inside. The lane already draws the line;
+     this is what makes it read as the music rather than as a ruler moving. */
+  function markLaneStep(step) {
+    const live = lane.querySelectorAll('.lane-note.now, .drum-cell.now');
+    for (let i = 0; i < live.length; i++) live[i].classList.remove('now');
+    if (step < 0) return;
+    if (part === 'drums') {
+      lane.querySelectorAll(`.drum-cell[data-step="${step}"].on, .drum-cell[data-step="${step}"].ghost`)
+        .forEach((cell) => cell.classList.add('now'));
+      return;
+    }
+    lane.querySelectorAll('.lane-note').forEach((note) => {
+      const start = Number(note.dataset.start);
+      const end = start + Number(note.dataset.dur);
+      if (step >= start && step < end) note.classList.add('now');
+    });
   }
 
   /* Keep the playhead on screen when the lane is wider than the phone, and do
@@ -746,9 +821,15 @@
     const beats = countInBars * 4;
     let n = 0;
     const interval = 60000 / song.bpm;
+    /* Every beat is scheduled against one fixed start rather than against the
+       last one that fired. A chained timeout carries the whole of its own
+       lateness forward, and four beats of that is the difference between
+       coming in on the downbeat and coming in behind it. */
+    const started = global.performance.now();
     box.hidden = false;
     UI.setInert(true);
     beat.textContent = String(beats);
+    setPlayGlyph(true, 'Stop the count-in');
     $('#countInCancel').focus({ preventScroll: true });
 
     const tick = () => {
@@ -764,7 +845,8 @@
          at the screen. */
       Engine.playDrum(n % 4 === 0 ? 'rim' : 'hat', 0, n % 4 === 0 ? 0.9 : 0.5);
       n++;
-      countInTimer = global.setTimeout(tick, interval);
+      const due = started + n * interval;
+      countInTimer = global.setTimeout(tick, Math.max(0, due - global.performance.now()));
     };
     tick();
   }
@@ -774,6 +856,7 @@
     if (!$('#countIn').hidden) {
       $('#countIn').hidden = true;
       UI.setInert(false);
+      setPlayGlyph(Engine.isPlaying());
       const play = $('#playButton');
       if (play) play.focus({ preventScroll: true });
     }
@@ -998,12 +1081,16 @@
     $('#arrangeKey').innerHTML = arrangement.tracks.map((t) =>
       `<span><i style="--tk:var(--t-${t.id})"></i>${escapeHtml(t.label)}</span>`).join('');
 
+    /* Buttons, not paragraphs. They are drawn as rows in a list, they sit
+       under a map whose sections are tappable, and doing nothing when tapped
+       is the one thing a row like this must not do. */
     const steps = $('#arrangeSteps');
     steps.innerHTML = arrangement.sections.map((s, i) =>
-      `<div class="row has-icon section-row">` +
+      `<button type="button" class="row has-icon section-row" data-section="${s.id}" aria-pressed="false">` +
       `<span class="row-icon">${i + 1}</span>` +
       `<span class="row-text"><span class="row-title">${escapeHtml(s.name)} · ${s.bars} bars</span>` +
-      `<span class="row-sub" style="white-space:normal">${escapeHtml(s.how)}</span></span></div>`).join('');
+      `<span class="row-sub" style="white-space:normal">${escapeHtml(s.how)}</span></span>` +
+      '<svg class="row-chevron" aria-hidden="true" focusable="false"><use href="#i-play"></use></svg></button>').join('');
 
     $('#theoryText').innerHTML = song.theory || '';
 
@@ -1020,7 +1107,7 @@
     soloOn = false;
     $('#soloButton').setAttribute('aria-pressed', 'false');
     applySolo();
-    Array.from($('#arrangeMap').children).forEach((node) => {
+    doc.querySelectorAll('#arrangeMap [data-section], #arrangeSteps [data-section]').forEach((node) => {
       node.setAttribute('aria-pressed', !already && node.dataset.section === id ? 'true' : 'false');
     });
     $('#arrangeReset').hidden = !activeSection;
@@ -1109,7 +1196,7 @@
   function removeSketch(entry) {
     UI.confirm({
       title: 'Delete this sketch?',
-      message: `“${escapeHtml(entry.title)}” will be removed from this device.`,
+      message: `“${entry.title}” will be removed from this device.`,
       confirmLabel: 'Delete',
       destructive: true
     }).then((yes) => {
@@ -1123,8 +1210,17 @@
   function saveCurrent() {
     const result = Library.save(song);
     renderLibrary();
-    if (result.duplicate) toast('Already in your library');
-    else { toast(`Saved “${song.title}”`); announce('Saved to library'); }
+    if (result.duplicate) { toast('Already in your library'); return; }
+    /* Library.save reports whether the write landed. iOS Safari in private
+       browsing throws on setItem, and telling someone their work is safe when
+       it is not is the worst answer available. */
+    if (result.stored === false) {
+      toast('Could not save — this browser is blocking storage');
+      announce('Save failed');
+      return;
+    }
+    toast(`Saved “${song.title}”`);
+    announce('Saved to library');
   }
 
   function loadRecipe(recipe, title) {
@@ -1177,17 +1273,39 @@
     copyToClipboard(link, 'Link copied');
   }
 
+  /* Everything you would want in a notes app or a message: the recipe, the
+     harmony as both symbols and numerals, every pitched part written out, what
+     the kit is playing, the theory note, and the link that rebuilds it. */
   function sketchAsText() {
-    const chords = (song.spans || []).map((s) => s.chord.symbol).join(' | ');
-    return [
+    const bar = (step) => Math.floor(step / 16) + 1;
+    const line = (events) => {
+      if (!events || !events.length) return null;
+      let at = 0;
+      return events.map((e) => {
+        const prefix = bar(e.start) !== at ? ((at = bar(e.start)), `| ${at}: `) : '';
+        return prefix + noteName(e.midi) + (e.role ? `(${e.role})` : '');
+      }).join(' ');
+    };
+
+    const out = [
       `${song.title} — Downbeat`,
       `${song.genre.label} · ${song.key.rootName} ${song.scaleName} · ${song.bpm} BPM · ${song.bars} bars`,
-      '',
-      `Chords: ${chords}`,
       `Feel: ${(ENERGIES.find((e) => e.id === song.energy) || {}).label || song.energy}`,
       '',
-      Library.linkFor(Library.recipeOf(song))
-    ].join('\n');
+      `Chords:   ${(song.spans || []).map((s) => s.chord.symbol).join(' | ')}`,
+      `Numerals: ${((song.progression || {}).chords || []).join(' | ')}`
+    ];
+    const melody = line(song.melody);
+    const counter = line(song.counter);
+    const bass = line(song.bass);
+    if (melody) out.push('', 'Melody:  ' + melody);
+    if (counter) out.push('Counter: ' + counter);
+    if (bass) out.push('Bass:    ' + bass);
+    const kit = G.DRUM_VOICES.filter((v) => (song.drums || []).some((e) => e.instrument === v.id));
+    if (kit.length) out.push('Drums:   ' + kit.map((v) => v.label).join(', '));
+    if (song.theory) out.push('', String(song.theory).replace(/<[^>]+>/g, ''));
+    out.push('', Library.linkFor(Library.recipeOf(song)));
+    return out.join('\n');
   }
 
   function copyText() { copyToClipboard(sketchAsText(), 'Copied as text'); }
@@ -1284,8 +1402,11 @@
       else screen.setAttribute('inert', '');
     });
     UI.closeSwipes();
-    /* The action bar belongs to a screen, so it comes and goes with it. */
-    $('#songCta').hidden = id !== 'song';
+    /* The action bar belongs to a screen, so it comes and goes with it — and
+       the toast has to know, or it lands on top of the app's primary button. */
+    const cta = $('#songCta');
+    cta.hidden = id !== 'song';
+    doc.documentElement.style.setProperty('--cta-h', cta.hidden ? '0px' : cta.offsetHeight + 'px');
     if (id === 'library') renderLibrary();
     if (id === 'song') renderGenres();
     if (id === 'play') global.requestAnimationFrame(fitFace);
@@ -1549,6 +1670,10 @@
     const button = event.target.closest('.map-sec');
     if (button) toggleSection(button.dataset.section);
   });
+  $('#arrangeSteps').addEventListener('click', (event) => {
+    const row = event.target.closest('.section-row');
+    if (row) toggleSection(row.dataset.section);
+  });
   $('#arrangeReset').addEventListener('click', () => { if (activeSection) toggleSection(activeSection.id); });
 
   $('#intro').addEventListener('keydown', (event) => UI.trap($('#intro'), event));
@@ -1574,6 +1699,12 @@
   doc.addEventListener('keydown', (event) => {
     const target = event.target;
     if (target && (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.tagName === 'SELECT')) return;
+    /* A focused control owns its own keys. Space activates a button and Enter
+       follows a link; a global shortcut that fires first takes the keyboard
+       away from every control in the app. The shortcuts are for when nothing
+       in particular is focused, which is the state you play in. */
+    if (target && target !== doc.body && target.closest &&
+        target.closest('button, a[href], summary, [role="switch"], [contenteditable]')) return;
     if (event.metaKey || event.ctrlKey) {
       if (event.key === 'z' || event.key === 'Z') { event.preventDefault(); undo(); }
       return;
