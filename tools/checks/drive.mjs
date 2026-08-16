@@ -408,14 +408,35 @@ await check('how it works', async () => {
 await assertSquare('after theme + intro');
 
 /* ----------------------------------------------------------- landscape */
-await check('landscape', async () => {
+await check('a phone on its side asks to be turned back', async () => {
+  const tabBefore = await page.evaluate(() => document.querySelector('.screen.is-active').dataset.screen);
   await page.setViewportSize({ width: H, height: W });
   await page.waitForTimeout(600);
-  await tap('.tab[data-tab="play"]');
-  await page.waitForTimeout(400);
-  await shot('landscape-play');
+  await shot('landscape-notice');
+  const state = await page.evaluate(() => {
+    const shown = (sel) => {
+      const el = document.querySelector(sel);
+      const r = el && el.getBoundingClientRect();
+      return !!el && getComputedStyle(el).display !== 'none' && r.width > 0;
+    };
+    return { notice: shown('.rotate'), app: shown('.app') };
+  });
+  if (!state.notice) throw new Error('no portrait notice in landscape');
+  if (state.app) throw new Error('the app is still laid out behind the notice');
+
+  // And turning back returns you to exactly where you were.
   await page.setViewportSize({ width: W, height: H });
-  await page.waitForTimeout(400);
+  await page.waitForTimeout(700);
+  const back = await page.evaluate(() => ({
+    app: getComputedStyle(document.querySelector('.app')).display !== 'none',
+    tab: document.querySelector('.screen.is-active').dataset.screen,
+    plate: !!document.querySelector('#faceStage svg'),
+    width: document.querySelector('#faceStage svg')
+      ? parseInt(document.querySelector('#faceStage svg').style.width, 10) : 0,
+  }));
+  if (!back.app) throw new Error('the app did not come back on turning upright');
+  if (back.tab !== tabBefore) throw new Error(`came back on ${back.tab}, was on ${tabBefore}`);
+  if (!back.plate || back.width < 120) throw new Error(`faceplate did not refit (${back.width}px)`);
 });
 
 /* ------------------------------------------------------- shared link */

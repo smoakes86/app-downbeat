@@ -12,8 +12,9 @@ const PROFILES = [
   { name: 'iphone-se', width: 375, height: 667 },
   { name: 'iphone-15', width: 393, height: 852 },
   { name: 'iphone-15-pro-max', width: 430, height: 932 },
-  { name: 'iphone-15-landscape', width: 852, height: 393 },
+  { name: 'iphone-15-landscape', width: 852, height: 393, rotateNotice: true },
   { name: 'ipad', width: 820, height: 1180 },
+  { name: 'ipad-landscape', width: 1180, height: 820 },
 ];
 const TABS = ['play', 'song', 'arrange', 'library'];
 
@@ -41,6 +42,33 @@ for (const p of PROFILES) {
   await page.waitForTimeout(900);
   const skip = page.locator('#introSkip');
   if (await skip.count() && await skip.first().isVisible()) { await skip.first().tap(); await page.waitForTimeout(500); }
+
+  /* A phone on its side gets the portrait notice instead of the app, so there
+     are no tabs to walk — check that the notice is what is showing and that
+     nothing of the app is left behind it. */
+  if (p.rotateNotice) {
+    await page.screenshot({ path: path.join(OUT, `${p.name}-rotate.png`) });
+    const state = await page.evaluate(() => {
+      const seen = (sel) => {
+        const el = document.querySelector(sel);
+        if (!el) return false;
+        const r = el.getBoundingClientRect();
+        return getComputedStyle(el).display !== 'none' && r.width > 0 && r.height > 0;
+      };
+      const notice = document.querySelector('.rotate');
+      return {
+        notice: seen('.rotate'),
+        app: seen('.app'),
+        text: notice ? notice.textContent.replace(/\s+/g, ' ').trim().slice(0, 40) : '',
+        role: notice ? notice.getAttribute('role') : null,
+      };
+    });
+    if (!state.notice) problems.push(`${p.name}: no portrait notice on a phone lying down`);
+    if (state.app) problems.push(`${p.name}: the app is still laid out behind the notice`);
+    if (state.role !== 'status') problems.push(`${p.name}: the notice is not announced (role=${state.role})`);
+    await ctx.close();
+    continue;
+  }
 
   for (const tab of TABS) {
     await page.locator(`.tab[data-tab="${tab}"]`).tap();

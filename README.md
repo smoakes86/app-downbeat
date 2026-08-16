@@ -29,6 +29,15 @@ things that move are the four screen scrollers, each keeping its own offset the
 way a tab controller's children do. No rubber-banding, no pull-to-refresh, no
 bounce at the top of a fixed bar.
 
+**Portrait, on a phone.** One hand on the phone and the other on the hardware —
+that is the posture the whole layout is for, and the manifest asks for it. iOS
+ignores that field for a web app, so a phone turned on its side gets a line
+asking for it back rather than a layout that does not work. The arithmetic is
+not close: a phone lying down is about 390 points tall, the fixed chrome takes
+158 of them, and what is left would draw a 540-unit sampler 115 points wide
+with three-pixel legends. A tablet on its side has the height, and gets the
+two-column desk instead.
+
 **Four tabs, and a transport that never leaves.**
 
 | | |
@@ -263,7 +272,9 @@ found:
   a draft survives a reload, swipe-to-delete opens and confirms.
 - **layout** — every tab at every size, with the safe-area insets an iPhone
   actually reports forced in, asserting no horizontal overflow, no page offset,
-  no control under the notch or the home indicator, and nothing below 44pt.
+  no control under the notch or the home indicator, and nothing below 44pt —
+  and that a phone on its side shows the portrait notice with none of the app
+  laid out behind it.
 - **contrast** — composites every text node's colour onto its real background
   and checks the ratio against the threshold for that size and weight.
 - **keyboard** — drives the entire app with no pointer at all.

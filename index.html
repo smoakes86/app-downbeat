@@ -109,6 +109,10 @@
       <symbol id="i-sparkle" viewBox="0 0 24 24"><path d="M10.2 2.4 11.9 7l4.6 1.7-4.6 1.7-1.7 4.6-1.7-4.6L3.9 8.7 8.5 7Z"/><path d="M17.6 13.6l1 2.6 2.6 1-2.6 1-1 2.6-1-2.6-2.6-1 2.6-1Z"/></symbol>
       <symbol id="i-refresh" viewBox="0 0 24 24"><path d="M12 4.2a7.8 7.8 0 0 1 6.6 3.6V4.9h2v6.4h-6.4v-2h3.1A5.8 5.8 0 1 0 17.7 14h2.1A7.8 7.8 0 1 1 12 4.2Z"/></symbol>
       <symbol id="i-trash" viewBox="0 0 24 24"><path d="M9.4 2.6h5.2l1 1.7H20.4v2H3.6v-2h4.8Z"/><path d="M5.6 8h12.8l-.9 11.9a2.2 2.2 0 0 1-2.2 2H8.7a2.2 2.2 0 0 1-2.2-2Z"/></symbol>
+      <symbol id="i-rotate" viewBox="0 0 24 24">
+        <path d="M8.4 2.6h7.2a2.4 2.4 0 0 1 2.4 2.4v14a2.4 2.4 0 0 1-2.4 2.4H8.4A2.4 2.4 0 0 1 6 19V5a2.4 2.4 0 0 1 2.4-2.4Zm-.4 2.4v14a.4.4 0 0 0 .4.4h7.2a.4.4 0 0 0 .4-.4V5a.4.4 0 0 0-.4-.4H8.4a.4.4 0 0 0-.4.4Z"/>
+        <path d="M12 16.4a1.15 1.15 0 1 1 0 2.3 1.15 1.15 0 0 1 0-2.3Z"/>
+      </symbol>
       <symbol id="i-key" viewBox="0 0 24 24"><path d="M4 5h16a1 1 0 0 1 1 1v12a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V6a1 1 0 0 1 1-1Zm1 2v10h14V7Z"/><path d="M7.2 7h1.9v6H7.2Zm3.9 0H13v6h-1.9Zm3.9 0h1.9v6h-1.9Z"/></symbol>
     </svg>
 
@@ -393,6 +397,18 @@
         <button class="btn intro-next" id="introNext">Next</button>
       </div>
     </section>
+
+    <!-- Portrait only, on a phone. The manifest asks for it and iOS ignores
+         the field for a web app, so this is what a rotated phone gets — CSS
+         alone decides when, so there is no frame in which the wrong layout is
+         drawn while JavaScript catches up. -->
+    <div class="rotate" role="status">
+      <svg class="i" aria-hidden="true" focusable="false"><use href="#i-rotate"></use></svg>
+      <b>Turn your phone upright</b>
+      <p>Downbeat is a portrait app — one hand on the phone, the other on the
+        hardware. There is not enough height on a phone lying down to draw a
+        sampler you could read.</p>
+    </div>
 
     <script src="src/theory.js"></script>
     <script src="src/genres.js"></script>

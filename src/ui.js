@@ -459,15 +459,12 @@
        hands are busy. At 0.44 a row of chips is visibly there to be scrolled
        to.
 
-       TWO COLUMNS — a phone on its side, a tablet, a desk. The run is beside
-       the plate rather than under it, so height costs less and the plate can
-       spend the width it has been given. Not without limit: a landscape phone
-       has about 250 points of scroller, and a plate five times that is a plate
-       nobody will scroll to the bottom of. 1.15 viewports is roughly one flick
-       to the pads, and the ceiling stops a wide desk drawing a metre-high
-       sampler. */
-    const twoColumn = global.matchMedia(
-      '(min-width: 900px), (orientation: landscape) and (max-height: 520px)').matches;
+       TWO COLUMNS — a tablet or a desk. The run is beside the plate rather
+       than under it, so height costs less and the plate can spend the width it
+       has been given, up to a ceiling that stops a wide desk drawing a
+       metre-high sampler. A phone never reaches this: the app is portrait
+       only, and css/screens.css says so rather than laying one out. */
+    const twoColumn = global.matchMedia('(min-width: 900px)').matches;
     const ceiling = twoColumn
       ? Math.min(global.innerHeight * 1.15, 620)
       : Math.min(global.innerHeight * 0.44, 460);
