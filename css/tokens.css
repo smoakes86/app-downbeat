@@ -250,6 +250,7 @@
     --on-lamp:#140C04;
 
     --red:#FF453A;
+    --red-fill:#C9110A;   /* white on this is 5.4:1; on --red it is 3.4:1 */
     --green:#32D74B;
     --edge-cast:rgba(0,0,0,.62);
 
@@ -350,6 +351,7 @@
     --lamp-ink:#A34500;
 
     --red:#D70015;
+    --red-fill:#C10012;
     --green:#248A3D;
     --edge-cast:rgba(120,112,94,.26);
 
@@ -375,15 +377,4 @@
   [data-part=bass]    { --part:var(--t-bass);    --part-ink:var(--t-bass-ink); }
   [data-part=drums]   { --part:var(--t-drums);   --part-ink:var(--t-drums-ink); }
 
-  /* A custom property's var()s are substituted at the computed-value time of
-     the element that DECLARES it, and the substituted string is what inherits.
-     Declared on body this would bake in body's --lit (registered
-     inherits:false, so body's own value is the initial 0) and produce a fully
-     transparent bloom for every reader. Declared on the pseudo it resolves
-     against that pseudo's own --lit and the --part it inherits. The
-     consequence is that the token cannot travel, so every consumer has to be
-     named in this selector. */
-  .seq-chip::before, .lane-head::before {
-    --bloom-part:0 0 14px color-mix(in srgb, var(--part) calc(var(--lit,0) * 62%), transparent);
-  }
 }

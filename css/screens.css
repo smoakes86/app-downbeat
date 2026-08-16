@@ -41,7 +41,6 @@
     background:var(--grouped-cell);
     border-radius:var(--r-sm);
   }
-  .card-flush { padding:0; overflow:hidden; }
 
   /* ============================================================ the rig */
 
@@ -183,15 +182,6 @@
     color:var(--on-part);
     opacity:1;
   }
-  /* Lit by the playhead. The lane already draws the line; this is what makes
-     it read as the music rather than as a ruler moving across a diagram. */
-  .lane-note.now {
-    opacity:1;
-    box-shadow:0 0 8px color-mix(in srgb, var(--part) 70%, transparent);
-    filter:brightness(1.25);
-  }
-  .drum-cell.now { opacity:1; box-shadow:0 0 7px color-mix(in srgb, var(--part) 75%, transparent); }
-
   .lane-note[data-role=root]   { background:var(--role-root); }
   .lane-note[data-role=third]  { background:var(--role-third); }
   .lane-note[data-role=fifth]  { background:var(--role-fifth); }
@@ -234,10 +224,27 @@
     color:var(--label-2);
   }
 
+  /* Lit by the playhead. The lane already draws the line; this is what makes
+     it read as the music rather than as a ruler moving across a diagram.
+     Declared here, after the per-part rules, and qualified by .lane so it
+     outranks `.lane.is-chords .lane-note`, which sets opacity too. */
+  .lane .lane-note.now {
+    opacity:1;
+    box-shadow:0 0 8px color-mix(in srgb, var(--part) 70%, transparent);
+    filter:brightness(1.25);
+  }
+  .lane .drum-cell.now { opacity:1; box-shadow:0 0 7px color-mix(in srgb, var(--part) 75%, transparent); }
+
   .lane-head {
     position:absolute;
     top:0; bottom:0;
-    left:calc(var(--head, 0) * 100%);
+    /* The playhead has to run across the grid it is marking, and on the drum
+       lane that grid starts after a sticky column of voice labels and stops
+       short of the right edge. Both are zero on a pitched lane, where the
+       notes are positioned across the full width. Without this the head ran
+       66px ahead of the beats it was pointing at. */
+    left:calc(var(--lane-gutter, 0px) +
+      var(--head, 0) * (100% - var(--lane-gutter, 0px) - var(--lane-tail, 0px)));
     width:2px;
     margin-left:-1px;
     background:var(--lamp);
@@ -249,7 +256,15 @@
 
   /* -------------------------------------------------------- the drum lane */
 
-  .lane.is-drums { display:flex; flex-direction:column; gap:2px; padding:var(--sp-2) 0; background-image:none; }
+  .lane.is-drums {
+    /* The label column is 58 wide including its own padding (border-box), and
+       .drum-row puts --sp-2 between it and the cells. */
+    --lane-gutter:calc(58px + var(--sp-2));
+    --lane-tail:var(--sp-3);
+    display:flex; flex-direction:column; gap:2px;
+    padding:var(--sp-2) 0;
+    background-image:none;
+  }
   .drum-row { display:flex; align-items:center; gap:var(--sp-2); min-height:20px; }
   .drum-label {
     position:sticky;
@@ -318,7 +333,7 @@
     background:var(--tint-fill);
     box-shadow:inset 0 0 0 2px var(--tint);
   }
-  .genre-card[aria-checked=true] b { color:var(--tint); }
+  .genre-card[aria-checked=true] b { color:var(--tint-ink); }
 
   .tempo-row { display:flex; flex-direction:column; gap:var(--sp-1); padding:var(--sp-2) var(--sp-4) var(--sp-3); }
   .tempo-top { display:flex; align-items:baseline; justify-content:space-between; gap:var(--sp-3); }
@@ -424,7 +439,7 @@
     font-size:var(--fs-subhead);
     font-weight:590;
     color:#FFFFFF;
-    background:var(--red);
+    background:var(--red-fill);
   }
   .swipe-actions button.is-neutral { background:var(--fill-1); color:var(--label); }
   .swipe-body {
@@ -488,6 +503,12 @@
     text-align:center;
     overflow-y:auto;
   }
+  /* The mark is a bar of four with beat one accented, and src/mark.js draws
+     that accent by reading --rest: the lead stroke keeps full ink and the
+     other three sit back. Without the declaration every stroke prints at full
+     weight and the mark is four equal bars — which is not the word. */
+  .mark .mark-stroke { --rest:.34; }
+  .mark .mark-stroke[data-lead] { --rest:1; }
   .intro-mark { opacity:.9; }
   .intro-page h2 { font-size:var(--fs-title1); font-weight:700; letter-spacing:var(--tr-title); max-width:18ch; }
   .intro-page p { font-size:var(--fs-callout); line-height:1.45; color:var(--label-2); max-width:34ch; }
@@ -541,7 +562,9 @@
     font-size:clamp(96px, 34vw, 200px);
     font-variation-settings:'wght' 700;
     line-height:1;
-    color:var(--lamp);
+    /* --tint, not --lamp: a lit lamp is the same colour in both appearances,
+       which is right on a faceplate and 2.3:1 on a light scrim. */
+    color:var(--tint);
     font-variant-numeric:tabular-nums;
   }
   .countin small { font-size:var(--fs-footnote); font-weight:600; color:var(--label-2); }

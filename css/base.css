@@ -69,7 +69,6 @@
   /* The sprite is a definitions block, not a picture. */
   .sprite { position:absolute; width:0; height:0; overflow:hidden; }
   .i { width:24px; height:24px; fill:currentColor; flex:none; }
-  .i-sm { width:20px; height:20px; }
 
   /* ---------------------------------------------------------------- fonts */
 
@@ -100,29 +99,19 @@
 
   /* ----------------------------------------------------------------- type */
 
-  /* The eleven iOS text styles, as classes. Nothing in the app sets a
-     font-size of its own — if a thing looks wrong at one of these sizes the
-     answer is weight, colour or space. */
-  .t-large-title { font-size:var(--fs-large-title); line-height:1.06; font-weight:700; letter-spacing:var(--tr-large); }
-  .t-title1  { font-size:var(--fs-title1); line-height:1.14; font-weight:700; letter-spacing:var(--tr-title); }
-  .t-title2  { font-size:var(--fs-title2); line-height:1.18; font-weight:700; letter-spacing:var(--tr-title); }
-  .t-title3  { font-size:var(--fs-title3); line-height:1.25; font-weight:600; letter-spacing:var(--tr-snug); }
-  .t-headline{ font-size:var(--fs-headline); line-height:1.29; font-weight:600; letter-spacing:var(--tr-snug); }
-  .t-body    { font-size:var(--fs-body); line-height:1.41; font-weight:400; }
-  .t-callout { font-size:var(--fs-callout); line-height:1.31; font-weight:400; }
-  .t-subhead { font-size:var(--fs-subhead); line-height:1.33; font-weight:400; }
-  .t-footnote{ font-size:var(--fs-footnote); line-height:1.38; font-weight:400; }
-  .t-caption { font-size:var(--fs-caption); line-height:1.33; font-weight:400; }
-  .t-caption2{ font-size:var(--fs-caption2); line-height:1.18; font-weight:400; }
-
-  .c-label { color:var(--label); }
-  .c-2 { color:var(--label-2); }
-  .c-3 { color:var(--label-3); }
-  .c-tint { color:var(--tint); }
+  /* The type ramp is the --fs-* tokens in css/tokens.css and nothing else:
+     every component names the rung it wants directly. There were eleven
+     utility classes here mirroring them and no element in the app ever
+     carried one — a second way to say the same thing is a second thing to
+     keep in step. */
 
   /* Real text, in a screen full of chrome: readable, and selectable again. */
   .prose { color:var(--label-2); font-size:var(--fs-subhead); line-height:var(--lh-body); }
   .prose b, .prose strong { color:var(--label); font-weight:600; }
+  /* The reset takes every margin off <p>; prose is the one place that needs
+     them back, because the hardware tips are injected as two paragraphs and
+     otherwise run together. */
+  .prose p + p { margin-top:.65em; }
   .selectable { -webkit-user-select:text; user-select:text; -webkit-touch-callout:default; }
 
   /* The section header above an inset-grouped list. iOS sets it in footnote
@@ -154,7 +143,7 @@
      parse the declaration is invalid at computed-value time and resolves to
      `auto`, taking the earlier 100vh with it. On an engine with neither,
      src/ui.js measures innerHeight and writes the height inline. */
-  .app, .overlay-fill {
+  .app {
     position:fixed;
     top:0; left:0; right:0;
     height:100vh;
@@ -167,14 +156,7 @@
     background:var(--grouped-bg);
     overflow:hidden;
   }
-  @supports (height:100dvh) {
-    .app, .overlay-fill { height:100dvh; }
-  }
-  /* Every fixed overlay is sized from the same rule as the shell. Left to
-     `inset:0` they would size to the initial containing block, which in
-     browser Safari is taller than what you can see — and a sheet whose bottom
-     edge is under the toolbar cannot be dismissed by the button on it. */
-  .overlay-fill { display:block; }
+  @supports (height:100dvh) { .app { height:100dvh; } }
 
   /* The four screens are stacked, not swapped, so each keeps its scroll
      offset exactly as a tab controller's children do. Hidden ones are inert

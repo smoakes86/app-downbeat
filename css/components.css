@@ -197,6 +197,8 @@
     letter-spacing:var(--tr-data);
     color:var(--label-2);
     white-space:nowrap;
+    overflow:hidden;
+    text-overflow:ellipsis;
   }
 
   .dock-actions { flex:none; display:flex; align-items:center; gap:var(--sp-1); }
@@ -243,7 +245,6 @@
     margin:0 var(--gutter);
     overflow:hidden;
   }
-  .list-plain { background:none; border-radius:0; margin:0; }
 
   .row {
     position:relative;
@@ -283,6 +284,9 @@
 
   .row-text { flex:1 1 auto; min-width:0; display:flex; flex-direction:column; gap:1px; }
   .row-title { font-size:var(--fs-body); line-height:1.3; color:var(--label); }
+  /* Declared here rather than in the base layer, where it lost to .row-title
+     and the tempo-reset row was never actually tinted. */
+  .row-title.c-tint, .c-tint { color:var(--tint); }
   .row-sub {
     font-size:var(--fs-footnote); line-height:1.3; color:var(--label-2);
     overflow:hidden; text-overflow:ellipsis; white-space:nowrap;
@@ -294,8 +298,7 @@
     max-width:60%;
     overflow:hidden; text-overflow:ellipsis; white-space:nowrap;
   }
-  .row-chevron { flex:none; width:14px; height:14px; fill:var(--label-3); }
-  .row-danger, .row-danger .row-title { color:var(--red); }
+  .row-chevron { flex:none; width:14px; height:14px; fill:color-mix(in srgb, var(--label) 46%, transparent); }
 
   /* A row whose value is a native <select>. The control is stretched
      transparently over the right-hand side of the row: iOS then presents its
@@ -340,13 +343,16 @@
        control should look like — but 32pt is not a 44pt target, so the segment
        is drawn at its proper size and reaches the floor with a pseudo. */
     min-height:34px;
-    display:grid;
-    place-items:center;
+    /* Block, not grid: text-overflow needs the text in a block box, and in a
+       grid container it is an anonymous item the ellipsis cannot reach. The
+       line-height does the vertical centring instead. */
+    display:block;
+    line-height:34px;
     padding:0 4px;
     border-radius:7px;
+    text-align:center;
     font-size:var(--fs-footnote);
     font-weight:590;
-    line-height:1.1;
     letter-spacing:-.005em;
     color:var(--label);
     white-space:nowrap;
@@ -391,7 +397,7 @@
   /* The one exception to the 32pt rule: this is the control the app is
      operated with, tapped more than everything else put together, so it is
      drawn at full target height rather than reaching it with a pseudo. */
-  .seg-parts button { font-size:var(--fs-caption); min-height:44px; }
+  .seg-parts button { font-size:var(--fs-caption); min-height:44px; line-height:44px; }
 
   /* ============================================================== switch */
 
@@ -474,22 +480,15 @@
   .btn-filled { background:var(--tint); color:var(--on-tint-fill); }
   .btn-filled:active { opacity:1; transform:scale(.985); filter:brightness(.9); }
 
-  /* Tinted — a secondary action that still needs a housing. */
-  .btn-tinted { background:var(--tint-fill); color:var(--tint); }
-  .btn-tinted:active { opacity:1; background:color-mix(in srgb, var(--tint) 26%, transparent); }
 
   /* Grey — a neutral action, where tint would over-claim. */
   .btn-grey { background:var(--fill-3); color:var(--label); }
   .btn-grey:active { opacity:1; background:var(--fill-2); }
 
-  .btn-danger { color:var(--red); }
   .btn-lg { min-height:50px; font-size:var(--fs-headline); border-radius:var(--r-lg); }
   .btn-block { width:100%; }
   .btn[disabled], .btn[aria-disabled=true] { opacity:.35; pointer-events:none; }
 
-  /* Two or three neutral actions side by side. */
-  .btn-row { display:flex; gap:var(--sp-2); padding:0 var(--gutter); }
-  .btn-row > .btn { flex:1 1 0; min-width:0; padding:0 var(--sp-2); }
 
   /* ============================================================== sheets */
 
@@ -588,6 +587,7 @@
     transition:transform var(--t-sheet) var(--e-ios);
   }
   .sheet-host.is-open .action-sheet { transform:translateY(0); }
+  .action-sheet.is-dragging { transition:none; }
 
   .action-group {
     background:var(--grouped-cell);
@@ -716,37 +716,6 @@
     transition:opacity var(--t-fade) var(--e-ios), transform var(--t-fade) var(--e-ios);
   }
   .toast.on { opacity:1; transform:translate(-50%, 0) scale(1); }
-
-  /* ========================================================= disclosure */
-
-  .disclosure { margin:0 var(--gutter); }
-  .disclosure > summary {
-    display:flex;
-    align-items:center;
-    gap:var(--sp-3);
-    min-height:var(--tap);
-    padding:11px var(--sp-4);
-    background:var(--grouped-cell);
-    border-radius:var(--r-sm);
-    font-size:var(--fs-body);
-    color:var(--label);
-    cursor:pointer;
-    list-style:none;
-  }
-  .disclosure > summary::-webkit-details-marker { display:none; }
-  .disclosure > summary:active { background:var(--fill-4); }
-  .disclosure[open] > summary { border-radius:var(--r-sm) var(--r-sm) 0 0; }
-  .disclosure > summary .row-chevron {
-    margin-left:auto;
-    transition:transform var(--t-open) var(--e-ios);
-  }
-  .disclosure[open] > summary .row-chevron { transform:rotate(90deg); }
-  .disclosure-body {
-    background:var(--grouped-cell);
-    border-radius:0 0 var(--r-sm) var(--r-sm);
-    padding:var(--sp-1) var(--sp-4) var(--sp-4);
-    box-shadow:inset 0 var(--hairline) 0 var(--separator);
-  }
 
   /* ======================================================== empty state */
 

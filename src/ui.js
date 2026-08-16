@@ -188,16 +188,20 @@
     if (Motion) Motion.tempo(song.bpm);
 
     arrangement = global.Arrange ? global.Arrange.plan(song) : null;
+    activeSection = null;
+
+    /* Before anything reads it. A song with no countermelody cannot be viewed
+       on the Counter part, and everything below — the mutes solo applies, the
+       colour the screen takes, the lane, the run — is derived from `part`. */
+    if (part === 'counter' && !(song.counter && song.counter.length)) part = 'melody';
+    app.dataset.part = part;
+
     /* The new song has its own sections, so whatever was soloed out by the old
        one is meaningless — but solo is a property of the player, not of the
        song, and it has to survive. applySolo() re-derives every mute from
        scratch: with no section active it is exactly a reset, and with solo on
        it puts solo back rather than quietly dropping it. */
-    activeSection = null;
     applySolo();
-
-    /* A song with no countermelody cannot be viewed on the Counter part. */
-    if (part === 'counter' && !(song.counter && song.counter.length)) part = 'melody';
 
     renderSong();
     saveDraft();
@@ -352,6 +356,9 @@
 
   function setPart(id) {
     if (!PARTS.some((p) => p.id === id)) return;
+    /* The same guard stepPart applies. Landing on Counter with no second line
+       draws an empty lane, an empty run and a faceplate with nothing lit. */
+    if (id === 'counter' && !(song.counter && song.counter.length)) return;
     part = id;
     app.dataset.part = id;
     if (partsControl) partsControl.select(id);
@@ -885,6 +892,19 @@
 
   function renderGenres() {
     const rail = $('#genreRail');
+    /* Rebuilding the rail resets its scroll, and it is rebuilt on every
+       regenerate — which is every field on the Song screen. The cards never
+       change, so only the selection is written unless the rail is empty. */
+    if (rail.children.length === G.order.length) {
+      Array.from(rail.children).forEach((card) => {
+        const on = card.dataset.genre === draft.genre;
+        card.setAttribute('aria-checked', on ? 'true' : 'false');
+        card.tabIndex = on ? 0 : -1;
+      });
+      $('#genreBlurb').textContent = G.GENRES[draft.genre].blurb || '';
+      revealGenre(false);
+      return;
+    }
     rail.innerHTML = G.order.map((id) => {
       const genre = G.GENRES[id];
       return `<button type="button" class="genre-card" role="radio" data-genre="${id}" ` +
@@ -1077,6 +1097,10 @@
         `<span class="map-sec-bars">${s.bars} bars</span>` +
         `<span class="map-tracks">${tracks}</span></button>`;
     }).join('');
+
+    /* A new song has no auditioned section, so the control that puts one back
+       must not survive the render that removed it. */
+    $('#arrangeReset').hidden = !activeSection;
 
     $('#arrangeKey').innerHTML = arrangement.tracks.map((t) =>
       `<span><i style="--tk:var(--t-${t.id})"></i>${escapeHtml(t.label)}</span>`).join('');
@@ -1705,6 +1729,9 @@
        in particular is focused, which is the state you play in. */
     if (target && target !== doc.body && target.closest &&
         target.closest('button, a[href], summary, [role="switch"], [contenteditable]')) return;
+    /* And they belong to the app, not to whatever is covering it. Escape is
+       the exception: it is how you get the cover off. */
+    if (event.key !== 'Escape' && (UI.isOpen() || !$('#intro').hidden || !$('#countIn').hidden)) return;
     if (event.metaKey || event.ctrlKey) {
       if (event.key === 'z' || event.key === 'Z') { event.preventDefault(); undo(); }
       return;

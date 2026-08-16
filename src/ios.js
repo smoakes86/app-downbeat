@@ -406,8 +406,10 @@
       function finish(value) {
         if (settled) return;
         settled = true;
+        /* The class is removed by onClose, after the exit. Stripping it here
+           took the centring away mid-animation and dropped the alert to the
+           bottom of the screen on its way out. */
         controller.close();
-        host.classList.remove('is-alert');
         resolve(value);
       }
 

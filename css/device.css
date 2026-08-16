@@ -405,13 +405,28 @@
 
   .seq-chip:active { transform:scale(.95); background:var(--fill-3); }
 
+  /* A note with no pad under it. It keeps its full contrast because it is the
+     one chip in the run that needs acting on, and the dashed edge says there
+     is nothing there to press. Declared before the lit state, not after, so
+     the lit state wins if a chip is ever both. */
+  .seq-chip.is-off {
+    background:none;
+    box-shadow:none;
+    outline:1px dashed var(--label-3);
+    outline-offset:-1px;
+  }
+  .seq-chip.is-off b { color:var(--label-2); }
+
   /* Lit by the transport, or linked from the pad you are touching. Both wear
      the part colour, because they are the same fact arriving from two
-     directions. */
+     directions. The bloom is written here rather than pulled from a token:
+     a custom property's var()s resolve on the element that DECLARES it, and
+     the one this used to read was declared on a pseudo-element while the
+     shadow was applied to its parent — so it computed to `none`, every time,
+     and the chips had never once bloomed. */
   .seq-chip.now, .seq-chord.now {
-    --lit:1;
     background:var(--part);
-    box-shadow:var(--bloom-part, none);
+    box-shadow:0 0 14px color-mix(in srgb, var(--part) 62%, transparent);
   }
   .seq-chip.now b, .seq-chip.now small, .seq-chip.now .chip-oct,
   .seq-chord.now .seq-chord-name, .seq-chord.now .seq-chord-keys { color:var(--on-part); }
@@ -420,17 +435,6 @@
     box-shadow:inset 0 0 0 2px var(--part);
     background:var(--grouped-cell-2);
   }
-
-  /* A note with no pad under it. It keeps its full contrast because it is the
-     one chip in the run that needs acting on, and the dashed edge says there
-     is nothing there to press. */
-  .seq-chip.is-off {
-    background:none;
-    box-shadow:none;
-    outline:1px dashed var(--label-3);
-    outline-offset:-1px;
-  }
-  .seq-chip.is-off b { color:var(--label-2); }
 
   /* Chords are read as stacks, so their chips are wider and print the symbol
      above the keys that make it. */

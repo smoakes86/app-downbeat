@@ -41,13 +41,17 @@
       --hairline:1px;
     }
     .seq-chip, .seq-chord, .genre-card { box-shadow:inset 0 0 0 1px var(--separator); }
-    .btn-tinted { box-shadow:inset 0 0 0 1px var(--tint); }
+    .btn-grey { box-shadow:inset 0 0 0 1px var(--separator); }
   }
 
   /* Focus is for hardware keyboards, Full Keyboard Access and Switch Control,
      all of which exist on iOS. One ring, and it never appears for a touch. */
   :focus { outline:none; }
   :focus-visible { outline:none; box-shadow:var(--focus-ring); z-index:2; position:relative; }
+  /* The picker <select> is stretched transparently over its row, so a blanket
+     position:relative here would drop it back into flow and unhook the row.
+     Its ring is drawn on the row instead — see .row-select in components. */
+  .row-select select:focus-visible { position:absolute; box-shadow:none; }
   .dev-pad:focus-visible, .dev-wkey:focus-visible, .dev-bkey:focus-visible { box-shadow:none; }
 
   /* A skip link past the run, which is sixty-odd tab stops between the part
