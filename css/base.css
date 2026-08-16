@@ -150,6 +150,13 @@
     display:grid;
     /* nav · screens · the current screen's action bar · transport · tabs */
     grid-template-rows:auto minmax(0, 1fr) auto auto auto;
+    /* One column, and it must never be wider than the phone. A grid item's
+       automatic minimum size is its min-content size, and the song meta line
+       in the nav bar is a nowrap string — so at 320pt (any iPhone in Display
+       Zoom) that one line was sizing the track to 368 and taking the last tab,
+       the loop button and the right edge of every screen off the display with
+       it. minmax(0, …) is what stops a track growing to fit its contents. */
+    grid-template-columns:minmax(0, 1fr);
     /* Landscape on a notched phone: the camera housing eats one side. */
     padding-left:var(--safe-l);
     padding-right:var(--safe-r);

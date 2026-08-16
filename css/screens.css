@@ -26,10 +26,14 @@
     flex:none;
     font-size:var(--fs-footnote);
     font-weight:510;
+    /* Exactly the title's line box, so a header whose action comes and going —
+       "Every part on" only exists while a part is off — does not change height
+       under it and shove the whole screen down by ten points. The 44pt target
+       is the pseudo's job, which is why the padding can go. */
+    line-height:1.3;
     color:var(--tint);
-    padding:var(--sp-1) 0;
   }
-  .block-action::before { content:''; position:absolute; inset:-12px -8px; }
+  .block-action::before { content:''; position:absolute; inset:-14px -8px; }
   .block-action:active { opacity:.4; }
   .block-note { flex:none; font-size:var(--fs-caption); color:var(--label-2); }
 
@@ -41,6 +45,87 @@
     background:var(--grouped-cell);
     border-radius:var(--r-sm);
   }
+
+  /* ============================================================ the mix
+
+     Five toggles on the same five columns as the part switcher above them, so
+     each one sits under the part it silences. Deliberately not a segmented
+     control: that shape means "one of these", and every combination here is
+     legal, including none of them.
+
+     "Every part on" is the block's trailing action rather than a sixth thing
+     in the row. In the row it would have taken a fifth of the width off five
+     equal columns the moment it appeared, and the labels with it. */
+  .mix-wrap { padding:0 var(--gutter); }
+  .mix {
+    display:grid;
+    grid-auto-flow:column;
+    grid-auto-columns:1fr;
+    gap:3px;
+  }
+
+  /* The state indicator sits UNDER the word rather than beside it. Beside it,
+     the eight pixels of the dot plus its gap were the difference between
+     "Counter" fitting in a fifth of the row and not, at 320pt — and the five
+     columns have to stay equal or the chips stop lining up with the parts they
+     answer to. Under it, the label gets the whole column. */
+  .mix-chip {
+    position:relative;
+    display:flex;
+    flex-direction:column;
+    align-items:center;
+    justify-content:center;
+    gap:3px;
+    min-height:34px;
+    padding:0 2px;
+    border-radius:8px;
+    background:var(--fill-4);
+    font-size:var(--fs-caption2);
+    font-weight:590;
+    line-height:1.1;
+    color:var(--label-2);
+    overflow:hidden;
+    transition:background-color var(--t-lamp) var(--e-ios),
+               color var(--t-lamp) var(--e-ios);
+  }
+  /* Its own block, so that where a word still will not fit it ellipses the way
+     the segmented control above it does rather than being cut off mid-letter.
+     text-overflow cannot reach a bare text node in a flex container. */
+  .mix-name {
+    max-width:100%;
+    white-space:nowrap;
+    overflow:hidden;
+    text-overflow:ellipsis;
+  }
+  /* 34 is the control; the pseudo takes the target to 44. */
+  .mix-chip::before { content:''; position:absolute; inset:-5px 0; }
+  .mix-chip:active { opacity:.5; }
+
+  /* On and off differ in LENGTH as well as in colour — a bar against a stub —
+     because the five colours are the one thing here that cannot also carry a
+     sixth meaning. It reads as a fader, which is what it is. */
+  .mix-bar {
+    flex:none;
+    width:7px; height:3px;
+    border-radius:var(--r-pill);
+    background:var(--label-3);
+    transition:width var(--t-lamp) var(--e-ios), background-color var(--t-lamp) var(--e-ios);
+  }
+  .mix-chip[aria-checked=true] {
+    background:color-mix(in srgb, var(--tint-part) 17%, transparent);
+    color:var(--tint-ink);
+  }
+  .mix-chip[aria-checked=true] .mix-bar {
+    width:20px;
+    background:var(--tint-part);
+  }
+  /* Nothing to switch: this sketch has no countermelody. It loses the housing
+     and the indicator rather than being greyed out — an empty slot, not a
+     switch that happens to be off — and the label keeps a colour you can read.
+     Dimming the word instead would have put an 11px label at 2.6:1, and the
+     one thing this chip has to do is tell you why it is not doing anything. */
+  .mix-chip[data-empty=true] { background:transparent; }
+  .mix-chip[data-empty=true] .mix-bar { display:none; }
 
   /* ============================================================ the rig */
 
@@ -585,7 +670,7 @@
       gap:var(--sp-5) var(--sp-4);
       max-width:1100px;
     }
-    .screen[data-screen=play] .parts-wrap { grid-column:1 / -1; }
+    .screen[data-screen=play] .parts-block { grid-column:1 / -1; }
     .screen[data-screen=play] .rig-block { grid-row:2 / span 3; }
   }
 
