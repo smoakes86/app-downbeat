@@ -766,6 +766,52 @@ await check('the beat is reproducible from the seed', async () => {
   if (!same) throw new Error('the same seed gave two different beats');
 });
 
+/* The kit listening to the band, rather than four layers that happen to start
+   at the same moment. */
+await check('the kit marks the chord changes and locks to the bass', async () => {
+  const out = await page.evaluate(() => {
+    const avg = (a) => (a.length ? a.reduce((x, y) => x + y, 0) / a.length : 0);
+    const bad = [];
+    let locked = 0;
+    let kicks = 0;
+    window.Genres.order.forEach((g) => {
+      if (g === 'ambient') return;
+      const onChange = [], offChange = [];
+      let holes = 0, marked = 0;
+      for (let i = 0; i < 12; i++) {
+        const s = window.Compose.compose({ genre: g, bars: 4 });
+        const changes = new Set(s.spans.map((x) => x.start));
+        s.drums.forEach((d) => {
+          if (d.fill) return;
+          (changes.has(d.step) ? onChange : offChange).push(d.velocity);
+          if (d.instrument === 'kick') { kicks++; if (d.locked) locked++; }
+        });
+        /* A chord change on a bar line must have a kick under it: either the
+           pattern already had one, or the kit put one into the hole. */
+        /* Only where the beat has a kick to put there: filling a hole is one
+           thing, inventing a drum part for a genre that has none is another. */
+        if (s.beat.kick) {
+          s.spans.forEach((span) => {
+            if (span.start % 16) return;
+            holes++;
+            if (s.drums.some((d) => d.instrument === 'kick' && d.step === span.start)) marked++;
+          });
+        }
+      }
+      if (marked < holes) bad.push(`${g}: ${holes - marked} bar-line changes with no kick under them`);
+      if (onChange.length && offChange.length && avg(onChange) <= avg(offChange)) {
+        bad.push(`${g}: chord changes are played no harder than anything else`);
+      }
+    });
+    if (!locked) bad.push('no kick anywhere lands with the bass');
+    return { bad: bad.slice(0, 4), locked, kicks };
+  });
+  if (out.bad.length) throw new Error(out.bad.join('; '));
+  if (out.locked < out.kicks * 0.2) {
+    throw new Error(`only ${out.locked} of ${out.kicks} kicks lock to the bass`);
+  }
+});
+
 /* ---------------------------------------------------------------- fills */
 
 await check('a genre has more than one fill in it', async () => {
@@ -776,8 +822,12 @@ await check('a genre has more than one fill in it', async () => {
       if (wanted < 2) return;
       const shapes = new Set();
       let filled = 0;
-      for (let i = 0; i < 40; i++) {
-        const s = window.Compose.compose({ genre: g, bars: 4 });
+      /* Seeded rather than sampled. A fill is a weighted draw, so an
+         unseeded run of this is a dice game the check can lose through no
+         fault of the code — and a check that fails one time in fifty is
+         worse than no check, because it teaches you to re-run it. */
+      for (let i = 0; i < 60; i++) {
+        const s = window.Compose.compose({ genre: g, bars: 4, harmonySeed: i * 7919 + 13, melodySeed: i * 104729 + 7 });
         const f = s.drums.filter((d) => d.fill);
         /* Signed by where the hits fall as well as by which voices play them:
            lo-fi's two fills are both snare-only and differ in their rhythm,
@@ -971,6 +1021,10 @@ await check('the arrangement moves on to the next section', async () => {
     }, 120);
   }), first);
   if (!moved) throw new Error(`still in ${first} after 25s`);
+  /* The engine crosses the boundary on the audio clock and the map is
+     repainted on the next animation frame, so reading the DOM in the same
+     tick as the detection is a race the check loses at the seam. */
+  await page.evaluate(() => new Promise((done) => requestAnimationFrame(() => requestAnimationFrame(done))));
   const marked = await page.evaluate(() => {
     const el = document.querySelector('#arrangeMap .map-sec.now');
     return el ? el.dataset.section : null;

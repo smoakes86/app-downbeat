@@ -1406,6 +1406,63 @@
       }
     });
 
+    /* ------------------------------------------------- hearing the band
+
+       Until here the kit has been deaf. It knows the genre, the energy and
+       its own pattern, and nothing whatever about the music it is playing
+       under — which is how you get four layers that start together rather
+       than a rhythm section.
+
+       Three things it can hear, all of them cheap and none of them rewriting
+       the pattern. Rewriting is the temptation and it is wrong: the beats are
+       hand-written and idiomatic, and a generator that second-guesses them
+       ends up with neither the pattern nor an idea of its own. */
+    const spans = ctx.spans || [];
+    const bassLine = ctx.bass || [];
+
+    if (spans.length) {
+      /* A drummer marks the chord change. Anything already landing on one
+         gets played a little harder — the change is a fact about the bar and
+         the kit should sound like it knows. */
+      const changes = new Set(spans.map((s) => s.start));
+      events.forEach((e) => {
+        if (changes.has(e.step)) e.velocity = clamp(e.velocity * 1.1, 0.14, 1);
+      });
+
+      /* And where a change lands on a bar line with no kick anywhere near it,
+         the kit puts one there. Only into a hole: a pattern that already has
+         a kick on the change is already doing this, and four-on-the-floor
+         never has a hole to fill.
+
+         Only if the beat has a kick at all, which is the difference between
+         filling a hole and inventing a drum part. Ambient has no kit and is
+         not asking for one. */
+      const kicks = events.filter((e) => e.instrument === 'kick');
+      if (patterns.kick) spans.forEach((span) => {
+        if (span.start % STEPS_PER_BAR !== 0) return;
+        const near = kicks.some((k) => Math.abs(k.step - span.start) <= 1);
+        if (near) return;
+        events.push({
+          step: span.start, instrument: 'kick', ghost: false,
+          nudge: nudgeFor('kick'),
+          velocity: clamp(0.78 * energyMod.velocity * arcAt(span.start, totalSteps, climax), 0.14, 1)
+        });
+      });
+    }
+
+    /* Where the kick and the bass land together they should sound like they
+       meant to. This is the whole difference between a rhythm section and two
+       parts that happen to be in the same song. */
+    if (bassLine.length) {
+      const onsets = new Set(bassLine.map((n) => Math.round(n.start)));
+      events.forEach((e) => {
+        if (e.instrument === 'kick' && onsets.has(Math.round(e.step))) {
+          e.velocity = clamp(e.velocity * 1.08, 0.14, 1);
+          e.locked = true;
+        }
+      });
+    }
+
     // Trap-style hat rolls: subdivide a few of the existing hits.
     if (genre.hatRolls) {
       const hats = events.filter((e) => e.instrument === 'hat');
@@ -1587,6 +1644,9 @@
     const beat = pickBeat(genre, drumRng);
     const drums = buildDrums({
       genre, totalBars, rng: drumRng, energy, beat,
+      /* What the rest of the band is doing. The bass is built above this
+         line for exactly that reason. */
+      spans, bass,
       /* Where the tune peaks, as a fraction of the loop, so the kit leans in
          at the same moment the melody does. */
       climax: melody.climaxStep === undefined
