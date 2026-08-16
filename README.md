@@ -232,11 +232,45 @@ effects exist only inside a `(hover: hover)` query, and the preview chain is
 bound there too, because WebKit synthesises a `mouseenter` on tap and never
 sends the matching `mouseleave`.
 
+Every label clears WCAG AA in both appearances, measured rather than eyeballed
+— including the ink on all five track colours where the segmented thumb paints
+them. Colour never carries meaning alone: the arrangement map states which
+parts play in each section, and the five track colours are always
+text-labelled.
+
 Reduced Motion takes the travel and leaves the light: a pad lighting up is
 information, and deleting it would delete the feature. Increased Contrast firms
-up every hairline and secondary label. Colour never carries meaning alone. The
-part switcher, the device switcher and the tab bar are proper radio groups and
-tab lists with roving tab indices, and modals trap focus and restore it.
+up every hairline and secondary label without overwriting a selection ring.
+
+The whole app works from a keyboard. The tab bar, the part switcher, the device
+switcher and the genre rail are proper tab lists and radio groups with roving
+tab indices *and* arrow keys — the roving index on its own is half a pattern
+and leaves everything but the current item unreachable. A focused control keeps
+its own keys, so Space presses the button you are on and drives the transport
+only when nothing is focused. Re-rendering a control the user just operated
+finds it again afterwards rather than dropping focus to the document. Modals
+take focus, trap it, make the app inert and give focus back.
+
+## How it is checked
+
+Five scripts drive the built app in a real browser at iPhone SE, 15, 15 Pro
+Max, landscape and iPad, and they are how most of the bugs in this rewrite were
+found:
+
+- **function** — taps through every control on every screen and asserts the
+  result: the playhead moves and sits over the grid it marks, chips and lane
+  notes light under playback, solo survives a regenerate, a share link boots,
+  a draft survives a reload, swipe-to-delete opens and confirms.
+- **layout** — every tab at every size, with the safe-area insets an iPhone
+  actually reports forced in, asserting no horizontal overflow, no page offset,
+  no control under the notch or the home indicator, and nothing below 44pt.
+- **contrast** — composites every text node's colour onto its real background
+  and checks the ratio against the threshold for that size and weight.
+- **keyboard** — drives the entire app with no pointer at all.
+- **axe-core** — over every screen and every modal, in both appearances.
+
+Plus a sweep of all fourteen genres × four parts × two devices, twelve-bar
+songs, a 320px screen and a sketch renamed to a hundred characters of markup.
 
 ## Layout
 
