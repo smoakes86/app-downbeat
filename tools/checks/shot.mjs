@@ -74,6 +74,10 @@ for (const p of PROFILES) {
         .forEach((el) => {
           const r = el.getBoundingClientRect();
           if (r.width === 0 || r.height === 0) return;
+          // Clipped to nothing until focused — the skip link. It is measured
+          // when it is visible, which is the only time it is a target.
+          const cs0 = getComputedStyle(el);
+          if (cs0.clipPath && cs0.clipPath !== 'none') return;
           const before = getComputedStyle(el, '::before');
           let h = r.height, w = r.width;
           if (before.content !== 'none' && before.position === 'absolute') {
