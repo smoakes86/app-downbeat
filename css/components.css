@@ -1,0 +1,785 @@
+/* Downbeat — the control set.
+
+   Everything here is a platform control rather than an invention: a navigation
+   bar, a tab bar, an inset-grouped table view, a segmented control, a switch, a
+   slider, the four button roles, a modal sheet with a grabber, an action sheet.
+   Building the app out of controls people already know how to use is most of
+   what "feels native" means, and it is cheaper than any amount of styling.
+
+   Two rules run through all of it.
+
+   FORTY-FOUR POINTS. Every hit target is at least 44x44, and where a control
+   looks smaller than that it grows an invisible ::before to reach it rather
+   than being drawn larger than it should be.
+
+   NO HOVER CARRIES MEANING. A finger has no hover state. Every affordance is
+   in the resting appearance and every response is on :active; hover effects
+   exist only inside a (hover:hover) query, as a courtesy to the trackpad. */
+@layer components {
+
+  /* ============================================================ nav bar */
+
+  /* The bar sits above the status bar rather than beside it —
+     apple-mobile-web-app-status-bar-style is black-translucent, so the layout
+     genuinely extends under the clock and has to pay it back.
+
+     Opaque, not translucent, and that is not a compromise. A blurred bar
+     exists so content can scroll *under* it; these four are rows of the shell
+     grid, so nothing ever passes behind them. Three permanent backdrop-filter
+     surfaces compositing over a 60fps animation loop is a real cost for an
+     effect with nothing to show. The separation is carried by the colour step
+     and the hairline instead. Blur is kept for the two surfaces that genuinely
+     float over content: the action sheet and the alert. */
+  .nav {
+    position:relative;
+    z-index:30;
+    padding-top:var(--safe-t);
+    background:var(--chrome-solid);
+  }
+  /* apple-mobile-web-app-status-bar-style has three values and none of them
+     follows the appearance: black-translucent draws the clock, the signal bars
+     and the battery in WHITE, always. That is right over the dark room and
+     invisible over the light one, and there is no second meta tag to switch to
+     — iOS reads it once, at launch.
+
+     So the light appearance gives the status bar its own dark strip to sit on.
+     It is a deliberate band rather than an accident: the alternative is either
+     losing the under-the-clock layout that makes an installed app look like an
+     app, or shipping a light theme whose clock cannot be read. */
+  body.light .nav::before {
+    content:'';
+    position:absolute;
+    left:0; right:0; top:0;
+    height:var(--safe-t);
+    background:#26241F;
+  }
+
+  .nav-inner {
+    min-height:var(--nav-h);
+    display:flex;
+    align-items:center;
+    gap:var(--sp-2);
+    padding:var(--sp-1) var(--sp-3) var(--sp-2);
+  }
+
+  /* The song, which is the one thing the title bar is for. Archivo rather than
+     SF: it is the app's own voice and the only place the brand face appears in
+     the chrome. It truncates rather than wraps — a two-line nav bar that
+     changes height on every generate makes the whole screen jump. */
+  .nav-title { flex:1 1 auto; min-width:0; }
+  .nav-title .nav-name {
+    font-family:var(--display);
+    font-size:var(--fs-title3);
+    font-variation-settings:'wght' 680;
+    font-weight:680;
+    line-height:1.15;
+    letter-spacing:var(--tr-snug);
+    color:var(--label);
+    white-space:nowrap;
+    overflow:hidden;
+    text-overflow:ellipsis;
+  }
+  .nav-meta {
+    display:block;
+    font-size:var(--fs-caption);
+    line-height:1.3;
+    color:var(--label-2);
+    white-space:nowrap;
+    overflow:hidden;
+    text-overflow:ellipsis;
+  }
+
+  /* A bar-button item. Tint-coloured, no housing — iOS bar buttons are bare
+     glyphs and this is the one place in the app where that is right. */
+  .nav-btn {
+    flex:none;
+    width:var(--tap); height:var(--tap);
+    display:grid; place-items:center;
+    color:var(--tint);
+    border-radius:var(--r-pill);
+    transition:opacity var(--t-lamp) var(--e-ios), background-color var(--t-lamp) var(--e-ios);
+  }
+  .nav-btn:active { opacity:.4; }
+  .nav-btn[aria-pressed=true] { background:var(--tint-fill); }
+
+  /* The hairline under the bar only exists once content has scrolled beneath
+     it, which is exactly how a UINavigationBar behaves. */
+  .nav::after {
+    content:'';
+    position:absolute; left:0; right:0; bottom:0; height:var(--hairline);
+    background:var(--separator);
+    opacity:0;
+    transition:opacity var(--t-fade) var(--e-ios);
+  }
+  .app.is-scrolled .nav::after { opacity:1; }
+
+  /* ============================================================ tab bar */
+
+  .tabbar {
+    position:relative;
+    z-index:30;
+    padding-bottom:var(--safe-b);
+    background:var(--chrome-solid);
+    box-shadow:inset 0 var(--hairline) 0 var(--separator);
+  }
+  .tabbar-inner {
+    display:grid;
+    grid-auto-flow:column;
+    grid-auto-columns:1fr;
+  }
+
+  .tab {
+    min-height:max(44px, var(--tab-h));
+    display:flex;
+    flex-direction:column;
+    align-items:center;
+    justify-content:center;
+    gap:2px;
+    padding:var(--sp-1) 2px;
+    color:var(--label-2);
+    transition:color var(--t-lamp) var(--e-ios);
+  }
+  .tab .i { width:26px; height:26px; }
+  .tab span {
+    font-size:0.625rem;   /* 10 — the tab-bar rung, below caption2 */
+    line-height:1.1;
+    font-weight:500;
+    letter-spacing:.005em;
+  }
+  .tab[aria-selected=true] { color:var(--tint); }
+  .tab:active { opacity:.55; }
+
+  /* ========================================================== transport */
+
+  /* The mini-player pattern: a compact, always-present strip between the
+     content and the tab bar. A performance tool has to be able to stop
+     wherever you are, so this never leaves the screen and never scrolls. */
+  .dock {
+    position:relative;
+    z-index:29;
+    min-height:var(--dock-h);
+    display:flex;
+    align-items:center;
+    gap:var(--sp-2);
+    padding:var(--sp-2) var(--sp-3);
+    background:var(--chrome-solid);
+    box-shadow:inset 0 var(--hairline) 0 var(--separator);
+  }
+
+  /* The one filled, coloured, unmissable control in the app. Amber, because
+     that is the colour of a lit transport on the hardware it drives. */
+  .dock-play {
+    flex:none;
+    width:46px; height:46px;
+    display:grid; place-items:center;
+    border-radius:var(--r-pill);
+    background:var(--lamp);
+    color:var(--on-lamp);
+    box-shadow:0 0 0 1px color-mix(in srgb, var(--lamp) 40%, transparent),
+               0 3px 14px color-mix(in srgb, var(--lamp) 32%, transparent);
+    transition:transform var(--t-click) var(--e-ios), filter var(--t-lamp) var(--e-ios);
+  }
+  .dock-play .i { width:26px; height:26px; }
+  .dock-play:active { transform:scale(.92); filter:brightness(.9); }
+
+  .dock-read { flex:1 1 auto; min-width:0; display:flex; flex-direction:column; gap:1px; }
+  .dock-part {
+    font-size:var(--fs-subhead);
+    font-weight:600;
+    line-height:1.2;
+    color:var(--part-ink);
+    white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
+    transition:color var(--t-throw) var(--e-ios);
+  }
+  .dock-pos {
+    font-family:var(--mono);
+    font-size:var(--fd-xs);
+    font-variation-settings:'wght' 500;
+    line-height:1.2;
+    letter-spacing:var(--tr-data);
+    color:var(--label-2);
+    white-space:nowrap;
+    overflow:hidden;
+    text-overflow:ellipsis;
+  }
+
+  .dock-actions { flex:none; display:flex; align-items:center; gap:var(--sp-1); }
+
+  /* A round icon toggle: off is a quiet fill, on is the tint. */
+  .icon-toggle {
+    width:var(--tap); height:var(--tap);
+    display:grid; place-items:center;
+    border-radius:var(--r-pill);
+    color:var(--label-2);
+    transition:color var(--t-lamp) var(--e-ios), background-color var(--t-lamp) var(--e-ios);
+  }
+  .icon-toggle .i { width:22px; height:22px; }
+  .icon-toggle:active { opacity:.5; }
+  .icon-toggle[aria-pressed=true] { background:var(--tint-fill); color:var(--tint); }
+
+  /* The bar counter under the transport: one segment per bar of the loop. It
+     is the only place in the chrome that shows musical position at a glance. */
+  .dock-bars {
+    position:absolute; left:0; right:0; top:0;
+    height:2px;
+    display:flex; gap:2px;
+    padding:0 var(--sp-3);
+    opacity:0;
+    transition:opacity var(--t-fade) var(--e-ios);
+  }
+  body.is-live .dock-bars { opacity:1; }
+  .dock-bars i {
+    flex:1 1 0;
+    background:var(--fill-3);
+    border-radius:1px;
+    transition:background-color var(--t-lamp) var(--e-ios);
+  }
+  .dock-bars i.on { background:var(--part); }
+
+  /* ==================================================== grouped lists */
+
+  /* UITableView, inset-grouped style. The rounded card is the cell background;
+     separators are inset from the left so they start where the text does, and
+     the last row has none. */
+  .list {
+    background:var(--grouped-cell);
+    border-radius:var(--r-sm);
+    margin:0 var(--gutter);
+    overflow:hidden;
+  }
+
+  .row {
+    position:relative;
+    display:flex;
+    align-items:center;
+    gap:var(--sp-3);
+    width:100%;
+    min-height:var(--tap);
+    padding:11px var(--sp-4);
+    text-align:left;
+    color:var(--label);
+    font-size:var(--fs-body);
+    line-height:1.3;
+  }
+  .row + .row::before {
+    content:'';
+    position:absolute; left:var(--sp-4); right:0; top:0;
+    height:var(--hairline);
+    background:var(--separator);
+  }
+  /* A full-bleed separator where the row has a leading glyph the text should
+     clear instead. */
+  .row.has-icon + .row.has-icon::before { left:calc(var(--sp-4) + 29px + var(--sp-3)); }
+
+  button.row, a.row { transition:background-color var(--t-lamp) var(--e-ios); }
+  button.row:active, a.row:active { background:var(--fill-4); }
+
+  .row-icon {
+    flex:none;
+    width:29px; height:29px;
+    display:grid; place-items:center;
+    border-radius:7px;
+    background:var(--fill-3);
+    color:var(--label);
+  }
+  .row-icon .i { width:18px; height:18px; }
+
+  .row-text { flex:1 1 auto; min-width:0; display:flex; flex-direction:column; gap:1px; }
+  .row-title { font-size:var(--fs-body); line-height:1.3; color:var(--label); }
+  /* Declared here rather than in the base layer, where it lost to .row-title
+     and the tempo-reset row was never actually tinted. */
+  .row-title.c-tint, .c-tint { color:var(--tint); }
+  .row-sub {
+    font-size:var(--fs-footnote); line-height:1.3; color:var(--label-2);
+    overflow:hidden; text-overflow:ellipsis; white-space:nowrap;
+  }
+  .row-value {
+    flex:none;
+    font-size:var(--fs-body);
+    color:var(--label-2);
+    max-width:60%;
+    overflow:hidden; text-overflow:ellipsis; white-space:nowrap;
+  }
+  .row-chevron { flex:none; width:14px; height:14px; fill:color-mix(in srgb, var(--label) 46%, transparent); }
+
+  /* A row whose value is a native <select>. The control is stretched
+     transparently over the right-hand side of the row: iOS then presents its
+     own wheel picker, which is a far better experience than any listbox this
+     app could draw, while the row still looks like a row. */
+  /* iOS only applies :active to an element that carries a click handler or a
+     pointer cursor, and this row is a bare <div> with a transparent <select>
+     over it. Without the cursor the row never highlights under a finger. */
+  .row-select { position:relative; cursor:pointer; }
+  .row-select select {
+    position:absolute; inset:0;
+    width:100%; height:100%;
+    opacity:0;
+    -webkit-appearance:none; appearance:none;
+    border:0; background:none;
+  }
+  .row-select .row-value { color:var(--tint); display:flex; align-items:center; gap:2px; }
+  .row-select:active { background:var(--fill-4); }
+  /* The <select> is transparent and stretched over the row, so its own focus
+     ring would be invisible. The row wears it instead. */
+  .row-select:has(select:focus-visible) { box-shadow:var(--focus-ring); border-radius:var(--r-xs); }
+
+  /* ==================================================== segmented control */
+
+  .seg-ctl {
+    position:relative;
+    display:grid;
+    grid-auto-flow:column;
+    grid-auto-columns:1fr;
+    gap:0;
+    padding:2px;
+    border-radius:9px;
+    background:var(--fill-3);
+    isolation:isolate;
+  }
+  .seg-ctl-wrap { padding:0 var(--gutter); }
+
+  .seg-ctl button {
+    position:relative;
+    z-index:1;
+    /* 32pt is the platform's own segmented-control height and it is what the
+       control should look like — but 32pt is not a 44pt target, so the segment
+       is drawn at its proper size and reaches the floor with a pseudo. */
+    min-height:34px;
+    /* Block, not grid: text-overflow needs the text in a block box, and in a
+       grid container it is an anonymous item the ellipsis cannot reach. The
+       line-height does the vertical centring instead. */
+    display:block;
+    line-height:34px;
+    padding:0 4px;
+    border-radius:7px;
+    text-align:center;
+    font-size:var(--fs-footnote);
+    font-weight:590;
+    letter-spacing:-.005em;
+    color:var(--label);
+    white-space:nowrap;
+    overflow:hidden;
+    text-overflow:ellipsis;
+    transition:color var(--t-throw) var(--e-ios), opacity var(--t-lamp) var(--e-ios);
+  }
+  .seg-ctl button::before { content:''; position:absolute; inset:-5px 0; }
+  .seg-ctl button:active { opacity:.5; }
+  .seg-ctl button[aria-disabled=true] { color:var(--label-3); }
+  /* Available but empty: quieter than its neighbours so it reads as the odd
+     one out, but still a label you can read — it is live, and tapping it is
+     how you fill it. */
+  .seg-ctl button[data-off=true] { color:var(--label-2); font-weight:400; }
+  /* A tab is selected and a radio is checked; this control is used as both. */
+  .seg-ctl button[aria-selected=true], .seg-ctl button[aria-checked=true] { font-weight:640; }
+
+  /* One thumb, moved with a transform, rather than a background painted on
+     whichever button is selected — a transform is the only way this slides at
+     60fps, and sliding is what a UISegmentedControl does. */
+  .seg-thumb {
+    position:absolute;
+    z-index:0;
+    top:2px; left:2px; bottom:2px;
+    width:calc((100% - 4px) / var(--seg-n, 2));
+    border-radius:7px;
+    background:var(--bg-3);
+    box-shadow:var(--shadow-1);
+    transform:translateX(calc(var(--seg-i, 0) * 100%));
+    transition:transform var(--t-throw) var(--e-ios), background-color var(--t-throw) var(--e-ios);
+  }
+  body.light .seg-thumb { background:#FFFFFF; }
+
+  /* The part switcher is a segmented control whose thumb takes the colour of
+     the part it is on, so the control itself is the legend for the five
+     colours used everywhere else on the screen. */
+  .seg-parts .seg-thumb { background:var(--part); box-shadow:none; }
+  body.light .seg-parts .seg-thumb { background:var(--part); }
+  .seg-parts button[aria-checked=true], .seg-parts button[aria-selected=true] {
+    color:var(--on-part); font-weight:700;
+  }
+  /* The one exception to the 32pt rule: this is the control the app is
+     operated with, tapped more than everything else put together, so it is
+     drawn at full target height rather than reaching it with a pseudo. */
+  .seg-parts button { font-size:var(--fs-caption); min-height:44px; line-height:44px; }
+
+  /* ============================================================== switch */
+
+  .switch {
+    flex:none;
+    position:relative;
+    width:51px; height:31px;
+    border-radius:var(--r-pill);
+    background:var(--fill-2);
+    transition:background-color var(--t-throw) var(--e-ios);
+  }
+  .switch::after {
+    content:'';
+    position:absolute; top:2px; left:2px;
+    width:27px; height:27px;
+    border-radius:var(--r-pill);
+    background:#FFFFFF;
+    box-shadow:0 3px 8px rgba(0,0,0,.15), 0 1px 1px rgba(0,0,0,.16);
+    transition:transform var(--t-throw) var(--e-ios);
+  }
+  [aria-checked=true] > .switch { background:var(--tint); }
+  [aria-checked=true] > .switch::after { transform:translateX(20px); }
+  /* 31px tall on its own; the pseudo takes the row of which it is part up to
+     the full 44. */
+  .switch::before { content:''; position:absolute; inset:-7px -4px; }
+
+  /* ============================================================== slider */
+
+  .slider {
+    -webkit-appearance:none; appearance:none;
+    width:100%;
+    height:var(--tap);
+    background:none;
+    touch-action:pan-y;
+  }
+  .slider::-webkit-slider-runnable-track {
+    height:4px;
+    border-radius:2px;
+    background:linear-gradient(to right,
+      var(--tint) 0 var(--fill-pct, 50%), var(--fill-2) var(--fill-pct, 50%) 100%);
+  }
+  .slider::-moz-range-track { height:4px; border-radius:2px; background:var(--fill-2); }
+  .slider::-moz-range-progress { height:4px; border-radius:2px; background:var(--tint); }
+  .slider::-webkit-slider-thumb {
+    -webkit-appearance:none; appearance:none;
+    width:28px; height:28px;
+    margin-top:-12px;
+    border-radius:var(--r-pill);
+    background:#FFFFFF;
+    box-shadow:0 3px 8px rgba(0,0,0,.15), 0 1px 1px rgba(0,0,0,.16);
+  }
+  .slider::-moz-range-thumb {
+    width:28px; height:28px; border:0;
+    border-radius:var(--r-pill); background:#FFFFFF;
+    box-shadow:0 3px 8px rgba(0,0,0,.15);
+  }
+  .slider:active::-webkit-slider-thumb { transform:scale(1.06); }
+
+  /* ============================================================= buttons */
+
+  .btn {
+    display:inline-flex;
+    align-items:center;
+    justify-content:center;
+    gap:var(--sp-2);
+    min-height:var(--tap);
+    padding:0 var(--sp-4);
+    border-radius:var(--r-md);
+    font-size:var(--fs-body);
+    font-weight:590;
+    line-height:1.2;
+    letter-spacing:var(--tr-snug);
+    color:var(--tint);
+    transition:opacity var(--t-lamp) var(--e-ios), transform var(--t-click) var(--e-ios);
+  }
+  .btn:active { opacity:.45; }
+  .btn .i { width:20px; height:20px; }
+
+  /* Filled — the one primary action on a screen, and never two at once. */
+  .btn-filled { background:var(--tint); color:var(--on-tint-fill); }
+  .btn-filled:active { opacity:1; transform:scale(.985); filter:brightness(.9); }
+
+
+  /* Grey — a neutral action, where tint would over-claim. */
+  .btn-grey { background:var(--fill-3); color:var(--label); }
+  .btn-grey:active { opacity:1; background:var(--fill-2); }
+
+  .btn-lg { min-height:50px; font-size:var(--fs-headline); border-radius:var(--r-lg); }
+  .btn-block { width:100%; }
+  .btn[disabled], .btn[aria-disabled=true] { opacity:.35; pointer-events:none; }
+
+
+  /* ============================================================== sheets */
+
+  /* A UISheetPresentationController: the content is pushed up from the bottom
+     edge behind a dimming scrim, it has a grabber, and it can be thrown away
+     downwards. Everything modal in the app is one of these. */
+  /* Outside .app, so the horizontal insets .app pays for the shell have to be
+     paid again here — a sheet in landscape on a notched phone otherwise runs
+     its grabber and its buttons under the camera housing. */
+  .sheet-host {
+    position:fixed;
+    top:0; left:0; right:0;
+    height:100vh;
+    padding-left:var(--safe-l);
+    padding-right:var(--safe-r);
+    z-index:60;
+    display:flex;
+    flex-direction:column;
+    justify-content:flex-end;
+    pointer-events:none;
+  }
+  @supports (height:100dvh) { .sheet-host { height:100dvh; } }
+  .sheet-host[hidden] { display:none; }
+
+  .scrim {
+    position:absolute; inset:0;
+    background:rgba(0,0,0,.42);
+    opacity:0;
+    pointer-events:auto;
+    transition:opacity var(--t-sheet) var(--e-ios);
+  }
+  .sheet-host.is-open .scrim { opacity:1; }
+
+  .sheet {
+    position:relative;
+    display:flex;
+    flex-direction:column;
+    max-height:min(92%, 100% - var(--safe-t) - 10px);
+    background:var(--grouped-bg);
+    border-radius:var(--r-sheet) var(--r-sheet) 0 0;
+    box-shadow:var(--shadow-3);
+    pointer-events:auto;
+    transform:translateY(100%);
+    transition:transform var(--t-sheet) var(--e-ios);
+    /* The sheet is the drag surface: panning is the app's, not the browser's,
+       or a pull on the grabber scrolls the page behind it. `pinch-zoom` rather
+       than `none` — it withholds exactly the pans the drag handler needs and
+       keeps the zoom the viewport policy deliberately leaves enabled. */
+    touch-action:pinch-zoom;
+    overflow:hidden;
+  }
+  .sheet-host.is-open .sheet { transform:translateY(0); }
+  .sheet.is-dragging { transition:none; }
+
+  .grabber {
+    flex:none;
+    width:36px; height:5px;
+    margin:5px auto 0;
+    border-radius:var(--r-pill);
+    background:var(--label-4);
+  }
+
+  .sheet-head {
+    flex:none;
+    display:flex;
+    align-items:center;
+    gap:var(--sp-2);
+    min-height:52px;
+    padding:var(--sp-2) var(--sp-3);
+  }
+  .sheet-head h2 { flex:1 1 auto; text-align:center; font-size:var(--fs-headline); font-weight:600; }
+  .sheet-head .nav-btn { margin:0; }
+  .sheet-head .sheet-lead, .sheet-head .sheet-trail { flex:none; min-width:var(--tap); }
+
+  /* The sheet's own scroller. touch-action is handed back here so the body of
+     a tall sheet scrolls normally while the header still drags. */
+  .sheet-body {
+    flex:1 1 auto;
+    min-height:0;
+    overflow-y:auto;
+    -webkit-overflow-scrolling:touch;
+    overscroll-behavior:contain;
+    touch-action:pan-y pinch-zoom;
+    padding-bottom:calc(var(--safe-b) + var(--sp-5));
+    display:flex;
+    flex-direction:column;
+    gap:var(--sp-5);
+  }
+
+  /* --------------------------------------------------------- action sheet */
+
+  .action-sheet {
+    pointer-events:auto;
+    padding:0 var(--sp-2) calc(var(--safe-b) + var(--sp-2));
+    transform:translateY(100%);
+    transition:transform var(--t-sheet) var(--e-ios);
+  }
+  .sheet-host.is-open .action-sheet { transform:translateY(0); }
+  .action-sheet.is-dragging { transition:none; }
+
+  .action-group {
+    background:var(--grouped-cell);
+    border-radius:var(--r-lg);
+    overflow:hidden;
+    margin-bottom:var(--sp-2);
+    backdrop-filter:var(--blur);
+    -webkit-backdrop-filter:var(--blur);
+  }
+  .action-group button, .action-title {
+    display:block;
+    width:100%;
+    min-height:57px;
+    padding:var(--sp-3) var(--sp-4);
+    text-align:center;
+    font-size:var(--fs-title3);
+    color:var(--tint);
+    position:relative;
+  }
+  .action-title {
+    min-height:0;
+    font-size:var(--fs-footnote);
+    color:var(--label-2);
+    padding:var(--sp-3) var(--sp-4);
+  }
+  .action-group button + button::before, .action-title + button::before {
+    content:'';
+    position:absolute; left:0; right:0; top:0; height:var(--hairline);
+    background:var(--separator);
+  }
+  .action-group button:active { background:var(--fill-4); }
+  .action-group button.is-danger { color:var(--red); }
+  .action-cancel button { font-weight:600; }
+
+  /* --------------------------------------------------------------- alert */
+
+  /* A UIAlertController: centred, small, and it interrupts. Everything else in
+     the app slides politely up from the bottom edge; a destructive
+     confirmation is the one thing that should not. */
+  /* One rule, because a padding shorthand after a padding-bottom silently
+     puts the keyboard back over the field. src/ios.js writes --kb from
+     visualViewport, so a field-bearing alert lifts clear of the keys instead
+     of sitting behind them. */
+  .sheet-host.is-alert {
+    justify-content:center;
+    align-items:center;
+    padding:var(--sp-6) var(--sp-6) calc(var(--sp-6) + var(--kb, 0px));
+  }
+
+  .alert { pointer-events:auto; width:min(270px, 100%); }
+  .alert-card {
+    border-radius:var(--r-lg);
+    background:var(--chrome-solid);
+    backdrop-filter:var(--blur);
+    -webkit-backdrop-filter:var(--blur);
+    box-shadow:var(--shadow-2);
+    overflow:hidden;
+    transform:scale(1.08);
+    opacity:0;
+    transition:transform var(--t-throw) var(--e-ios), opacity var(--t-throw) var(--e-ios);
+  }
+  .sheet-host.is-open .alert-card { transform:scale(1); opacity:1; }
+
+  .alert-copy { padding:var(--sp-5) var(--sp-4) var(--sp-4); text-align:center; }
+  .alert-copy b { display:block; font-size:var(--fs-headline); font-weight:600; }
+  .alert-copy p { margin-top:3px; font-size:var(--fs-footnote); line-height:1.35; color:var(--label-2); }
+
+  .alert-field { padding:0 var(--sp-4) var(--sp-4); }
+  .alert-field input {
+    width:100%;
+    min-height:34px;
+    padding:6px var(--sp-2);
+    border-radius:var(--r-xs);
+    border:var(--hairline) solid var(--separator);
+    background:var(--bg);
+    color:var(--label);
+    font-size:max(16px, var(--fs-subhead));
+    -webkit-user-select:text;
+    user-select:text;
+  }
+
+  .alert-actions { display:grid; grid-auto-flow:column; grid-auto-columns:1fr; }
+  .alert-actions button {
+    position:relative;
+    min-height:44px;
+    padding:var(--sp-2);
+    font-size:var(--fs-body);
+    color:var(--tint);
+  }
+  .alert-actions button::before {
+    content:'';
+    position:absolute; left:0; right:0; top:0; height:var(--hairline);
+    background:var(--separator);
+  }
+  .alert-actions button + button::after {
+    content:'';
+    position:absolute; left:0; top:0; bottom:0; width:var(--hairline);
+    background:var(--separator);
+  }
+  .alert-actions button.is-default { font-weight:600; }
+  .alert-actions button.is-danger { color:var(--red); font-weight:600; }
+  .alert-actions button:active { background:var(--fill-4); }
+
+  /* ============================================================== toast */
+
+  .toast {
+    position:fixed;
+    left:50%;
+    /* --cta-h is written by src/ui.js: the Song screen mounts an action bar
+       between the content and the transport, and a toast that lands on top of
+       the app's primary button is a toast in the worst possible place. */
+    bottom:calc(var(--safe-b) + var(--tab-h) + var(--dock-h) + var(--cta-h, 0px) + var(--sp-3));
+    z-index:80;
+    max-width:min(88vw, 420px);
+    padding:var(--sp-3) var(--sp-5);
+    border-radius:var(--r-pill);
+    background:var(--chrome-solid);
+    box-shadow:var(--shadow-2), 0 0 0 var(--hairline) var(--separator);
+    color:var(--label);
+    font-size:var(--fs-subhead);
+    font-weight:500;
+    text-align:center;
+    pointer-events:none;
+    opacity:0;
+    transform:translate(-50%, 12px) scale(.96);
+    transition:opacity var(--t-fade) var(--e-ios), transform var(--t-fade) var(--e-ios);
+  }
+  .toast.on { opacity:1; transform:translate(-50%, 0) scale(1); }
+  /* With a sheet up there is no transport to sit above, and the usual place
+     is the middle of the sheet. It goes under the title bar instead. */
+  body.has-modal .toast {
+    top:calc(var(--safe-t) + var(--nav-h) + var(--sp-3));
+    bottom:auto;
+    transform:translate(-50%, -12px) scale(.96);
+  }
+  body.has-modal .toast.on { transform:translate(-50%, 0) scale(1); }
+
+  /* ======================================================== empty state */
+
+  .empty {
+    display:flex;
+    flex-direction:column;
+    align-items:center;
+    gap:var(--sp-3);
+    padding:var(--sp-7) var(--sp-5);
+    text-align:center;
+    color:var(--label-2);
+  }
+  .empty-mark { opacity:.4; }
+  .empty b { color:var(--label); font-size:var(--fs-headline); font-weight:600; }
+  .empty p { font-size:var(--fs-subhead); max-width:32ch; }
+
+  /* ============================================================== misc */
+
+  .badge {
+    display:inline-grid; place-items:center;
+    min-width:22px; height:22px;
+    padding:0 7px;
+    border-radius:var(--r-pill);
+    background:var(--fill-3);
+    color:var(--label-2);
+    font-size:var(--fs-caption2);
+    font-weight:600;
+  }
+
+  /* A horizontal rail of chips. Padded at both ends so the first and last item
+     clear the screen edge — and so a swipe that starts on the rail is never
+     mistaken for the system's edge-swipe back gesture. */
+  .rail {
+    display:flex;
+    gap:var(--sp-2);
+    overflow-x:auto;
+    overflow-y:hidden;
+    -webkit-overflow-scrolling:touch;
+    overscroll-behavior-x:contain;
+    scroll-snap-type:x proximity;
+    scrollbar-width:none;
+    padding:var(--sp-1) var(--gutter);
+    /* scrollIntoView aligns to the padding box, so without this a card
+       scrolled into view lands flush against the screen edge. */
+    scroll-padding-inline:var(--gutter);
+    /* No axis lock. touch-action composes as an INTERSECTION down the ancestor
+       chain rather than as an override, so `pan-x` on a full-width band does
+       two things nobody wants: a vertical drag that happens to start on the
+       rail scrolls nothing, and pinch-to-zoom is removed from the whole
+       subtree. The browser already resolves nested scrollers correctly, and
+       overscroll-behavior above is what stops the gesture chaining out. */
+  }
+  .rail::-webkit-scrollbar { display:none; }
+  .rail > * { scroll-snap-align:start; flex:none; }
+
+  :focus-visible { outline:none; }
+}

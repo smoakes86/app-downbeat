@@ -2,23 +2,31 @@
 <html lang="en">
   <head>
     <meta charset="utf-8">
+    <!-- viewport-fit=cover puts the layout under the notch and the home
+         indicator; css/tokens.css pays all four insets back by hand. Zoom is
+         deliberately left enabled — Safari ignores user-scalable=no anyway, and
+         pinch-to-zoom is an accessibility feature. Double-tap zoom, which is
+         the one that actually costs a tap delay, is killed by
+         touch-action:manipulation instead. -->
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
     <title>Downbeat — play it on your hardware</title>
     <meta name="description" content="Write a progression, a bass line, drums and a melody, then play every part on your EP-133 or FM-1 — pads and keys lighting in time.">
+    <!-- iOS turns anything that looks like a phone number into a link, and a
+         tempo, a bar count and a scale code all look like phone numbers. -->
+    <meta name="format-detection" content="telephone=no">
 
-    <!-- Installed, this opens without browser chrome, which is also the real
-         fix for Safari's toolbars eating the bottom of the layout. -->
     <link rel="manifest" href="manifest.webmanifest">
-    <!-- Exactly --room in each theme. Three different near-blacks used to
-         produce a visible seam between the launch screen and the app. -->
+    <!-- Exactly the app background in each appearance, so the launch screen and
+         the first paint do not show a seam. -->
     <meta name="theme-color" content="#070806" media="(prefers-color-scheme: dark)">
-    <meta name="theme-color" content="#D6D2C7" media="(prefers-color-scheme: light)">
+    <meta name="theme-color" content="#FFFFFF" media="(prefers-color-scheme: light)">
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="mobile-web-app-capable" content="yes">
+    <!-- black-translucent means the app draws under the clock rather than
+         beside it, which is what makes an installed PWA look like an app
+         instead of a page in a frame. The nav bar pays safe-area-inset-top. -->
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <meta name="apple-mobile-web-app-title" content="Downbeat">
-    <!-- iOS ignores SVG for home-screen icons, so this one is a real PNG.
-         Both are built by tools/make-icons.js. -->
     <link rel="apple-touch-icon" href="icons/icon-180.png">
     <!-- Pasted from Mark.FAVICON in src/mark.js — the one consumer of the mark
          that cannot call JS at parse time. Mark.favicon() re-points it at
@@ -26,42 +34,59 @@
     <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect width='32' height='32' fill='%23070806'/><g transform='translate(2 8)'><rect x='0' y='0' width='3' height='15' fill='%23FF8A32'/><rect x='8' y='7' width='1.5' height='8' fill='%23E9E7DF' opacity='.34'/><rect x='13' y='7' width='1.5' height='8' fill='%23E9E7DF' opacity='.34'/><rect x='18' y='7' width='1.5' height='8' fill='%23E9E7DF' opacity='.34'/><rect x='0' y='15' width='27.5' height='1' fill='%23E9E7DF' opacity='.38'/></g></svg>">
     <link rel="icon" type="image/png" sizes="192x192" href="icons/icon-192.png">
 
-    <!-- The two faces the first paint actually draws with. The latin-ext cuts
-         are not preloaded: an English panel never touches them, and a preload
-         the page does not use is a warning and 84KB of wasted bandwidth. -->
+    <!-- Only the two faces the first paint draws with. The interface itself is
+         set in the system font, which needs no network at all. -->
     <link rel="preload" as="font" type="font/woff2" crossorigin href="fonts/archivo-latin.woff2">
     <link rel="preload" as="font" type="font/woff2" crossorigin href="fonts/martianmono-latin.woff2">
 
-    <!-- Twelve sheets, in cascade order. The order is also declared inside
-         css/tokens.css as an @layer statement, so a mistake here cannot change
+    <!-- Six sheets, in cascade order. The order is also declared as an @layer
+         statement at the top of css/tokens.css, so a mistake here cannot change
          which rule wins — only when it arrives. -->
     <link rel="stylesheet" href="css/tokens.css">
     <link rel="stylesheet" href="css/base.css">
-    <link rel="stylesheet" href="css/layout.css">
-    <link rel="stylesheet" href="css/controls.css">
-    <link rel="stylesheet" href="css/lane.css">
-    <link rel="stylesheet" href="css/run.css">
-    <link rel="stylesheet" href="css/faceplate.css">
-    <link rel="stylesheet" href="css/sheets.css">
-    <link rel="stylesheet" href="css/overlays.css">
-    <link rel="stylesheet" href="css/motion.css">
-    <link rel="stylesheet" href="css/responsive.css">
+    <link rel="stylesheet" href="css/components.css">
+    <link rel="stylesheet" href="css/screens.css">
+    <link rel="stylesheet" href="css/device.css">
     <link rel="stylesheet" href="css/a11y.css">
   </head>
   <body>
-    <!-- The page had no <h1> at all. The wordmark beside it is aria-hidden, so
-         this is the only place the product says its own name to a reader. -->
-    <h1 class="sr-only">Downbeat</h1>
 
-    <!-- One drawn icon language. Every glyph in the app used to be Unicode
-         punctuation rendered in whatever fallback the platform supplied — a
-         crescent that arrives as a colour emoji on some Android builds, a
-         fullwidth CJK plus sitting next to a Unicode minus. These are on one
-         24px grid at one optical weight, and they inherit currentColor, which
-         a data-URI mask cannot. -->
+    <!-- One drawn icon language, on one 24px grid at one optical weight,
+         inheriting currentColor. Unicode punctuation cannot do either: a
+         crescent arrives as a colour emoji on some builds and a fullwidth CJK
+         plus sits next to a Unicode minus. -->
     <svg class="sprite" aria-hidden="true" focusable="false" xmlns="http://www.w3.org/2000/svg">
-      <symbol id="i-play" viewBox="0 0 24 24"><path d="M8 5.2 19 12 8 18.8Z"/></symbol>
-      <symbol id="i-stop" viewBox="0 0 24 24"><path d="M6.5 6.5h11v11h-11Z"/></symbol>
+      <symbol id="i-play" viewBox="0 0 24 24"><path d="M7.6 4.9 19.4 12 7.6 19.1Z"/></symbol>
+      <symbol id="i-stop" viewBox="0 0 24 24"><rect x="6" y="6" width="12" height="12" rx="2.4"/></symbol>
+      <!-- The tab bar. Four glyphs that name a place rather than an action. -->
+      <symbol id="i-pads" viewBox="0 0 24 24">
+        <rect x="3.2" y="3.2" width="7.6" height="7.6" rx="2.1"/><rect x="13.2" y="3.2" width="7.6" height="7.6" rx="2.1"/>
+        <rect x="3.2" y="13.2" width="7.6" height="7.6" rx="2.1"/><rect x="13.2" y="13.2" width="7.6" height="7.6" rx="2.1"/>
+      </symbol>
+      <symbol id="i-sliders" viewBox="0 0 24 24">
+        <rect x="2.6" y="5.4" width="18.8" height="1.7" rx=".85" opacity=".55"/><rect x="6.6" y="3.2" width="3.3" height="6.1" rx="1.65"/>
+        <rect x="2.6" y="11.2" width="18.8" height="1.7" rx=".85" opacity=".55"/><rect x="14" y="9" width="3.3" height="6.1" rx="1.65"/>
+        <rect x="2.6" y="17" width="18.8" height="1.7" rx=".85" opacity=".55"/><rect x="9.4" y="14.8" width="3.3" height="6.1" rx="1.65"/>
+      </symbol>
+      <symbol id="i-structure" viewBox="0 0 24 24">
+        <rect x="2.8" y="4.4" width="7.2" height="4.5" rx="1.5"/><rect x="11.4" y="4.4" width="9.8" height="4.5" rx="1.5"/>
+        <rect x="2.8" y="10.75" width="12.2" height="4.5" rx="1.5"/><rect x="16.4" y="10.75" width="4.8" height="4.5" rx="1.5"/>
+        <rect x="2.8" y="17.1" width="5.6" height="4.5" rx="1.5"/><rect x="9.8" y="17.1" width="11.4" height="4.5" rx="1.5"/>
+      </symbol>
+      <symbol id="i-library" viewBox="0 0 24 24"><path d="M6.6 2.6h10.8a1.6 1.6 0 0 1 1.6 1.6v17.2L12 17.1l-7 4.3V4.2a1.6 1.6 0 0 1 1.6-1.6Z"/></symbol>
+      <!-- Transport and options. -->
+      <symbol id="i-loop" viewBox="0 0 24 24">
+        <path d="M7.6 5.4h9.1a4 4 0 0 1 4 4v2.4h-2V9.4a2 2 0 0 0-2-2H7.6v2.7L2.8 6.4 7.6 2.7Z"/>
+        <path d="M16.4 18.6H7.3a4 4 0 0 1-4-4v-2.4h2v2.4a2 2 0 0 0 2 2h9.1v-2.7l4.8 3.7-4.8 3.7Z"/>
+      </symbol>
+      <symbol id="i-solo" viewBox="0 0 24 24"><path d="M12 2.6A9.4 9.4 0 0 0 2.6 12v6.3A3 3 0 0 0 5.6 21.3h1.5A2 2 0 0 0 9.1 19.3v-4.6a2 2 0 0 0-2-2H4.7V12a7.3 7.3 0 0 1 14.6 0v.7h-2.4a2 2 0 0 0-2 2v4.6a2 2 0 0 0 2 2h1.5a3 3 0 0 0 3-3V12A9.4 9.4 0 0 0 12 2.6Z"/></symbol>
+      <symbol id="i-undo" viewBox="0 0 24 24"><path d="M8.6 6.9H14a6.6 6.6 0 0 1 0 13.2h-3.6v-2H14a4.6 4.6 0 0 0 0-9.2H8.6v3.4L3.2 7.9 8.6 3.5Z"/></symbol>
+      <!-- Chrome. -->
+      <symbol id="i-close" viewBox="0 0 24 24"><path d="M6.3 7.7 7.7 6.3 12 10.6l4.3-4.3 1.4 1.4L13.4 12l4.3 4.3-1.4 1.4L12 13.4l-4.3 4.3-1.4-1.4L10.6 12Z"/></symbol>
+      <symbol id="i-chevron-left" viewBox="0 0 24 24"><path d="M15.1 4.9 16.5 6.3l-5.7 5.7 5.7 5.7-1.4 1.4L8 12Z"/></symbol>
+      <symbol id="i-chevron-right" viewBox="0 0 24 24"><path d="M8.9 19.1 7.5 17.7l5.7-5.7-5.7-5.7 1.4-1.4L16 12Z"/></symbol>
+      <symbol id="i-chevron-down" viewBox="0 0 24 24"><path d="M19.1 8.9 17.7 7.5 12 13.2 6.3 7.5 4.9 8.9 12 16Z"/></symbol>
+      <symbol id="i-share" viewBox="0 0 24 24"><path d="M11 15.4V6.7L8.1 9.6 6.7 8.2 12 2.9l5.3 5.3-1.4 1.4L13 6.7v8.7Z"/><path d="M4.6 13.4h2v5.4h10.8v-5.4h2v7.4H4.6Z"/></symbol>
       <symbol id="i-moon" viewBox="0 0 24 24"><path d="M20.6 15.1A8.7 8.7 0 0 1 8.9 3.4 8.7 8.7 0 1 0 20.6 15.1Z"/></symbol>
       <symbol id="i-sun" viewBox="0 0 24 24">
         <circle cx="12" cy="12" r="4.3"/>
@@ -70,441 +95,332 @@
         <g transform="rotate(45 12 12)"><rect x="11" y="1.5" width="2" height="3.8" rx="1"/><rect x="11" y="18.7" width="2" height="3.8" rx="1"/></g>
         <g transform="rotate(135 12 12)"><rect x="11" y="1.5" width="2" height="3.8" rx="1"/><rect x="11" y="18.7" width="2" height="3.8" rx="1"/></g>
       </symbol>
-      <symbol id="i-close" viewBox="0 0 24 24"><path d="M6.3 7.7 7.7 6.3 12 10.6l4.3-4.3 1.4 1.4L13.4 12l4.3 4.3-1.4 1.4L12 13.4l-4.3 4.3-1.4-1.4L10.6 12Z"/></symbol>
-      <symbol id="i-chevron-left" viewBox="0 0 24 24"><path d="M14.7 5.6 16.1 7l-5 5 5 5-1.4 1.4L8.3 12Z"/></symbol>
-      <symbol id="i-chevron-right" viewBox="0 0 24 24"><path d="M9.3 18.4 7.9 17l5-5-5-5 1.4-1.4L15.7 12Z"/></symbol>
-      <symbol id="i-chevron-up" viewBox="0 0 24 24"><path d="M5.6 14.7 7 16.1l5-5 5 5 1.4-1.4L12 8.3Z"/></symbol>
-      <symbol id="i-chevron-down" viewBox="0 0 24 24"><path d="M18.4 9.3 17 7.9l-5 5-5-5-1.4 1.4L12 15.7Z"/></symbol>
-      <symbol id="i-share" viewBox="0 0 24 24"><path d="M11 15.4V6.7L8.1 9.6 6.7 8.2 12 2.9l5.3 5.3-1.4 1.4L13 6.7v8.7Z"/><path d="M4.6 13.4h2v5.4h10.8v-5.4h2v7.4H4.6Z"/></symbol>
       <symbol id="i-plus" viewBox="0 0 24 24"><path d="M11 4h2v7h7v2h-7v7h-2v-7H4v-2h7Z"/></symbol>
-      <symbol id="i-minus" viewBox="0 0 24 24"><path d="M4 11h16v2H4Z"/></symbol>
       <symbol id="i-check" viewBox="0 0 24 24"><path d="M9.6 16.2 5.4 12 4 13.4l5.6 5.6L20.4 8.2 19 6.8Z"/></symbol>
-      <!-- One glyph past §6.36's list. §6.33 prescribes an overflow control for
-           the thumb bar's second row and there is no icon in the app that means
-           "more"; a literal ellipsis is exactly the fallback-font problem the
-           sprite exists to end. -->
       <symbol id="i-more" viewBox="0 0 24 24"><circle cx="5.4" cy="12" r="1.9"/><circle cx="12" cy="12" r="1.9"/><circle cx="18.6" cy="12" r="1.9"/></symbol>
+      <!-- Row glyphs. -->
+      <symbol id="i-link" viewBox="0 0 24 24">
+        <path d="M10.9 13.1a4.2 4.2 0 0 0 5.9 0l3-3a4.2 4.2 0 1 0-5.9-5.9l-1.5 1.5 1.4 1.4 1.5-1.5a2.2 2.2 0 0 1 3.1 3.1l-3 3a2.2 2.2 0 0 1-3.1 0Z"/>
+        <path d="M13.1 10.9a4.2 4.2 0 0 0-5.9 0l-3 3a4.2 4.2 0 1 0 5.9 5.9l1.5-1.5-1.4-1.4-1.5 1.5a2.2 2.2 0 0 1-3.1-3.1l3-3a2.2 2.2 0 0 1 3.1 0Z"/>
+      </symbol>
+      <symbol id="i-copy" viewBox="0 0 24 24"><path d="M8.4 2.2h8.4a3.4 3.4 0 0 1 3.4 3.4v10.2h-2V5.6a1.4 1.4 0 0 0-1.4-1.4H8.4Z"/><path d="M5.4 6.2h8.8a2.4 2.4 0 0 1 2.4 2.4v10.8a2.4 2.4 0 0 1-2.4 2.4H5.4A2.4 2.4 0 0 1 3 19.4V8.6a2.4 2.4 0 0 1 2.4-2.4Zm-.4 2.4v10.8a.4.4 0 0 0 .4.4h8.8a.4.4 0 0 0 .4-.4V8.6a.4.4 0 0 0-.4-.4H5.4a.4.4 0 0 0-.4.4Z"/></symbol>
+      <symbol id="i-download" viewBox="0 0 24 24"><path d="M11 2.8h2v9.4l3.1-3.1 1.4 1.4L12 16 6.5 10.5 7.9 9.1 11 12.2Z"/><path d="M4.4 14.6h2v4.2h11.2v-4.2h2v6.2H4.4Z"/></symbol>
+      <symbol id="i-info" viewBox="0 0 24 24"><path d="M12 2.2A9.8 9.8 0 1 0 21.8 12 9.8 9.8 0 0 0 12 2.2Zm0 2a7.8 7.8 0 1 1-7.8 7.8A7.8 7.8 0 0 1 12 4.2Zm-1.1 6.2h2.2v7h-2.2Zm0-3.4h2.2v2.2h-2.2Z"/></symbol>
+      <symbol id="i-sparkle" viewBox="0 0 24 24"><path d="M10.2 2.4 11.9 7l4.6 1.7-4.6 1.7-1.7 4.6-1.7-4.6L3.9 8.7 8.5 7Z"/><path d="M17.6 13.6l1 2.6 2.6 1-2.6 1-1 2.6-1-2.6-2.6-1 2.6-1Z"/></symbol>
+      <symbol id="i-refresh" viewBox="0 0 24 24"><path d="M12 4.2a7.8 7.8 0 0 1 6.6 3.6V4.9h2v6.4h-6.4v-2h3.1A5.8 5.8 0 1 0 17.7 14h2.1A7.8 7.8 0 1 1 12 4.2Z"/></symbol>
+      <symbol id="i-trash" viewBox="0 0 24 24"><path d="M9.4 2.6h5.2l1 1.7H20.4v2H3.6v-2h4.8Z"/><path d="M5.6 8h12.8l-.9 11.9a2.2 2.2 0 0 1-2.2 2H8.7a2.2 2.2 0 0 1-2.2-2Z"/></symbol>
+      <symbol id="i-rotate" viewBox="0 0 24 24">
+        <path d="M8.4 2.6h7.2a2.4 2.4 0 0 1 2.4 2.4v14a2.4 2.4 0 0 1-2.4 2.4H8.4A2.4 2.4 0 0 1 6 19V5a2.4 2.4 0 0 1 2.4-2.4Zm-.4 2.4v14a.4.4 0 0 0 .4.4h7.2a.4.4 0 0 0 .4-.4V5a.4.4 0 0 0-.4-.4H8.4a.4.4 0 0 0-.4.4Z"/>
+        <path d="M12 16.4a1.15 1.15 0 1 1 0 2.3 1.15 1.15 0 0 1 0-2.3Z"/>
+      </symbol>
+      <symbol id="i-key" viewBox="0 0 24 24"><path d="M4 5h16a1 1 0 0 1 1 1v12a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V6a1 1 0 0 1 1-1Zm1 2v10h14V7Z"/><path d="M7.2 7h1.9v6H7.2Zm3.9 0H13v6h-1.9Zm3.9 0h1.9v6h-1.9Z"/></symbol>
     </svg>
 
-    <!-- The desk. Two regions and nothing else: the hardware, which never
-         moves and is never covered, and the stage, which carries whatever part
-         you are playing. Both overlays open inside the stage, which is what
-         keeps the hardware in sight while you work. -->
-    <!-- Labelled, all three of them. §9.6 asks for it and a screen reader's
-         landmark list otherwise reads "banner, main, navigation" with nothing
-         to tell them apart from the two labelled groups sitting inside. -->
-    <header class="bar" id="bar" aria-label="Transport and song">
-      <!-- Three tiers, not one row of interchangeable lozenges: who this is,
-           what the song is, and what you can do to it. Mark.render fills the
-           slot, so the slot is a separate element from the word — rendering
-           into .wordmark itself would delete DOWNBEAT. -->
-      <div class="wordmark" aria-hidden="true"><span class="mark-slot"></span><b>Downbeat</b></div>
-      <span class="bar-rule" aria-hidden="true"></span>
-      <div class="bar-song">
-        <h2 id="songTitle">—</h2>
-        <span id="songMeta"></span>
-      </div>
-      <span class="bar-pos" id="barPos" aria-live="off"></span>
+    <!-- The app. Fixed chrome top and bottom, four scrolling screens between
+         them, and nothing else at document level. -->
+    <div class="app" id="app" data-part="melody">
 
-      <!-- On a wide screen these sit in the bar. On a phone ui.js moves this
-           whole group, and the part switcher with it, into #thumb at the foot
-           of the screen — the only part of a six-inch phone your thumb reaches
-           without shuffling your grip. Moved, not duplicated, so there is one
-           of each control and one set of handlers.
-
-           The spacer leads rather than trails: everything after it is a control
-           and the song identity is everything before it, which is the tier
-           boundary §6.1 asks the layout to state. -->
-      <div class="bar-controls" id="barControls">
-        <span class="spacer"></span>
-        <!-- The transport is seated in its own milled bezel. Loop is a property
-             of the transport rather than a sixth equal-weight lozenge, and in
-             the old flat row it was the first control the phone deleted. -->
-        <div class="transport">
-          <button class="play" id="playButton" aria-label="Play or stop" aria-keyshortcuts="Space">
-            <span class="play-icon" id="playIcon">▶</span><span id="playLabel">Play</span>
+      <header class="nav" id="nav">
+        <!-- The only place the product says its own name to a reader: the
+             wordmark is a drawing and the title bar carries the song. -->
+        <h1 class="sr-only">Downbeat</h1>
+        <div class="nav-inner">
+          <div class="nav-title">
+            <h2 class="nav-name" id="songTitle">Downbeat</h2>
+            <span class="nav-meta" id="songMeta">Writing your first song…</span>
+          </div>
+          <button class="nav-btn" id="undoButton" aria-label="Undo the last change" hidden>
+            <svg class="i" aria-hidden="true" focusable="false"><use href="#i-undo"></use></svg>
           </button>
-          <button class="pill loop-badge" id="loopButton" aria-pressed="true" title="Loop">Loop</button>
+          <button class="nav-btn" id="shareButton" aria-label="Share and export" aria-haspopup="dialog">
+            <svg class="i" aria-hidden="true" focusable="false"><use href="#i-share"></use></svg>
+          </button>
+          <button class="nav-btn" id="themeButton" aria-label="Switch appearance">
+            <svg class="i" id="themeIcon" aria-hidden="true" focusable="false"><use href="#i-moon"></use></svg>
+          </button>
         </div>
-        <!-- Every toggle in one housing (rule C6). A control with no housing is
-             announcing that it has no on state, which is what separates these
-             two from the three openers after the hairline. -->
-        <div class="toggle-well" role="group" aria-label="Playback options">
-          <button class="pill" id="soloButton" aria-pressed="false" data-thumb-overflow title="Hear only the part you are playing">Solo</button>
-          <button class="pill" id="performButton" aria-pressed="false" data-thumb-overflow title="Focus the interface for playing">Perform</button>
-        </div>
-        <!-- Openers and one-shot actions: caps resting on the panel, after a
-             1px rule drawn by .key-group itself. Undo is data-conditional, not
-             [hidden] — reserving its space is what stops Structure being pushed
-             off the right of a 374px screen the moment it appears. -->
-        <div class="key-group">
-          <button class="pill undo" id="undoButton" data-conditional data-thumb-overflow title="Undo the last song change" aria-keyshortcuts="Control+Z Meta+Z">Undo</button>
-          <button class="pill is-key" id="songButton" data-thumb-overflow aria-haspopup="dialog" aria-expanded="false">New song</button>
-          <button class="pill is-key" id="structureButton" data-thumb-overflow aria-haspopup="dialog" aria-expanded="false">Structure</button>
-        </div>
-      </div>
-      <!-- Outside the group that moves: a phone's bottom row has room for the
-           things you touch while playing, and the theme is not one of them. It
-           stays up here, where it is out of the way and still one tap. -->
-      <button class="icon" id="themeButton" aria-label="Switch theme" title="Switch theme">
-        <svg class="i" id="themeIcon" aria-hidden="true" focusable="false"><use href="#i-moon"></use></svg>
-      </button>
-      <!-- One segment per bar, built by ui.js. You read your position in the
-           form rather than in a single undifferentiated line. -->
-      <div class="bar-progress" id="barSlot" role="group" aria-label="Song position"><i id="barProgress"></i></div>
-    </header>
+      </header>
 
-    <div class="performance-chrome" id="performanceChrome" hidden>
-      <div><small>Performance mode</small><b id="performancePart">Melody</b></div>
-      <span id="performancePosition" aria-live="off"></span>
-      <div class="performance-actions">
-        <button class="icon" id="performancePrevious" aria-label="Previous part">
-          <svg class="i" aria-hidden="true" focusable="false"><use href="#i-chevron-left"></use></svg>
-        </button>
-        <button class="play" id="performancePlay" aria-label="Play or stop">Play</button>
-        <button class="icon" id="performanceNext" aria-label="Next part">
-          <svg class="i" aria-hidden="true" focusable="false"><use href="#i-chevron-right"></use></svg>
-        </button>
-      </div>
-      <button class="pill" id="performanceExit">Done</button>
-    </div>
+      <main class="screens" id="screens">
 
-    <main class="desk" id="desk" aria-label="Desk">
-      <!-- ------------------------------------------------------------ rig -->
-      <section class="rig" id="rig" aria-label="Hardware">
-        <p class="legend">Hardware</p>
-        <div class="rig-stage" id="rigStage" aria-live="off"></div>
-        <div class="devices" id="rigDevices" role="group" aria-label="Choose your hardware"></div>
-        <!-- The asset tag. It is the only number on screen nobody needs, and it
-             is the thing that makes a screenshot look like a photograph of
-             equipment. ui.js slot-cuts it whenever the song changes.
+        <!-- ------------------------------------------------------- play -->
+        <section class="screen is-active" data-screen="play" id="screenPlay" role="tabpanel" aria-label="Play">
+          <div class="screen-inner">
 
-             aria-hidden because it is engraving, not text. §3.6 prints it at 16%
-             ink, which measures 1.55:1 dark and 1.38:1 light and is the whole
-             effect; raising it to §9.1's floor would delete the thing rather
-             than fix it. The exemption is only legitimate because the plate
-             repeats and never uniquely carries: DOWNBEAT is the sr-only <h1>
-             above; the device is the pressed chip in #rigDevices and the
-             #rigStage label; the key and the BPM are #songMeta in the bar and
-             the #rigStage label; and the bar count is every .bar-seg's "Bar n of
-             m" plus the lane's own role=img description. All five were checked
-             live at 1440x900 and at 390x844 with the thumb bar mounted, and none
-             of them sits under an aria-hidden or display:none ancestor in either
-             layout. Hide anything here that is not also said out there and this
-             becomes a real loss — §9.1 records the exemption and its terms. -->
-        <p class="plate" id="specPlate" aria-hidden="true">Downbeat</p>
-      </section>
-
-      <!-- ---------------------------------------------------------- stage -->
-      <section class="stage" id="stage">
-        <div class="stage-body" id="stageBody">
-          <!-- Unhidden only on the shared-link boot branch. A persistent banner
-               rather than a 1.9-second toast: the highest-value arrival path in
-               a product with no accounts deserves more than a caption. -->
-          <div class="landing" id="sharedLanding" hidden>
-            <div class="landing-copy">
-              <span class="legend">Shared link</span>
-              <p>Someone shared this sketch with you.</p>
+            <!-- Which part you are playing. The thumb takes that part's colour,
+                 so the control is also the legend for the five colours used
+                 everywhere else on the screen. -->
+            <div class="seg-ctl-wrap parts-wrap">
+              <div class="seg-ctl seg-parts" id="parts" role="radiogroup" aria-label="Which part you are playing"></div>
             </div>
-            <div class="landing-actions">
-              <button class="go" id="sharedLandingPlay">Play</button>
-              <button class="ghost" id="sharedLandingNew">Make your own</button>
-            </div>
+
+            <section class="block rig-block">
+              <div class="block-head">
+                <h3 class="group-title">Your hardware</h3>
+                <button class="block-action" id="setupButton">Set-up</button>
+              </div>
+              <div class="face-wrap" id="faceWrap">
+                <div class="face-bay" id="faceBay">
+                  <div class="face-stage" id="faceStage"></div>
+                </div>
+              </div>
+              <p class="face-readout" id="faceReadout"></p>
+              <div class="seg-ctl-wrap">
+                <div class="seg-ctl" id="devices" role="radiogroup" aria-label="Choose your hardware"></div>
+              </div>
+            </section>
+
+            <section class="block">
+              <div class="block-head">
+                <h3 class="group-title" id="runTitle">Play in this order</h3>
+                <span class="block-note" id="runNote"></span>
+              </div>
+              <a class="skip" href="#shapeBlock">Skip the run of pads</a>
+              <div class="run" id="run" aria-labelledby="runTitle"></div>
+            </section>
+
+            <section class="block" id="shapeBlock" tabindex="-1">
+              <div class="block-head">
+                <h3 class="group-title">Shape</h3>
+                <span class="block-note" id="laneNote"></span>
+              </div>
+              <div class="lane-scroll" id="laneScroll">
+                <div class="lane" id="lane" role="img"></div>
+              </div>
+            </section>
           </div>
+        </section>
 
-          <p class="legend" id="partsLegend">Part</p>
-          <nav class="parts" id="parts" role="group" aria-labelledby="partsLegend"></nav>
+        <!-- ------------------------------------------------------- song -->
+        <section class="screen" data-screen="song" id="screenSong" role="tabpanel" aria-label="Song" inert>
+          <div class="screen-inner">
+            <section class="block">
+              <div class="block-head"><h3 class="group-title">Sound</h3></div>
+              <div class="rail" id="genreRail" role="radiogroup" aria-label="Genre"></div>
+              <p class="group-note" id="genreBlurb"></p>
+            </section>
 
-          <!-- On a phone the lane is a slim strip by default: the pads are what
-               you read while playing, and the shape of the part is one tap
-               away rather than permanently taking a fifth of the screen. -->
-          <div class="lane-wrap" id="laneWrap">
-            <div class="lane-top">
-              <p class="legend">Shape</p>
-              <button class="lane-toggle" id="laneToggle" aria-expanded="false" aria-controls="lane" aria-describedby="laneDescription">
-                <span class="lane-toggle-label">Shape</span><span class="chev" aria-hidden="true">⌃</span>
-              </button>
-            </div>
-            <div class="lane-bars" id="laneBars" aria-hidden="true"></div>
-            <div class="lane" id="lane" aria-hidden="true"></div>
-            <span class="sr-only" id="laneDescription"></span>
-            <div class="lane-head" id="laneHead"></div>
-          </div>
+            <section class="block">
+              <div class="block-head"><h3 class="group-title">Key and feel</h3></div>
+              <div class="list" id="songFields"></div>
+            </section>
 
-          <!-- A keyboard user reaching the run otherwise tabs through sixty-odd
-               chips to get to the setup instructions, and does it again on
-               every part switch. It sits before the legend so the legend stays
-               the run's immediate previous sibling. -->
-          <a class="skip" href="#recipe">Skip the run of pads</a>
-          <p class="legend" id="runLegend">Run</p>
-          <div class="run" id="run" aria-labelledby="runLegend"></div>
-
-          <details class="recipe" id="recipe" tabindex="-1">
-            <summary id="recipeSummary"><span id="recipeSummaryLabel">Set-up</span><i class="disclosure" aria-hidden="true"></i></summary>
-            <div class="disclose"><ol class="recipe-steps" id="recipeSteps"></ol></div>
-          </details>
-        </div>
-
-        <!-- Both sheets live inside the stage, so they cover the part you are
-             reading and never the hardware you are reading it for. -->
-        <div class="sheet-host" id="sheetHost" hidden>
-          <div class="scrim" id="scrim"></div>
-
-          <section class="sheet" id="songSheet" data-sheet="song" role="dialog" aria-modal="true" aria-labelledby="songSheetTitle" tabindex="-1" hidden>
-            <div class="sheet-head">
-              <div class="sheet-title">
-                <span class="eyebrow">Create</span>
-                <h2 id="songSheetTitle">New song</h2>
-              </div>
-              <button class="icon" data-close-sheet aria-label="Close">
-                <svg class="i" aria-hidden="true" focusable="false"><use href="#i-close"></use></svg>
-              </button>
-            </div>
-
-            <div class="sheet-body">
-              <div class="creation-hero">
-                <p>Pick a genre and Downbeat will choose musical defaults you can refine.</p>
-              </div>
-
-              <div class="field">
-                <label for="genreSelect">Genre</label>
-                <select id="genreSelect"></select>
-                <p class="field-note" id="genreBlurb"></p>
-              </div>
-
-              <details class="creation-details" id="creationDetails">
-                <summary>Fine-tune the song<i class="disclosure" aria-hidden="true"></i></summary>
-                <div class="disclose">
-                  <div class="creation-details-body">
-                    <div class="field-row">
-                      <div class="field">
-                        <label for="keySelect">Key</label>
-                        <select id="keySelect"></select>
-                      </div>
-                      <div class="field">
-                        <label for="scaleSelect">Scale</label>
-                        <select id="scaleSelect"></select>
-                      </div>
-                    </div>
-
-                    <div class="field-row">
-                      <div class="field">
-                        <label for="energySelect">Feel</label>
-                        <select id="energySelect">
-                          <optgroup label="Calm to busy">
-                            <option value="still">Still &amp; sparse</option>
-                            <option value="soft">Soft &amp; spacious</option>
-                            <option value="flow" selected>Easy flow</option>
-                            <option value="bright">Bright &amp; lively</option>
-                            <option value="driving">Driving &amp; full</option>
-                          </optgroup>
-                          <optgroup label="Against the grain">
-                            <option value="heavy">Slow &amp; heavy</option>
-                            <option value="hushed">Busy but hushed</option>
-                          </optgroup>
-                        </select>
-                      </div>
-                      <div class="field">
-                        <label for="barsSelect">Length</label>
-                        <select id="barsSelect">
-                          <option value="auto" selected>Fits the genre</option>
-                          <option value="4">4 bars</option>
-                          <option value="8">8 bars</option>
-                          <option value="12">12 bars</option>
-                        </select>
-                      </div>
-                    </div>
-
-                    <div class="field">
-                      <div class="field-top">
-                        <label for="tempoRange">Tempo</label>
-                        <span class="field-read" id="tempoValue">—</span>
-                      </div>
-                      <input type="range" id="tempoRange" min="50" max="180" step="1" value="100" aria-label="Tempo in beats per minute">
-                      <div class="tempo-actions">
-                        <button class="ghost" id="tapTempoButton">Tap tempo</button>
-                        <button class="ghost" id="tempoReset" data-conditional>Use genre tempo</button>
-                      </div>
-                    </div>
-
-                    <div class="field-row compact-settings">
-                      <div class="field">
-                        <label for="countInSelect">Count-in</label>
-                        <select id="countInSelect">
-                          <option value="0">Off</option>
-                          <option value="1" selected>1 bar</option>
-                          <option value="2">2 bars</option>
-                        </select>
-                      </div>
-                      <label class="check"><span>Second melody</span><input type="checkbox" id="counterToggle"></label>
-                    </div>
+            <section class="block">
+              <div class="block-head"><h3 class="group-title">Tempo</h3></div>
+              <div class="list">
+                <div class="tempo-row">
+                  <div class="tempo-top">
+                    <label class="row-title" for="tempoRange">Beats per minute</label>
+                    <span class="tempo-read" id="tempoValue">—</span>
                   </div>
+                  <input class="slider" type="range" id="tempoRange" min="50" max="180" step="1" value="100" aria-label="Tempo in beats per minute">
                 </div>
-              </details>
-
-              <!-- Nine identical ghosts in two anonymous rows become named
-                   groups. The legend above each is the same silkscreen register
-                   as the rest of the desk, which is what makes the sheet read as
-                   part of the machine rather than as a settings page. -->
-              <div class="sheet-group">
-                <h3 class="legend">Rewrite</h3>
-                <div class="sheet-row">
-                  <button class="ghost" id="rerollMelodyButton">New melody</button>
-                  <button class="ghost" id="rerollChordsButton">New chords</button>
-                </div>
+                <button class="row" id="tapTempoButton" type="button">
+                  <span class="row-text"><span class="row-title">Tap tempo</span>
+                    <span class="row-sub" id="tapTempoHint">Tap four times in time</span></span>
+                </button>
+                <button class="row" id="tempoReset" type="button" hidden>
+                  <span class="row-text"><span class="row-title c-tint">Use the genre’s tempo</span></span>
+                </button>
               </div>
+            </section>
 
-              <div class="sheet-group">
-                <h3 class="legend">Export</h3>
-                <div class="sheet-row is-export">
-                  <button class="ghost" id="saveButton">Save to library</button>
-                  <button class="ghost" id="linkButton">Copy link</button>
-                  <button class="ghost" id="copyButton">Copy as text</button>
-                  <button class="ghost" id="midiButton">Download MIDI</button>
-                </div>
-              </div>
+            <section class="block">
+              <div class="block-head"><h3 class="group-title">Rewrite</h3></div>
+              <div class="list" id="rewriteList"></div>
+              <p class="group-note">Rerolling one half keeps the other, so you can hunt for a melody over chords you already like.</p>
+            </section>
 
-              <div class="sheet-row is-quiet">
-                <button class="ghost" id="installButton" data-conditional>Install app</button>
-                <button class="ghost" id="helpButton">How it works</button>
+          </div>
+        </section>
+
+        <!-- ---------------------------------------------------- arrange -->
+        <section class="screen" data-screen="arrange" id="screenArrange" role="tabpanel" aria-label="Arrange" inert>
+          <div class="screen-inner">
+            <section class="block">
+              <div class="block-head">
+                <h3 class="group-title" id="arrangeFormLabel">Arrangement</h3>
+                <button class="block-action" id="arrangeReset" hidden>All parts on</button>
               </div>
-              <p class="install-help" id="installHelp" role="status" hidden>
-                On iPhone or iPad, tap Share, then choose <b>Add to Home Screen</b>.
+              <p class="group-note" id="arrangeSummary"></p>
+              <div class="map" id="arrangeMap" role="group" aria-label="Arrangement map"></div>
+              <div class="map-key" id="arrangeKey" aria-hidden="true"></div>
+            </section>
+
+            <section class="block">
+              <div class="block-head"><h3 class="group-title">Section by section</h3></div>
+              <div class="list" id="arrangeSteps"></div>
+            </section>
+
+            <section class="block">
+              <div class="block-head"><h3 class="group-title">Why this works</h3></div>
+              <div class="card"><p class="prose selectable" id="theoryText"></p></div>
+            </section>
+
+            <section class="block">
+              <div class="block-head"><h3 class="group-title">On the hardware</h3></div>
+              <div class="card"><div class="prose selectable" id="arrangeTips"></div></div>
+            </section>
+          </div>
+        </section>
+
+        <!-- ---------------------------------------------------- library -->
+        <section class="screen" data-screen="library" id="screenLibrary" role="tabpanel" aria-label="Library" inert>
+          <div class="screen-inner">
+            <section class="block">
+              <div class="block-head"><h3 class="group-title">This song</h3></div>
+              <div class="list" id="currentActions"></div>
+            </section>
+
+            <section class="block">
+              <div class="block-head">
+                <h3 class="group-title">Saved sketches</h3>
+                <span class="badge" id="libraryCount" hidden>0</span>
+              </div>
+              <div class="list" id="libraryList"></div>
+              <div class="empty" id="libraryEmpty">
+                <span class="empty-mark" id="libraryMark" aria-hidden="true"></span>
+                <b>Nothing saved yet</b>
+                <p>A sketch is saved as the recipe that made it, so it comes back note for note — and it is small enough to live in a link.</p>
+              </div>
+            </section>
+
+            <section class="block">
+              <div class="block-head"><h3 class="group-title">Downbeat</h3></div>
+              <div class="list" id="aboutList"></div>
+              <p class="group-note" id="installHelp" hidden>
+                Tap <b>Share</b> in Safari, then choose <b>Add to Home Screen</b>. Installed, Downbeat runs full-screen and works with no connection.
               </p>
+            </section>
+          </div>
+        </section>
+      </main>
 
-              <div class="saved">
-                <div class="saved-head">
-                  <h3 class="legend">Library</h3>
-                  <span class="count" id="libraryCount" hidden>0</span>
-                </div>
-                <div class="saved-list" id="libraryList"></div>
-                <div class="empty" id="libraryEmpty">
-                  <div class="empty-mark" aria-hidden="true"></div>
-                  <b>Nothing saved yet</b>
-                  <p>Save a sketch and it waits here, on this device, with its key, tempo and shape intact.</p>
-                  <button class="ghost" id="librarySaveEmpty">Save this song</button>
-                </div>
-              </div>
-            </div>
+      <!-- The Song screen's primary action, as its own row of the shell rather
+           than as something sticky inside the scroller. A sticky footer covers
+           whatever is under it, and the row it covers on a phone is always the
+           last one you were reaching for. -->
+      <div class="cta-bar" id="songCta" hidden>
+        <button class="btn btn-filled btn-lg btn-block" id="generateButton">
+          <svg class="i" aria-hidden="true" focusable="false"><use href="#i-sparkle"></use></svg>
+          Write a new song
+        </button>
+      </div>
 
-            <!-- Every field above is live, so this is a reroll of both seeds
-                 rather than a submit — and a CTA that scrolls away below nine
-                 other buttons is a CTA nobody presses. -->
-            <div class="sheet-foot">
-              <button class="go" id="generateButton" aria-keyshortcuts="G">Generate song</button>
-            </div>
-          </section>
-
-          <section class="sheet" id="structureSheet" data-sheet="structure" role="dialog" aria-modal="true" aria-labelledby="structureSheetTitle" tabindex="-1" hidden>
-            <div class="sheet-head">
-              <div class="sheet-title">
-                <span class="eyebrow">Arrange</span>
-                <h2 id="structureSheetTitle">Structure</h2>
-              </div>
-              <button class="icon" data-close-sheet aria-label="Close">
-                <svg class="i" aria-hidden="true" focusable="false"><use href="#i-close"></use></svg>
-              </button>
-            </div>
-
-            <div class="sheet-body">
-              <p class="sheet-lead"><b id="arrangeFormLabel"></b> <span id="arrangeSummary"></span></p>
-
-              <div class="sheet-section">
-                <h3 class="legend">Arrangement</h3>
-                <div class="map-wrap" id="mapWrap">
-                  <div class="map" id="arrangeMap" aria-label="Arrangement map"></div>
-                </div>
-                <button class="ghost" id="arrangeReset" hidden>All parts back on</button>
-              </div>
-
-              <ol class="sections" id="arrangeSteps"></ol>
-
-              <div class="why">
-                <h3>Why this works</h3>
-                <p id="theoryText"></p>
-              </div>
-
-              <div class="why">
-                <h3>On the hardware</h3>
-                <div id="arrangeTips"></div>
-              </div>
-            </div>
-          </section>
+      <!-- The transport. A performance tool has to be able to stop from
+           wherever you are, so it never scrolls and never leaves. -->
+      <div class="dock" id="dock" role="region" aria-label="Transport">
+        <div class="dock-bars" id="dockBars" aria-hidden="true"></div>
+        <button class="dock-play" id="playButton" aria-label="Play" aria-keyshortcuts="Space">
+          <svg class="i" id="playIcon" aria-hidden="true" focusable="false"><use href="#i-play"></use></svg>
+        </button>
+        <div class="dock-read">
+          <span class="dock-part" id="dockPart">Melody</span>
+          <span class="dock-pos" id="dockPos"></span>
         </div>
-      </section>
-    </main>
+        <div class="dock-actions">
+          <button class="icon-toggle" id="soloButton" aria-pressed="false" aria-label="Hear only this part">
+            <svg class="i" aria-hidden="true" focusable="false"><use href="#i-solo"></use></svg>
+          </button>
+          <button class="icon-toggle" id="loopButton" aria-pressed="true" aria-label="Loop">
+            <svg class="i" aria-hidden="true" focusable="false"><use href="#i-loop"></use></svg>
+          </button>
+        </div>
+      </div>
 
-    <!-- Phone only. ui.js fills it by moving #parts and #barControls here. -->
-    <nav class="thumb" id="thumb" hidden aria-label="Parts and transport"></nav>
+      <!-- A <nav> whose role is overridden by tablist stops being a landmark,
+           and then the tab bar is page content outside every landmark. The
+           navigation region and the tablist are two things, so they are two
+           elements. -->
+      <nav class="tabbar" id="tabbar" aria-label="Sections">
+        <div class="tabbar-inner" role="tablist" aria-label="Sections">
+        <button class="tab" role="tab" data-tab="play" aria-selected="true" aria-controls="screenPlay">
+          <svg class="i" aria-hidden="true" focusable="false"><use href="#i-pads"></use></svg><span>Play</span>
+        </button>
+        <button class="tab" role="tab" data-tab="song" aria-selected="false" aria-controls="screenSong" tabindex="-1">
+          <svg class="i" aria-hidden="true" focusable="false"><use href="#i-sliders"></use></svg><span>Song</span>
+        </button>
+        <button class="tab" role="tab" data-tab="arrange" aria-selected="false" aria-controls="screenArrange" tabindex="-1">
+          <svg class="i" aria-hidden="true" focusable="false"><use href="#i-structure"></use></svg><span>Arrange</span>
+        </button>
+        <button class="tab" role="tab" data-tab="library" aria-selected="false" aria-controls="screenLibrary" tabindex="-1">
+          <svg class="i" aria-hidden="true" focusable="false"><use href="#i-library"></use></svg><span>Library</span>
+        </button>
+        </div>
+      </nav>
 
-    <div class="count-in" id="countIn" role="dialog" aria-modal="true" aria-labelledby="countInLabel" hidden>
-      <small class="legend" id="countInLabel">Count in</small>
-      <!-- aria-hidden, not aria-live: an assertive region firing three times a
-           second interrupts and discards everything the reader was saying,
-           including the "Playback started" that follows it. -->
-      <b id="countInBeat" aria-hidden="true">4</b>
-      <button class="pill" id="countInCancel" aria-keyshortcuts="Escape">Cancel</button>
+      <span class="sr-only" id="live" role="status" aria-live="polite"></span>
     </div>
 
-    <section class="onboarding" id="onboarding" role="dialog" aria-modal="true" aria-labelledby="onboardingTitle" hidden>
-      <div class="onboarding-card">
-        <button class="icon onboarding-close" id="onboardingClose" aria-label="Skip introduction">
-          <svg class="i" aria-hidden="true" focusable="false"><use href="#i-close"></use></svg>
-        </button>
-        <!-- The mark showing beat 1, 2 and 3 rather than a digit in a box: the
-             motif is taught on first run and recognised every time the logo
-             counts a bar afterwards. Mark.render fills each one. -->
-        <div class="onboarding-page" data-onboarding-page="0">
-          <span class="onboarding-mark" data-beat="1" aria-hidden="true"></span>
-          <p class="eyebrow">Create</p>
-          <h2 id="onboardingTitle">A complete song sketch in seconds.</h2>
-          <p>Choose a sound, key and feel. Downbeat writes the harmony, melody, bass and drums together.</p>
+    <div class="countin" id="countIn" role="dialog" aria-modal="true" aria-label="Counting in" hidden>
+      <small>Count in</small>
+      <!-- aria-hidden rather than aria-live: a region firing three times a
+           second interrupts and discards everything the reader was saying. -->
+      <b id="countInBeat" aria-hidden="true">4</b>
+      <button class="btn btn-grey" id="countInCancel" aria-keyshortcuts="Escape">Cancel</button>
+    </div>
+
+    <section class="intro" id="intro" role="dialog" aria-modal="true" aria-label="Welcome to Downbeat" hidden>
+      <!-- A scroll container with nothing focusable in it cannot be reached
+           from a keyboard. The tour is driven by the dots and Next rather than
+           by scrolling, but the scroller still has to be operable. -->
+      <div class="intro-pages" id="introPages" role="group" aria-label="Tour" tabindex="0">
+        <div class="intro-page" data-page="0">
+          <span class="intro-mark" data-beat="1" aria-hidden="true"></span>
+          <p class="intro-eyebrow">Create</p>
+          <h2>A complete song sketch in seconds</h2>
+          <p>Pick a sound and Downbeat writes the harmony, melody, bass line and drums together — in a real key, with real voice leading.</p>
         </div>
-        <div class="onboarding-page" data-onboarding-page="1" hidden>
-          <span class="onboarding-mark" data-beat="2" aria-hidden="true"></span>
-          <p class="eyebrow">Connect</p>
-          <h2 id="onboardingHardwareTitle">Choose the hardware in front of you.</h2>
-          <p>Tap the unit on your desk. Downbeat draws its exact pads or keys for every part, and remembers the choice.</p>
-          <div class="devices onboarding-devices" id="onboardingDevices" role="group" aria-label="Choose your hardware"></div>
-        </div>
-        <div class="onboarding-page" data-onboarding-page="2" hidden>
-          <span class="onboarding-mark" data-beat="3" aria-hidden="true"></span>
-          <p class="eyebrow">Perform</p>
-          <h2 id="onboardingPerformTitle">Press play and follow the lights.</h2>
-          <p>Performance mode keeps the active part, next inputs and transport within reach, and holds the screen awake while you play.</p>
-        </div>
-        <div class="onboarding-foot">
-          <button class="icon onboarding-back" id="onboardingBack" aria-label="Previous step">
-            <svg class="i" aria-hidden="true" focusable="false"><use href="#i-chevron-left"></use></svg>
-          </button>
-          <!-- Real tab stops. These looked tappable and were aria-hidden
-               decoration; a focusable control that does nothing is worse than
-               the decoration it replaced, so each one jumps to its page. -->
-          <div class="onboarding-dots" id="onboardingDots">
-            <button type="button" data-onboarding-go="0"><span class="sr-only">Step 1 of 3</span></button>
-            <button type="button" data-onboarding-go="1"><span class="sr-only">Step 2 of 3</span></button>
-            <button type="button" data-onboarding-go="2"><span class="sr-only">Step 3 of 3</span></button>
+        <div class="intro-page" data-page="1">
+          <span class="intro-mark" data-beat="2" aria-hidden="true"></span>
+          <p class="intro-eyebrow">Connect</p>
+          <h2>Choose the box on your desk</h2>
+          <p>Downbeat draws the exact pads or keys for every part on your EP‑133 K.O. II or M‑VAVE FM‑1, and remembers which one you play.</p>
+          <div class="seg-ctl-wrap" style="width:100%;max-width:320px">
+            <div class="seg-ctl" id="introDevices" role="radiogroup" aria-label="Choose your hardware"></div>
           </div>
-          <button class="go" id="onboardingNext">Continue</button>
         </div>
+        <div class="intro-page" data-page="2">
+          <span class="intro-mark" data-beat="3" aria-hidden="true"></span>
+          <p class="intro-eyebrow">Perform</p>
+          <h2>Press play and follow the lights</h2>
+          <p>Pads light in time with playback and the run scrolls ahead of your hands. The screen stays awake while you play.</p>
+        </div>
+      </div>
+      <div class="intro-foot">
+        <button class="btn intro-skip" id="introSkip">Skip</button>
+        <div class="intro-dots" id="introDots">
+          <button type="button" data-go="0" aria-current="true"><span class="sr-only">Step 1 of 3</span></button>
+          <button type="button" data-go="1"><span class="sr-only">Step 2 of 3</span></button>
+          <button type="button" data-go="2"><span class="sr-only">Step 3 of 3</span></button>
+        </div>
+        <button class="btn intro-next" id="introNext">Next</button>
       </div>
     </section>
 
-    <span class="sr-only" id="transportStatus" role="status" aria-live="polite"></span>
-    <div class="toast" id="toast" role="status"></div>
+    <!-- Portrait only, on a phone. The manifest asks for it and iOS ignores
+         the field for a web app, so this is what a rotated phone gets — CSS
+         alone decides when, so there is no frame in which the wrong layout is
+         drawn while JavaScript catches up. -->
+    <div class="rotate" role="status">
+      <svg class="i" aria-hidden="true" focusable="false"><use href="#i-rotate"></use></svg>
+      <b>Turn your phone upright</b>
+      <p>Downbeat is a portrait app — one hand on the phone, the other on the
+        hardware. There is not enough height on a phone lying down to draw a
+        sampler you could read.</p>
+    </div>
+
     <script src="src/theory.js"></script>
     <script src="src/genres.js"></script>
     <script src="src/compose.js"></script>
     <script src="src/audio.js"></script>
     <script src="src/midi.js"></script>
-    <!-- Both are dependency-free and both are read by everything downstream:
-         devices.js draws the mark into its empty states, ui.js sequences with
-         Motion. They go before the first consumer, not at the end. -->
     <script src="src/mark.js"></script>
     <script src="src/motion.js"></script>
     <script src="src/devices.js"></script>
     <script src="src/arrange.js"></script>
     <script src="src/library.js"></script>
+    <script src="src/ios.js"></script>
     <script src="src/ui.js"></script>
   </body>
 </html>

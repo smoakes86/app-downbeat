@@ -5,73 +5,102 @@ melody, then shows you how to perform each part on a Teenage Engineering EP-133
 K.O. II or an M-VAVE FM-1 — the exact pads and keys, in order, lighting up in
 time with playback.
 
-No build step, no dependencies. Open `index.html` in a browser, or serve the
-directory with anything static.
+An iPhone app, built as a zero-dependency PWA. No build step, no dependencies.
+Open `index.html` in a browser, or serve the directory with anything static.
 
 ```
 python3 -m http.server
 ```
 
+Add it to your Home Screen and it runs full-screen, offline, with the screen
+held awake while you play.
+
 ## The interface
 
-Two regions and nothing else.
+Downbeat is shaped like an iOS app because it is used like one: standing at a
+desk with a phone in one hand and a sampler under the other. So it is built out
+of platform controls rather than invented ones — a navigation bar, a tab bar, an
+inset-grouped table view, a segmented control, a switch, a slider, modal sheets
+with grabbers, action sheets, alerts. People already know how all of those
+behave, and that is most of what "feels native" means.
 
-**The hardware, on the left, always.** Not a tab, not a panel you open — the
-faceplate is the app, and it never leaves the screen. It is given whatever
-height the window has and the drawing scales into it, so it is as large as the
-room allows on a desktop and still legible on a tablet.
+**The document never scrolls.** `<body>` is locked to the viewport and the only
+things that move are the four screen scrollers, each keeping its own offset the
+way a tab controller's children do. No rubber-banding, no pull-to-refresh, no
+bounce at the top of a fixed bar.
 
-**The part, on the right.** Five buttons — Melody, Counter, Chords, Bass,
-Drums — and picking one shows *that* part: its shape on the grid, and the run
-of pads to press for it, in order. Nothing else is on screen, because nothing
-else is what you are doing. The whole right-hand side takes the part's colour,
-so you can tell at a glance whether you are on the bass or the kit.
+**Portrait, on a phone.** One hand on the phone and the other on the hardware —
+that is the posture the whole layout is for, and the manifest asks for it. iOS
+ignores that field for a web app, so a phone turned on its side gets a line
+asking for it back rather than a layout that does not work. The arithmetic is
+not close: a phone lying down is about 390 points tall, the fixed chrome takes
+158 of them, and what is left would draw a 540-unit sampler 115 points wide
+with three-pixel legends. A tablet on its side has the height, and gets the
+two-column desk instead.
 
-**Two sheets, and one rule about them.** *New song* and *Structure* open as
-overlays — but they are children of the part region, not of the page, so they
-cover what you were reading and never the hardware you were reading it for. You
-can change genre, key and feel with the faceplate still lit and still playing
-beside you. That one structural decision is why it works at every screen size
-without a single positioning special case.
+**Four tabs, and a transport that never leaves.**
 
-Song creation, saved sketches, sharing and MIDI export all live in the *New
-song* sheet. The arrangement guide and the theory note live in *Structure*. The
-setup recipe for the device — which is genuinely useful and genuinely long —
-sits under the run as a disclosure, closed until you want it.
+| | |
+|---|---|
+| **Play** | The part you are playing: the faceplate, the run of pads, the shape |
+| **Song** | Genre, key, scale, feel, length, tempo, second melody, count-in |
+| **Arrange** | The form, the map, section by section, the theory note |
+| **Library** | Saved sketches, sharing, export, and how it works |
 
-On a phone the desk stacks, and the faceplate crops to the pads themselves: at
-that size the display and the function rows are pixels you cannot press, so the
-`viewBox` is retargeted to just the grid you actually hit.
+Between the content and the tab bar sits the transport — play, the part you are
+on, your position in the loop, solo and loop. A performance tool has to be able
+to stop from wherever you are, so it is always there and never scrolls.
+
+**The part switcher is a segmented control whose thumb takes that part's
+colour**, so the control is also the legend for the five colours used
+everywhere else. Tapping *Counter* when the song has no second line writes one
+rather than refusing — a dead segment can only tell you that you cannot have the
+thing.
+
+**The faceplate is fitted, not squeezed.** A plate is a fixed number of user
+units wide — 356 for the EP-133, 682 for the FM-1 — so "make it the width of the
+screen" produces two very different objects. `fitFace()` measures the opening
+and the viewBox and picks a scale that keeps the silkscreen readable; where the
+width cannot pay for that, the plate keeps its floor and the bay scrolls
+sideways, opening centred on the pads this part actually uses. Losing the far
+end of a keybed off the edge of a phone is a better outcome than shrinking all
+27 keys past being able to read which one to press.
+
+**The run of pads is a rail you flick.** During playback it scrolls the chip it
+has just lit into view, so the run runs ahead of your hands.
+
+**The shape is drawn against the bars.** Bars are never narrower than 96 points,
+so a twelve-bar sketch scrolls rather than collapsing into slivers — and the
+lane follows the playhead while it runs, unless your finger is on it.
 
 ## The look
 
-A dark studio desk. Near-black room, panels lifted off it, and the two
-faceplates lit on top like real gear — which is exactly what they are, so they
-keep their real-world colours. Turn the lights on with the theme button.
+A dark studio room by default, warm near-black rather than grey, and a light
+appearance in warm paper. Both follow the system unless you choose.
 
-The chrome is deliberately quiet so the *music* carries the colour: the part
-you have selected tints its chip, its notes, its run, and the pads that light
-up under playback.
+Colour is role-named the way UIKit names it: background, grouped background,
+elevated cell, four fill levels, four label levels, one separator. Depth is a
+lighter surface and a hairline, never a bevel and a cast shadow.
 
-The visual system is built from semantic tokens on `<body>` in `styles.css`:
-canvas, layered surfaces, labels, separators, materials and elevation. Dark and
-light appearances swap those foundations while component rules remain shared.
-Translucent chrome and sheets use the material tokens; controls and workspace
-panels use raised or inset surfaces according to their interaction hierarchy.
+Type is San Francisco on the iOS ramp — the eleven text styles are the only
+sizes in the app, in `rem` so a raised browser font size raises the app with it.
+Two shipped faces survive in exactly two places: Archivo sets the song title,
+and Martian Mono sets everything printed *on the hardware*, because that type is
+silkscreen and reads as gear rather than as interface.
 
-System blue is reserved for primary actions; the musical palette is kept out of
-general chrome so colour always carries meaning.
+The tint is the amber the hardware's own lamps are, not system blue: an app with
+a strong accent should use it. It sits outside the five track hues, so it can
+never be mistaken for musical data.
 
 The five track colours are data, not decoration, so they are picked as a
 categorical palette and validated rather than eyeballed — lightness band, chroma
-floor, colour-blind separation and contrast, in both themes, in the order the
-tracks appear. Melody takes the brand accent; the rest alternate warm and cool,
-because a semantic ordering put green next to magenta and failed deutan badly.
-Each track keeps its colour everywhere it appears — mute chip, timeline lane,
-arrangement map — and is always text-labelled, never colour alone.
+floor, colour-blind separation and contrast, in both appearances, in the order
+the tracks appear. Each track keeps its colour everywhere it appears and is
+always text-labelled, never colour alone.
 
-The EP-133 and FM-1 faceplates keep their real-world colours in both themes.
-They are pictures of actual objects; only their lit state follows the accent.
+The EP-133 and FM-1 faceplates keep their real-world colours in both
+appearances. They are pictures of actual objects; only their lit state follows
+the part.
 
 ## What it does
 
@@ -123,23 +152,20 @@ weight, and how hard the whole thing is played. Five of the settings run in a
 line, *Still & sparse* through *Easy flow* to *Driving & full*. The other two
 step off it, because busy and loud are not the same axis: *Slow & heavy* plays
 almost nothing and hits it hard, *Busy but hushed* is full of notes and quiet
-with it. At the calm end the kit thins rather than just turning down — ghost
-notes are the first thing a player drops — and the fill into the loop point
-gets rarer as things settle and near-certain when they are driving.
+with it.
 
-**One part at a time, on the grid.** Whichever part is selected gets the whole
-lane to itself, drawn at a size you can read. Melody, countermelody and chords
-are pitched blocks against the bars; the bass letters every note with the job
-it is doing — `R` root, `3` third, `5` fifth, `→` an approach note leaning into
-the next chord — and the drums are a step sequencer, one row per voice, with
-accents, ghost notes and hat rolls all visible. Below it, the same part as the
-run of pads to press. The two things you need to play a line are finally in the
-same view.
+**One part at a time, on the grid.** Melody, countermelody and chords are
+pitched blocks against the bars; the bass letters every note with the job it is
+doing — `R` root, `3` third, `5` fifth, `→` an approach note leaning into the
+next chord — and the drums are a step sequencer, one row per voice, with
+accents and ghost notes visible. Below it, the same part as the run of pads to
+press.
 
 **Playback** is a lookahead scheduler on the audio clock, so it stays in time
 and loops cleanly. Voices are oscillator stacks with ADSR and filter
 envelopes; drums are synthesised; everything shares a reverb send into a
-soft-clipper and compressor.
+soft-clipper and compressor. A count-in clicks you in so you can start playing
+on the downbeat without looking at the screen.
 
 **An arrangement guide.** The generator writes a loop; this turns it into a
 song. Each genre gets the shape its songs actually take — verse/chorus for
@@ -147,81 +173,136 @@ pop, rock, folk, R&B, gospel and funk; build/drop for house, trap and
 synthwave; head-and-solos for jazz, blues and bossa; a slow fade up and down
 for lo-fi and ambient. Sections are whole numbers of loops, so nothing ever
 lands mid-progression. A map drawn to scale shows which of the five parts
-play in each section and how the energy moves, and every section is
-clickable: it mutes the parts that section drops so you hear the idea
-instead of just reading it.
+play in each section, and every section is tappable: it mutes the parts that
+section drops so you hear the idea instead of just reading it.
 
 **Saving and sharing.** A sketch is stored as the recipe that produced it —
 genre, key, scale choice, energy, length, tempo and the two seeds — rather
 than as a dump of notes. Reloading one replays exactly the same decisions, so
 it comes back note for note, and the recipe is small enough to live in a URL:
-the ⇗ button copies a link that rebuilds the sketch on any machine, no
-account and no server. Saves live in the browser's local storage.
+Share hands the link to the system share sheet, which can put it in Messages,
+in a note or on the clipboard. Saves live in the browser's local storage, and
+swipe left on one to delete it. The sketch you are working on is kept as a
+draft too, so a relaunch picks up where you left off.
 
 **Hardware performance views.** You pick the device; nothing picks it for you.
-The choice holds for every part — melody, countermelody, chords, bass, drums —
-and across reloads, until you change it. A stylised faceplate shows exactly how
-to play the part, lighting its pads and keys live during playback, and each
-comes with a setup recipe checked against current firmware:
+The choice holds for every part and across reloads, until you change it. A
+stylised faceplate shows exactly how to play the part, lighting its pads and
+keys live during playback, and each comes with a setup recipe checked against
+current firmware:
 
 - **Teenage Engineering EP-133 K.O. II** (OS 2.5) — the pads are labelled as
   they are on the unit, a calculator keypad reading `.` `0` `ENTER` along the
   bottom and `1`–`9` above it, with KEYS mode running the scale up from the
   bottom left. The root goes where the device puts it: on the pad marked `1`,
-  three degrees up the run, so `.` `0` `ENTER` play the degrees below it. The
-  scale and key are given as the system codes you actually type — `311` for
-  major through `319` for minor pentatonic, and `320`–`331` for C through B —
-  and the octave is chosen to put as much of the part under the pads as
-  possible. The K.O. II has no harmonic minor, melodic minor or phrygian
-  dominant, so sketches in those keys fall back to `12T` and the pads run
-  chromatically. Also the TIMING-plus-pads arpeggio for broken chords (which
-  needs the sample set to oneshot or legato) and a pad-per-voice kit map for
-  the drum track. Notes that fall outside the chosen scale are flagged rather
-  than silently dropped.
+  three degrees up the run. The scale and key are given as the system codes you
+  actually type — `311` for major through `319` for minor pentatonic, and
+  `320`–`331` for C through B — and the octave is chosen to put as much of the
+  part under the pads as possible. The K.O. II has no harmonic minor, melodic
+  minor or phrygian dominant, so sketches in those keys fall back to `12T` and
+  the pads run chromatically. Also the TIMING-plus-pads arpeggio for broken
+  chords and a pad-per-voice kit map for the drum track. Notes that fall
+  outside the chosen scale are flagged rather than silently dropped.
 - **M-VAVE FM-1** (firmware V15) — the 27-key F3–G5 silicone keybed, with
   the OCT −/+ shift (and its LED blink code) computed so the whole part fits
   under the fingers, POLY for chord stacks, MONO and V15's glide for bass
   lines, and pointers to the arpeggiator and 16-step sequencer.
 
-Every pad and key on the faceplates is clickable and previews its sound, as
-is every step chip in the play-in-order recipe.
+Every pad and key on the faceplates is tappable and previews its sound, as is
+every step chip in the run.
 
 ## Controls
 
 | | |
 |---|---|
-| Genre, Key, Scale | Scale can be left on *Pick for me* |
-| Second line | Adds a countermelody under the tune |
-| Energy | Seven settings. Five run from *Still & sparse* to *Driving & full*, moving tempo, note density, rests, leaps and how hard it is played; *Slow & heavy* and *Busy but hushed* step off that line, because pace and weight are not the same axis |
-| Length | *Fits the genre*, or force 4, 8 or 12 bars |
-| Tempo | Overrides the genre's tempo — ↺ puts it back on the genre without changing a note of the sketch |
+| Genre | A rail of cards. Picking one rewrites the song in that genre's scales, tempo range and kit |
+| Key, Scale, Feel, Length | Rows that open the system picker. Scale can be left on *Pick for me* |
+| Second melody | Adds a countermelody under the tune |
+| Tempo | A slider across the genre's own range, plus tap tempo, and one row to put it back on the genre without changing a note |
+| Count-in | Off, one bar or two |
 | New melody / New chords | Reroll one half, keep the other |
-| Part buttons | Which part you are playing — the lane, the run and the lit pads all follow |
-| Device buttons | Which of the two units you are playing it on. It stays put as you switch parts |
+| Write a new song | Rerolls both seeds |
+| Part switcher | Which part you are playing — the faceplate, the run and the shape all follow |
+| Device switcher | Which of the two units you are playing it on. It stays put as you switch parts |
 | Solo | Hear only the part you are on. It follows the selection |
-| Arrangement sections | Click one to hear it with its parts dropped |
-| Save / Share | Save the sketch, or copy a link that rebuilds it |
-| Copy / MIDI | Copy the sketch as text, or download it as MIDI |
+| Loop | Round and round, or once through |
+| Arrangement sections | Tap one to hear it with its parts dropped |
+| Share | The system share sheet: link, text, MIDI, or save to the library |
+| Undo | Appears in the title bar whenever a change can be taken back |
 
-`Space` plays and stops, `G` writes a new song, `1`–`5` pick a part, `Esc`
-closes a sheet. The room is dark unless you turn the lights on, and it
-remembers which you chose.
+With a hardware keyboard: `Space` plays and stops, `G` writes a new song,
+`1`–`5` pick a part, `⌘Z` undoes, `Esc` closes whatever is open.
+
+## Accessibility
+
+Every target clears 44 points, or reaches it with a pseudo-element rather than
+being drawn larger than it should be. Nothing depends on hovering — hover
+effects exist only inside a `(hover: hover)` query, and the preview chain is
+bound there too, because WebKit synthesises a `mouseenter` on tap and never
+sends the matching `mouseleave`.
+
+Every label clears WCAG AA in both appearances, measured rather than eyeballed
+— including the ink on all five track colours where the segmented thumb paints
+them. Colour never carries meaning alone: the arrangement map states which
+parts play in each section, and the five track colours are always
+text-labelled.
+
+Reduced Motion takes the travel and leaves the light: a pad lighting up is
+information, and deleting it would delete the feature. Increased Contrast firms
+up every hairline and secondary label without overwriting a selection ring.
+
+The whole app works from a keyboard. The tab bar, the part switcher, the device
+switcher and the genre rail are proper tab lists and radio groups with roving
+tab indices *and* arrow keys — the roving index on its own is half a pattern
+and leaves everything but the current item unreachable. A focused control keeps
+its own keys, so Space presses the button you are on and drives the transport
+only when nothing is focused. Re-rendering a control the user just operated
+finds it again afterwards rather than dropping focus to the document. Modals
+take focus, trap it, make the app inert and give focus back.
+
+## How it is checked
+
+Five scripts drive the built app in a real browser at iPhone SE, 15, 15 Pro
+Max, landscape and iPad, and they are how most of the bugs in this rewrite were
+found:
+
+- **function** — taps through every control on every screen and asserts the
+  result: the playhead moves and sits over the grid it marks, chips and lane
+  notes light under playback, solo survives a regenerate, a share link boots,
+  a draft survives a reload, swipe-to-delete opens and confirms.
+- **layout** — every tab at every size, with the safe-area insets an iPhone
+  actually reports forced in, asserting no horizontal overflow, no page offset,
+  no control under the notch or the home indicator, and nothing below 44pt —
+  and that a phone on its side shows the portrait notice with none of the app
+  laid out behind it.
+- **contrast** — composites every text node's colour onto its real background
+  and checks the ratio against the threshold for that size and weight.
+- **keyboard** — drives the entire app with no pointer at all.
+- **axe-core** — over every screen and every modal, in both appearances.
+
+Plus a sweep of all fourteen genres × four parts × two devices, twelve-bar
+songs, a 320px screen and a sketch renamed to a hundred characters of markup.
 
 ## Layout
 
 ```
-index.html
-styles.css
-src/theory.js    note spelling, scales, roman numerals, chords, voice leading
-src/genres.js    the 14 genre definitions — pure data
-src/compose.js   melody, countermelody, bass, drums, chord comping
-src/audio.js     synth voices, drum synthesis, effects, scheduler
-src/midi.js      Standard MIDI File export
-src/devices.js   hardware faceplates, note-to-pad/key mapping, playback lighting
-src/arrange.js   section plans per genre family — pure data plus a scaler
-src/library.js   sketch recipes, local storage, shareable links
-src/ui.js        the desk — the permanent hardware region, the per-part lane
-                 and run, the two sheets, and the transport
+index.html          the shell: nav bar, four screens, transport, tab bar
+css/tokens.css      colour, type, motion and the two hardware palettes
+css/base.css        reset, fonts, the type ramp, the fixed app shell
+css/components.css  the iOS control set
+css/screens.css     the four screens
+css/device.css      everything src/devices.js draws
+css/a11y.css        reduced motion, increased contrast, focus
+src/theory.js       note spelling, scales, roman numerals, chords, voice leading
+src/genres.js       the 14 genre definitions — pure data
+src/compose.js      melody, countermelody, bass, drums, chord comping
+src/audio.js        synth voices, drum synthesis, effects, scheduler
+src/midi.js         Standard MIDI File export
+src/devices.js      hardware faceplates, note-to-pad/key mapping, lighting
+src/arrange.js      section plans per genre family — pure data plus a scaler
+src/library.js      sketch recipes, local storage, shareable links
+src/ios.js          modal presentation, action sheets, alerts, swipe, segments
+src/ui.js           the app: state, transport, the four screens, platform glue
 ```
 
 Adding a genre means adding one object to `src/genres.js`.

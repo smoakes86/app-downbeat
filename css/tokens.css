@@ -1,211 +1,178 @@
-/* Downbeat — ANODISE tokens.
+/* Downbeat — tokens.
 
-   Every value the rest of the app is allowed to name lives here, and nowhere
-   else. The cascade is declared once, at the top of the first stylesheet, so a
-   link-order accident in index.html cannot silently reorder the app: a rule in
-   `components` beats a rule in `layout` because of this line, not because of
-   which <link> happens to come first. */
-@layer tokens, base, layout, components, motion, responsive, a11y;
+   The app is an iPhone app first. That decides this file twice over:
 
-/* The six properties the interface animates as *values* rather than as
-   keyframes. Registering them is what makes `transition: --part 220ms` legal —
-   an unregistered custom property has no type, so the browser can only swap it
-   in one frame. Without these six declarations the part detent, the lamp decay
-   and the playhead are all teleports. */
+   1. COLOUR IS SEMANTIC AND ROLE-NAMED, the way UIKit names it — background,
+      grouped background, elevated cell, four fill levels, four label levels,
+      one separator. Depth on iOS is a lighter surface and a hairline, never a
+      bevel pair and a cast shadow, so the material tokens the old desk was
+      built from are gone and nothing here paints a highlight along an edge.
+
+   2. TYPE IS THE SYSTEM STACK ON THE SYSTEM RAMP. San Francisco is the single
+      loudest signal that an app belongs on the platform, and its eleven text
+      styles are the only sizes an iOS app is allowed to use. The two shipped
+      faces survive in exactly two places: Archivo sets the song title, and
+      Martian Mono sets everything printed *on the hardware* — pad legends,
+      note names, the two displays — because that type is silkscreen and reads
+      as gear rather than as interface.
+
+   Two palettes are carried over from the previous design intact, because both
+   were validated and neither is a matter of taste:
+
+   - THE HARDWARE PALETTES (--ep-*, --fm-*). These are pictures of two real
+     objects. They keep their real-world colours in both appearances; only the
+     lit state follows the part. src/devices.js draws against them and
+     css/device.css paints them, so the names are a contract.
+
+   - THE FIVE TRACK COLOURS. Picked as a categorical palette and checked for
+     lightness band, chroma floor, colour-blind separation and contrast in both
+     appearances, in the order the tracks appear. Melody blue, counter coral,
+     chords teal, bass lime, drums magenta — no two adjacent hues closer than
+     94 degrees. They are data, never decoration, and every place they appear
+     is also text-labelled. */
+
+@layer tokens, base, components, screens, device, a11y;
+
 @layer tokens {
-  @property --part      { syntax:'<color>';  inherits:true;  initial-value:#4E9BEA }
-  @property --part-ink  { syntax:'<color>';  inherits:true;  initial-value:#7FB8F2 }
-  @property --tint      { syntax:'<color>';  inherits:true;  initial-value:#4E9BEA }
-  @property --lit       { syntax:'<number>'; inherits:false; initial-value:0 }
-  @property --head      { syntax:'<number>'; inherits:false; initial-value:0 }
-  @property --vel       { syntax:'<number>'; inherits:false; initial-value:.8 }
+  /* Animated as values rather than as keyframes. An unregistered custom
+     property has no type, so the browser can only swap it in one frame —
+     without these the pad lamps and the playhead are teleports. */
+  @property --part     { syntax:'<color>';  inherits:true;  initial-value:#4E9BEA }
+  @property --part-ink { syntax:'<color>';  inherits:true;  initial-value:#7FB8F2 }
+  @property --lit      { syntax:'<number>'; inherits:false; initial-value:0 }
+  @property --head     { syntax:'<number>'; inherits:false; initial-value:0 }
+  @property --vel      { syntax:'<number>'; inherits:false; initial-value:.8 }
 
-  /* Structure only. Nothing here changes between themes, which is why it can
-     safely sit on :root — see the note on the body block below for why colour
-     cannot. */
   :root {
-    --shell:1720px;
-    --gutter:20px;
-    /* Measured from the bar itself in ui.js; the fallback covers the first paint. */
-    --bar-h:56px;
+    /* ------------------------------------------------------------ metrics */
 
-    /* The notch, the home indicator and the landscape camera housing. The
-       viewport is told to extend under all three (viewport-fit=cover), so every
-       edge the chrome touches has to pay them back. */
+    /* The four insets. viewport-fit=cover puts the layout under the notch, the
+       home indicator and the landscape camera housing, so every edge of chrome
+       pays them back by hand. Fallbacks matter: a browser without the env()
+       resolves the whole calc() to nothing without them. */
     --safe-t:env(safe-area-inset-top, 0px);
     --safe-b:env(safe-area-inset-bottom, 0px);
     --safe-l:env(safe-area-inset-left, 0px);
     --safe-r:env(safe-area-inset-right, 0px);
 
-    /* Apple's minimum comfortable touch target. */
+    /* 44pt is Apple's minimum, and it is a floor rather than a target: the
+       primary transport and the tab bar items are larger. */
     --tap:44px;
 
-    /* A 4px base with even steps. The previous scale skipped (4/8/12/18/28/44),
-       and a hundred-odd raw pixel values had been written around the holes. */
-    --sp-0:2px;  --sp-1:4px;  --sp-2:8px;  --sp-3:12px;
-    --sp-4:16px; --sp-5:24px; --sp-6:32px; --sp-7:48px;
+    --nav-h:52px;      /* the title bar, below the status bar */
+    --tab-h:50px;      /* the tab bar, above the home indicator */
+    --dock-h:56px;     /* the transport, between the two */
 
-    /* Radii are named by role, not by size, so the choice is never a guess. The
-       nesting is derived: a well has 4px of padding, so the cap inside it is
-       12 - 4 = 8. 18px is the EP-133's own corner as a share of its width. */
-    --r-chip:4px;
-    --r-cap:8px;
-    --r-well:12px;
-    --r-panel:18px;
+    --gutter:16px;     /* the standard iOS screen margin */
+    --gutter-lg:20px;
+
+    /* 4px base, no gaps. */
+    --sp-0:2px;  --sp-1:4px;  --sp-2:8px;  --sp-3:12px;
+    --sp-4:16px; --sp-5:20px; --sp-6:24px; --sp-7:32px; --sp-8:44px;
+
+    /* iOS radii are large and continuous. 10px is the inset-grouped table
+       corner, 14px a card, 12px a control, 22px the modal sheet. */
+    --r-xs:6px;
+    --r-sm:10px;
+    --r-md:12px;
+    --r-lg:14px;
+    --r-xl:20px;
+    --r-sheet:14px;
     --r-pill:999px;
 
-    /* Durations are tied to mass, not to taste. Sixteen rungs, each named for
-       the kind of object that moves rather than for its number — a rung picked
-       by number is a rung picked by taste, which is the thing §5.2 exists to
-       stop.
+    /* The 0.5pt hairline. A physical pixel on a 2x/3x screen; `thin` where the
+       browser can resolve it, a hard 1px where it cannot. */
+    --hairline:0.5px;
 
-       Five of them (lamp, click, throw, slide, power) predate this pass and are
-       untouched in both name and value; they are consumed too widely to rename.
-       The other eleven were literals: §9.4 demands every duration be a token
-       while the scale only covered five of the numbers the bible names, so the
-       rule was unsatisfiable and eighty-three literal times had been written
-       around the holes. css/motion.css had already written the hole down —
-       "five entrance times … sit between the duration rungs and are written
-       literally here" — which is a comment nobody should have had to author.
+    /* ------------------------------------------------------------- motion */
 
-       Exits are deliberately absent. §5.3 derives them: exit = 55% of the
-       entrance, spelled at the point of use as `calc(var(--t-x) * .55)` so the
-       relationship stays visible in the rule and cannot drift when an entrance
-       is retuned. An exit rung would be a second place to change.
-
-       One duration in the app is honestly not a rung: the 3.2s hairline that
-       depletes under an armed delete mirrors the undo window src/ui.js counts
-       down. A time that has to equal a JS timeout is that timeout's number, not
-       a judgement about mass, and it is commented as such at the point of use.
-
-       --t-power is the odd one out on this ladder: it is not the length of a
-       single movement but the length of a composed sequence, so it is the one
-       duration that can be wrong without any single rule looking wrong. It was
-       520ms while css/motion.css composed §7.1 out to 640ms — the lamp strike is
-       authored as this token minus the strike's own length (--t-bloom, 180ms) so
-       that the sequence *ends* on the token, and at 520 that put the last event
-       195ms before the legends had finished arriving. 640ms is §7.1's own total
-       and the number the boot actually takes; src/ui.js reads the same token to
-       decide when the onboarding may cover the room, so the two cannot disagree
-       again. */
+    /* Named for the mass of the thing that moves, not for the number. The
+       first five are consumed by css/device.css, which is carried over intact,
+       so their names are a contract. */
     --t-lamp:40ms;     /* a filament lights: no mass at all */
-    --t-recoil:90ms;   /* a body kicks and comes straight back */
     --t-click:110ms;   /* a cap travels */
-    --t-cut:130ms;     /* the outgoing copy of something being replaced */
-    --t-fade:160ms;    /* a cross-cut: one layer trades places with another */
-    --t-bloom:180ms;   /* light and colour settling on a face already in place */
-    --t-notice:200ms;  /* a small surface arrives unasked */
-    --t-throw:220ms;   /* a switch flips */
-    --t-cue:240ms;     /* a line of type is recut; a band crosses a region */
+    --t-least:120ms;   /* the floor: shorter than this reads as a jump */
+    --t-fade:160ms;    /* one layer trades places with another */
+    --t-bloom:180ms;   /* colour settling on a face already in place */
+    --t-throw:220ms;   /* a switch flips; a tab changes */
     --t-panel:260ms;   /* a panel-sized region enters */
-    --t-open:280ms;    /* a housing changes shape: a disclosure, a knob's track */
-    --t-veil:300ms;    /* the room is covered, or a rail opens to full height */
-    --t-slide:320ms;   /* a drawer */
-    --t-lift:340ms;    /* the heaviest single move: a card rises, the desk regrids */
-    --t-grow:400ms;    /* a bar grows out of nothing */
-    --t-power:640ms;   /* the unit powers up, first pixel to lit lamp */
+    --t-open:280ms;    /* a housing changes shape: a disclosure */
+    --t-sheet:340ms;   /* a modal sheet rises from the bottom edge */
+    --t-lift:340ms;
 
-    /* The floor, and deliberately NOT a rung on the ladder above. Every value
-       from --t-lamp to --t-power answers "how heavy is this thing"; this one
-       answers "how short can a change be and still read as a change rather than
-       as a jump". That is a perceptual limit, not a mass, which is why it is
-       stated apart — dropping 120ms into the ladder between --t-click and
-       --t-cut would put a third value inside a 20ms band and invite the next
-       reader to pick it for a small object, which is exactly wrong.
+    /* Steps between staggered items. A step changes the order you read a
+       sequence in, which is why it is a different family from a duration. */
+    --s-pad:14ms;
+    --s-chip:16ms;
+    --s-row:24ms;
 
-       Two consumers, and they want it for the same reason. css/a11y.css spends
-       it on the whole reduced-motion reveal: when transforms are off, every
-       entrance collapses to the shortest honest fade. css/layout.css spends it
-       on .bar-pos, the transport readout that appears and disappears with the
-       transport, where there is no object travelling and 110ms reads as a
-       flicker. It was written as a literal eleven times before it had a name. */
-    --t-least:120ms;
-
-    /* Steps, not durations. A step is the gap between two things that each take
-       their own time, and it is a separate family because getting one wrong
-       changes the *order* you read a sequence in rather than how heavy it feels.
-       --hop, below, is the beat-relative member of exactly this set — these are
-       the fixed-rate ones, for sequences whose reading order must not stretch
-       with the tempo. */
-    --s-pad:14ms;      /* one pad behind the last, in reading order */
-    --s-chip:16ms;     /* one chip behind the last — Motion.stagger's own step */
-    --s-bar:25ms;      /* one energy bar behind the last, left to right */
-    --s-word:40ms;     /* one word behind the last in a slot cut */
-    --s-region:45ms;   /* one desk region behind the last, at boot */
-    --s-lead:60ms;     /* one whole region leading another: rig before stage */
-    --s-behind:80ms;   /* a card arriving into a room that is already dimmed */
-
-    /* Written once per song by Motion.tempo(bpm) — never per frame, because a
-       registered inherited property written to :root invalidates the whole
-       document. Everything beat-relative derives from it, so the interface gets
-       faster when the music does. Outside roughly 66-180 BPM the clamps take
-       over and the relationship stops being literally true. */
+    /* Written once per song by Motion.tempo(bpm). Everything beat-relative
+       derives from it, so the lamps get faster when the music does. */
     --beat-ms:545;
     --t-decay:clamp(140ms, calc(var(--beat-ms) * .42 * 1ms), 380ms);
     --hop:clamp(28ms, calc(var(--beat-ms) * .08 * 1ms), 64ms);
 
-    /* --e-detent, --e-travel, --e-throw, --e-close, --e-decay and --e-rubber are
-       written onto this element by src/motion.js at load, from the same literal
-       list that backs Motion.EASE. They are deliberately not duplicated here:
-       two copies of a cubic-bezier is two copies that can disagree, and the
-       curves are read from JS as often as from CSS.
-
-       --e-linear is the seventh curve and the only one declared here, because
-       the reason for that rule does not reach it: `linear` is a CSS-wide
-       keyword, not a bezier, so there is no second copy to drift out of step
-       with a first. It exists because five declarations already needed a
-       constant rate and had to spell a bare keyword §9.4 had no entry for — a
-       metronome scanline crossing the count-in, the phosphor strike on both
-       displays, and the hairline depleting under an armed delete. All three are
-       phenomena with no mass: a rate that is genuinely uniform, where an eased
-       curve would be a lie about a mechanism that is not there. §5.1 forbids it
-       on anything that travels through space, which has mass by definition and
-       therefore has to accelerate. */
+    /* --e-detent, --e-travel, --e-throw, --e-close, --e-decay and --e-rubber
+       are written onto this element by src/motion.js at load, from the same
+       list that backs Motion.EASE — two copies of a cubic-bezier is two copies
+       that can disagree. --e-ios is the platform's own standard curve and the
+       default for anything that simply moves. */
+    --e-ios:cubic-bezier(.32,.72,0,1);
     --e-linear:linear;
 
-    /* Two self-hosted variable faces. Archivo carries a real width axis, which
-       is what makes a rack-panel silkscreen legend possible at all; Martian
-       Mono was drawn for dense UI data and keeps a two-character accidental
-       legible at 10px. The metric-matched fallbacks are declared in base.css so
-       a cold cache does not reflow the panel. */
-    --sans:"Archivo","Archivo Fallback",system-ui,sans-serif;
-    --mono:"Martian Mono","Mono Fallback",ui-monospace,monospace;
+    /* Scales travel to nothing under reduced motion while light, which is
+       information, keeps its full decay. css/a11y.css flips it. */
+    --m-travel:1;
 
-    /* Chrome — Archivo. Nine rungs replace twenty-four ad-hoc sizes, seven of
-       which sat inside a single 3px band. Anything that then looks wrong is a
-       hierarchy problem, to be solved with weight, colour or space. */
-    --fs-legend:10px;
-    --fs-micro:11px;
-    --fs-meta:12px;
-    --fs-ui:13px;
-    --fs-body:15px;
-    --fs-lead:17px;
-    --fs-title:clamp(19px, 1.1vw + 15px, 21px);
-    --fs-display:clamp(24px, 2.2vw + 16px, 30px);
-    --fs-readout:clamp(96px, 26vw, 220px);
+    /* -------------------------------------------------------------- type */
 
-    /* Data — Martian Mono, always tabular. */
+    /* SF is not a webfont — `system-ui` resolves to it on every Apple platform
+       and to the right local face everywhere else. Archivo and Martian Mono
+       are self-hosted and scoped to the two jobs named at the top of this
+       file. */
+    --ui:-apple-system, BlinkMacSystemFont, system-ui, "Segoe UI", Roboto, sans-serif;
+    --display:"Archivo", "Archivo Fallback", var(--ui);
+    --mono:"Martian Mono", "Mono Fallback", ui-monospace, SFMono-Regular, monospace;
+    /* css/device.css asks for the silkscreen face by this name. */
+    --sans:var(--display);
+
+    /* The iOS text styles, at their default (Large) Dynamic Type sizes. These
+       are the only sizes in the app.
+
+       In rem rather than px, so a reader who has raised their browser's base
+       font size gets a larger app rather than an unchanged one. Web pages get
+       no access to Dynamic Type itself, but the root font size is the closest
+       thing there is and honouring it costs nothing. The numbers are the
+       platform's own, divided by 16: 1.0625rem is 17pt at the default. */
+    --fs-large-title:2.125rem;  /* 34 */
+    --fs-title1:1.75rem;        /* 28 */
+    --fs-title2:1.375rem;       /* 22 */
+    --fs-title3:1.25rem;        /* 20 */
+    --fs-headline:1.0625rem;    /* 17, semibold */
+    --fs-body:1.0625rem;        /* 17 */
+    --fs-callout:1rem;          /* 16 */
+    --fs-subhead:0.9375rem;     /* 15 */
+    --fs-footnote:0.8125rem;    /* 13 */
+    --fs-caption:0.75rem;       /* 12 */
+    --fs-caption2:0.6875rem;    /* 11 */
+
+    /* Data — Martian Mono, always tabular, on the hardware only. These are
+       printed *on* fixed-size objects, so they stay in pixels: a note name
+       that outgrows the pad it is printed on is not more readable. */
     --fd-xs:10px;
     --fd-sm:12px;
     --fd:15px;
     --fd-lg:19px;
 
-    --lh-data:1;  --lh-tight:1.08;  --lh-heading:1.12;  --lh-ui:1.35;  --lh-body:1.5;
-    --tr-caps:.145em;  --tr-tight:-.028em;  --tr-snug:-.012em;  --tr-0:0;  --tr-data:.01em;
-    /* The sixth rung, and the one the scale was missing rather than a new
-       design decision: §3.6 has always specified .1em for the spec plate by
-       name, and css/base.css has always written that number by hand. A tracking
-       value spelled at the point of use is a value §9.2 cannot check, which is
-       how a scale that claims to have collapsed seventeen values to five ends
-       up quietly carrying six. It is narrower than --tr-caps on purpose — at 16%
-       ink a wider track dissolves into the panel instead of reading as
-       engraving — so it cannot be folded into the caps rung. */
-    --tr-plate:.1em;
+    --lh-data:1; --lh-tight:1.1; --lh-heading:1.2; --lh-ui:1.3; --lh-body:1.45;
+    /* SF tightens as it grows; these are the platform's own optical tracking. */
+    --tr-large:-.024em; --tr-title:-.018em; --tr-snug:-.011em; --tr-0:0;
+    --tr-caps:.06em; --tr-data:.01em; --tr-plate:.1em;
 
-    /* Hardware palettes. These are pictures of two real objects, so they keep
-       their real-world colours in both themes — but they are a closed,
-       documented set rather than thirty anonymous hexes scattered through the
-       faceplate rules, and every legend in them now clears 4.5:1. */
+    /* --------------------------------------------------------- hardware
+
+       Two real objects. Unchanged between appearances on purpose: a light
+       theme does not repaint the gear on your desk. */
     --ep-body-hi:#E2DFD8;  --ep-body-lo:#CDC9C1;  --ep-ink:#0D0C0A;
     --ep-cap-hi:#F4F1EA;   --ep-cap-lo:#E0DCD3;   --ep-cap:#EFECE4;
     --ep-well:#C4C0B6;     --ep-edge:#B8B4A9;
@@ -218,113 +185,88 @@
     --fm-bkey:#1A1C22;     --fm-edge:#B9B5AB;
     --fm-tft:#090C11;      --fm-t1:#7FD4FF; --fm-t2:#FFD27F; --fm-t3:#FF8A32;
     --fm-legend:#6E6A61;   --fm-brand:#9DA3AE;
+
+    /* The ink on any track fill, in either appearance, because the fills are
+       bright in both. 5.09–11.67:1 across all ten. */
+    --on-part:#140C04;
+    --on-tint:#FFFFFF;
   }
 
-  /* Colour tokens live on <body>, not :root, and that placement is
-     load-bearing. A custom property that references another resolves against
-     the values in scope on the element where it is *declared*. Put the derived
-     tokens on :root and they bake in :root's base values — the light theme
-     would then swap --room and --ink underneath them and nothing downstream
-     would move.
-
-     There is exactly one body{} and one body.light{} in the codebase. The file
-     used to carry two of each, one dead behind the other, which is why nobody
-     could say what colour anything actually was. */
+  /* Colour lives on <body> rather than :root, and the placement is
+     load-bearing: a custom property that references another resolves against
+     the values in scope where it is DECLARED. Put --fill-1 on :root and it
+     bakes in :root's --label, and the light appearance would then swap --label
+     underneath it with nothing downstream moving. */
   body {
     color-scheme:dark;
 
-    /* Surfaces. The steps between them are deliberately tiny — on near-black
-       you cannot get 1.35:1 between adjacent fills without turning the room
-       grey, so depth is carried by the bevel pair, the cast and a hairline,
-       never by a lighter fill. --inset goes *below* --room because a recess is
-       darker than the thing it is cut into. */
-    --room:#070806;
-    --panel:#191C1A;
-    --raised:#282D2A;
-    --high:#3A403C;
-    --inset:#040504;
-    --material:color-mix(in srgb, #141715 84%, transparent);
+    /* Backgrounds. iOS separates the plain scale from the grouped scale: a
+       grouped screen's base is darker than its cells, which is the entire
+       depth cue for an inset-grouped list. On a warm near-black rather than
+       pure #000 — the room this app has always been in, and it keeps the
+       aluminium of the EP-133 sitting *in* the picture rather than on it. */
+    --bg:#070806;
+    --bg-2:#141614;
+    --bg-3:#1F2220;
 
-    /* Material. --alu is the ON state of every binary control: not a lighter
-       fill, a different metal. */
-    --alu:#5A615C;
-    --alu-edge:#767D77;
-    --bevel-top:rgba(255,247,232,.075);
-    --bevel-bot:rgba(0,0,0,.55);
+    --grouped-bg:#070806;
+    --grouped-cell:#161917;
+    --grouped-cell-2:#212422;
+
+    /* Chrome that floats over content: the nav bar, the tab bar, the transport
+       and a sheet's scrim all blur what is behind them. The fallback matters —
+       without backdrop-filter this has to be opaque or the content shows
+       straight through. */
+    --chrome:color-mix(in srgb, #0C0E0C 72%, transparent);
+    --chrome-solid:#0C0E0C;
+    --blur:saturate(180%) blur(20px);
+
+    /* Labels. Four levels, exactly as UIKit has them. Never pure white. */
+    --label:#F2F1EC;
+    --label-2:rgba(240,238,230,.62);
+    --label-3:rgba(240,238,230,.33);
+    --label-4:rgba(240,238,230,.19);
+
+    /* Fills, for control backgrounds that sit on top of a background. */
+    --fill-1:rgba(126,128,120,.36);
+    --fill-2:rgba(126,128,120,.30);
+    --fill-3:rgba(126,128,120,.22);
+    --fill-4:rgba(126,128,120,.16);
+
+    --separator:rgba(90,92,86,.62);
+    --separator-opaque:#343834;
+
+    /* The tint. Every iOS app has exactly one, and Downbeat's is the amber its
+       hardware lamps already are — it sits outside the five track hues, so it
+       can never be mistaken for musical data. System blue is not used: a
+       borrowed accent in an app with a strong one is a missed signature. */
+    --tint:#FF8A32;
+    --tint-ink:#FF9A4E;
+    --on-tint-fill:#140C04;   /* 11.9:1 on the dark tint */
+    --tint-fill:color-mix(in srgb, var(--tint) 17%, transparent);
+
+    --lamp:var(--tint);
+    --lamp-ink:var(--tint-ink);
+    --on-lamp:#140C04;
+
+    --red:#FF453A;
+    --red-fill:#C9110A;   /* white on this is 5.4:1; on --red it is 3.4:1 */
+    --green:#32D74B;
     --edge-cast:rgba(0,0,0,.62);
 
-    /* Ink. Never #fff, never #000 — printed ink is neither, and the darkest
-       value in the system is --inset at #040504. */
-    --ink:#E9E7DF;
-    --muted:#8D918A;
-    --label-tertiary:#868C85;
-
-    /* Secondary ink for type that sits on a cap, and the rung §2.3's table
-       never measured. --muted is validated on --panel and --inset; --high is
-       neither, and the case that ships most often — a .ghost label, a run
-       chip's note name, its duration and its PAD eyebrow — is secondary type on
-       --high, where --muted is 3.31:1 and every one of them is under §9.1's
-       floor. 70% of --ink is the lightest step that clears it everywhere a cap
-       can be, in both themes, while staying a visible rung below --ink so the
-       hierarchy survives and .ghost's --ink hover still reads as a change:
-       5.14 / 6.35 on --high, 6.37 / 6.14 on --raised, 3.43 / 6.40 on --alu
-       (graphics only there — never text).
-
-       It is a derivation of --ink through the same color-mix idiom --edge and
-       --edge-hot use, not a new colour, which is why it needs no light-theme
-       twin: both resolve against whichever --ink is in scope on this element.
-       It lived in css/base.css until this pass, in a second body{} block that
-       §2.3 forbids outright. */
-    --ink-2:color-mix(in srgb, var(--ink) 70%, transparent);
-
-    /* Two hairlines and a decision: does this boundary carry meaning? --edge is
-       decoration and always travels with the bevel pair; --edge-hot is the only
-       thing defining a control's extent and clears 3:1. --line and --separator
-       are gone. */
-    --edge:color-mix(in srgb, var(--ink) 26%, transparent);
-    --edge-hot:color-mix(in srgb, var(--ink) 38%, transparent);
-
-    /* Emission. Light, not pigment: high chroma, always wearing a bloom, and
-       restricted to the transport, the lit pads and the two displays. The lamp
-       is identical in both themes because a lit lamp is a lit lamp regardless
-       of the room, and because no track hue lives in the 20-50 degree amber
-       band it is unambiguous everywhere it appears. */
-    --lamp:#FF8A32;
-    --lamp-ink:#FF9A4E;
-    --on-lamp:#140C04;
-    --vfd:#6FE3CF;
-    --rec:#E8382A;
-    --rec-ink:#FF6A5E;
-
-    /* Track pigment. Anodised colour and screen-print ink — matte, mid-chroma,
-       never glowing, and the only family allowed to carry musical data. The hue
-       ladder is 213/15/168/74/325 so no two adjacent parts sit closer than 94
-       degrees, and bass is lime rather than gold specifically so it cannot be
-       confused with the emissive amber next to it. Every hue ships a fill and
-       an -ink: fills are for backgrounds, -ink is the only value allowed in a
-       colour property. */
+    /* Track pigment. Matte, mid-chroma, never glowing. Every hue ships a fill
+       and an -ink: fills are for backgrounds, -ink is the only value allowed
+       in a colour property. */
     --t-melody:#4E9BEA;   --t-melody-ink:#7FB8F2;
     --t-counter:#F5806A;  --t-counter-ink:#F79A87;
     --t-chords:#3ECBAC;   --t-chords-ink:#5FD6BC;
     --t-bass:#B4D648;     --t-bass-ink:#C4E065;
     --t-drums:#F368B4;    --t-drums-ink:#F78BC6;
 
-    /* The ink on any track fill, in both themes, because the fills are bright
-       in both. Verified 5.09-11.67:1 across all ten. */
-    --on-part:#140C04;
-
-    /* The bass lane letters every note with the job it does. One hue stepped by
-       lightness, because the roles are a ranking and not five categories.
-
-       The two ends of the ramp are named rather than spelled. §9.1 forbids #fff
-       and #000 outright and it means it here too: this ladder used to mix
-       toward both, which is the one place in the whole palette where a pigment
-       was being pushed to an absolute the rest of the system spends its whole
-       argument avoiding — the same reason §2.3 gives for --ink. --on-part is
-       the near-black every track fill already prints on and costs nothing new;
-       --role-ceil is its opposite number, a warm paper rather than a clinical
-       white. Both are theme-independent on purpose: a ranking that inverts
-       between themes is not a ranking. */
+    /* The bass lane letters every note with the job it is doing. One hue
+       stepped by lightness, because the roles are a ranking and not five
+       categories — and a ranking that inverts between appearances is not a
+       ranking, so both ends are appearance-independent. */
     --role-ceil:#F3F0E6;
     --role-root:color-mix(in oklab, var(--t-bass), var(--on-part) 26%);
     --role-third:color-mix(in oklab, var(--t-bass), var(--role-ceil) 12%);
@@ -333,107 +275,85 @@
     --role-approach:repeating-linear-gradient(45deg, var(--t-bass) 0 3px,
                     color-mix(in oklab, var(--t-bass), var(--role-ceil) 44%) 3px 6px);
 
-    /* Elevation is a chamfer plus a cast, never a fill change. One light
-       source, fixed at top-centre, which is why nothing in the interface is
-       ambiguous about which way is up. Wells invert the pair — that inversion
-       is the entire depth cue. */
-    --bevel:inset 0 1px 0 var(--bevel-top), inset 0 -1px 0 var(--bevel-bot);
-    --bevel-in:inset 0 1px 0 var(--bevel-bot), inset 0 -1px 0 var(--bevel-top);
+    /* Elevation on iOS is a soft, low, neutral drop — used only by things that
+       genuinely float free of the surface behind them: a sheet, the toast, a
+       popover. Nothing inside a list gets one. */
+    --shadow-1:0 1px 3px rgba(0,0,0,.30);
+    --shadow-2:0 4px 16px rgba(0,0,0,.36);
+    --shadow-3:0 -1px 24px rgba(0,0,0,.44);
 
-    --cast-0:0 1px 0 var(--edge-cast);
-    --cast-1:0 1px 2px rgba(0,0,0,.34), 0 2px 6px rgba(0,0,0,.22);
-    --cast-2:0 2px 6px rgba(0,0,0,.38), 0 10px 24px rgba(0,0,0,.28);
-    --cast-3:0 4px 12px rgba(0,0,0,.42), 0 24px 56px rgba(0,0,0,.36);
-    --cast-4:0 8px 24px rgba(0,0,0,.46), 0 40px 90px rgba(0,0,0,.44);
+    /* One focus ring for the whole app, for the hardware keyboard and
+       switch-control users the platform still has. */
+    --focus-ring:0 0 0 2px var(--bg), 0 0 0 4px var(--tint);
 
-    --bloom-lamp:0 0 0 1px color-mix(in srgb,var(--lamp) 40%,transparent),
-                 0 4px 18px color-mix(in srgb,var(--lamp) 38%,transparent);
-    /* --bloom-part is not here. It cannot be — see the rule at the foot of this
-       file. --bloom-lamp survives on body only because both of its inputs are
-       constants at body scope; the part bloom's two inputs are not. */
-
-    /* One hairline of specular along the top edge of a panel. This replaces a
-       145-degree wash of 1% white, which did two very different things in the
-       two themes because 1% white on near-black and 1% white on near-white are
-       not comparable operations. */
-    --sheen:linear-gradient(178deg, color-mix(in srgb, var(--bevel-top) 100%, transparent) 0 1px,
-            transparent 1px);
-
-    /* One ring, used by every focus rule in the app. Amber sits outside the
-       track palette, so it reads on all ten hues, on the aluminium cap, on the
-       amber Play button and on both rooms. */
-    --focus-ring:0 0 0 2px var(--lamp), 0 0 0 5px color-mix(in srgb, var(--lamp) 34%, transparent);
-
-    /* Default part tint, before a part is chosen. */
+    /* Default part tint, before a part is chosen. Set as a pair — a fill
+       without its ink is how an interface ends up with white on yellow. */
     --part:var(--t-melody);
     --part-ink:var(--t-melody-ink);
 
-    background:var(--room);
-    color:var(--ink);
+    /* src/mark.js draws the wordmark against these two names and is shared
+       with tools/make-icons.js, so they are aliases rather than a rename. */
+    --ink:var(--label);
+    --edge-hot:var(--label-3);
 
-    /* Type defaults belong on the one body block rather than on ten of five
-       hundred rule blocks — until now every other block inherited whatever the
-       OS font's internal leading happened to be, so the vertical rhythm changed
-       between operating systems. The old global -.006em tracking is deleted: it
-       applied to the mono too, which is the opposite of what tabular data
-       wants. */
-    font-family:var(--sans);
+    /* The grouped background rather than the plain one: <body> is what shows
+       through the safe-area padding on .app, and in the light appearance a
+       white strip down each edge of a putty screen is very visible in
+       landscape. */
+    background:var(--grouped-bg);
+    color:var(--label);
+    font-family:var(--ui);
+    font-size:var(--fs-body);
     line-height:var(--lh-body);
     letter-spacing:var(--tr-0);
     font-variant-numeric:tabular-nums;
     -webkit-font-smoothing:antialiased;
-    text-rendering:optimizeLegibility;
-
-    /* 100vh is the *large* viewport: on mobile Safari it is taller than what you
-       can see whenever the toolbars are showing, and with overflow hidden there
-       is no scroll to reclaim it — measured at 99px of the layout permanently
-       below the fold. dvh tracks the visible height instead; vh stays as the
-       fallback for anything that does not know the unit. */
-    height:100vh; height:100dvh;
-    margin:0; overflow:hidden; padding-top:var(--bar-h);
-
-    /* Nothing in the chrome should be selectable or long-pressable — the note
-       data opts back in below. */
-    -webkit-tap-highlight-color:transparent;
-    -webkit-touch-callout:none;
-    user-select:none; -webkit-user-select:none;
-    touch-action:manipulation;
   }
 
-  /* The room with the lights on. Natural-aluminium putty rather than white, so
-     the faceplate sits *in* the room instead of floating on it — it is the same
-     family as the EP-133's own body. Two rules make this theme work where the
-     old one failed: there is no headroom above near-white, so every capped
-     control lives in a well and lifts with shadow rather than with light. */
+  /* The light appearance. Warm paper rather than white, for the same reason
+     the dark room is warm: the aluminium faceplate has to sit in it. */
   body.light {
     color-scheme:light;
 
-    --room:#D6D2C7;
-    --panel:#EBE7DE;
-    --raised:#F4F1E9;
-    --high:#FBF9F3;
-    --inset:#C9C5B9;
-    --material:color-mix(in srgb, #F1EDE4 86%, transparent);
+    --bg:#FFFFFF;
+    --bg-2:#F3F1EB;
+    --bg-3:#E8E5DD;
 
-    --alu:#FDFBF5;
-    --alu-edge:#E6E1D4;
-    --bevel-top:rgba(255,255,255,.92);
-    --bevel-bot:rgba(96,90,74,.20);
-    --edge-cast:rgba(120,112,94,.26);
+    --grouped-bg:#F1EFE8;
+    --grouped-cell:#FFFFFF;
+    --grouped-cell-2:#F5F3ED;
 
-    --ink:#1A1913;
-    --muted:#514F46;
-    --label-tertiary:#66614F;
+    --chrome:color-mix(in srgb, #FBFAF6 72%, transparent);
+    --chrome-solid:#FBFAF6;
 
-    --edge:color-mix(in srgb, var(--ink) 32%, transparent);
-    --edge-hot:color-mix(in srgb, var(--ink) 50%, transparent);
+    --label:#161511;
+    --label-2:rgba(28,26,20,.66);
+    --label-3:rgba(28,26,20,.34);
+    --label-4:rgba(28,26,20,.16);
 
+    --fill-1:rgba(118,116,104,.24);
+    --fill-2:rgba(118,116,104,.18);
+    --fill-3:rgba(118,116,104,.12);
+    --fill-4:rgba(118,116,104,.08);
+
+    --separator:rgba(70,68,58,.28);
+    --separator-opaque:#D3D0C6;
+
+    /* The amber has to darken to carry text on paper: #FF8A32 is 2.2:1 on
+       white. This is the same hue at 5.6:1, and the lamps themselves keep the
+       bright value because a lit lamp is a lit lamp in any room. */
+    --tint:#B24E00;
+    --tint-ink:#8F3E00;
+    /* The dark ink measures 3.67:1 on this tint; white measures 5.28:1. */
+    --on-tint-fill:#FFFFFF;
+    --tint-fill:color-mix(in srgb, var(--tint) 12%, transparent);
     --lamp:#FF8A32;
     --lamp-ink:#A34500;
-    --on-lamp:#140C04;
-    --vfd:#0A7060;
-    --rec:#C22013;
-    --rec-ink:#A8180C;
+
+    --red:#D70015;
+    --red-fill:#C10012;
+    --green:#248A3D;
+    --edge-cast:rgba(120,112,94,.26);
 
     --t-melody:#2E86D8;   --t-melody-ink:#155194;
     --t-counter:#F0724F;  --t-counter-ink:#8E3613;
@@ -441,56 +361,20 @@
     --t-bass:#93B62A;     --t-bass-ink:#445905;
     --t-drums:#DE4E9B;    --t-drums-ink:#9B175E;
 
-    /* Warm grey, at roughly 0.6x the dark alpha. A black shadow on putty reads
-       as dirt, and in this theme the casts carry the elevation the bevels
-       cannot. */
-    --cast-1:0 1px 2px rgba(120,112,94,.20), 0 2px 6px rgba(120,112,94,.13);
-    --cast-2:0 2px 6px rgba(120,112,94,.23), 0 10px 24px rgba(120,112,94,.17);
-    --cast-3:0 4px 12px rgba(120,112,94,.25), 0 24px 56px rgba(120,112,94,.22);
-    --cast-4:0 8px 24px rgba(120,112,94,.28), 0 40px 90px rgba(120,112,94,.26);
+    --shadow-1:0 1px 3px rgba(120,112,94,.22);
+    --shadow-2:0 4px 16px rgba(120,112,94,.24);
+    --shadow-3:0 -1px 24px rgba(120,112,94,.26);
+
+    --focus-ring:0 0 0 2px var(--bg), 0 0 0 4px var(--tint);
   }
 
-  /* The part you are playing tints the room: its chip, its notes, its run and
-     the pads that light up all read --part, so the screen changes colour with
-     what is under your hands. Set on #desk because both regions are inside it,
-     and set as a *pair* — a fill without its ink is how the app ended up with
-     white text on yellow. */
-  #desk[data-part=melody]  { --part:var(--t-melody);  --part-ink:var(--t-melody-ink); }
-  #desk[data-part=counter] { --part:var(--t-counter); --part-ink:var(--t-counter-ink); }
-  #desk[data-part=chords]  { --part:var(--t-chords);  --part-ink:var(--t-chords-ink); }
-  #desk[data-part=bass]    { --part:var(--t-bass);    --part-ink:var(--t-bass-ink); }
-  #desk[data-part=drums]   { --part:var(--t-drums);   --part-ink:var(--t-drums-ink); }
+  /* The part you are playing tints the screen: its chip, its notes, its run
+     and the pads that light under playback all read --part. Set on the app
+     root so every region is inside it, and always as a pair. */
+  [data-part=melody]  { --part:var(--t-melody);  --part-ink:var(--t-melody-ink); }
+  [data-part=counter] { --part:var(--t-counter); --part-ink:var(--t-counter-ink); }
+  [data-part=chords]  { --part:var(--t-chords);  --part-ink:var(--t-chords-ink); }
+  [data-part=bass]    { --part:var(--t-bass);    --part-ink:var(--t-bass-ink); }
+  [data-part=drums]   { --part:var(--t-drums);   --part-ink:var(--t-drums-ink); }
 
-  .part[data-part=melody]  { --tint:var(--t-melody);  --tint-ink:var(--t-melody-ink); }
-  .part[data-part=counter] { --tint:var(--t-counter); --tint-ink:var(--t-counter-ink); }
-  .part[data-part=chords]  { --tint:var(--t-chords);  --tint-ink:var(--t-chords-ink); }
-  .part[data-part=bass]    { --tint:var(--t-bass);    --tint-ink:var(--t-bass-ink); }
-  .part[data-part=drums]   { --tint:var(--t-drums);   --tint-ink:var(--t-drums-ink); }
-
-  /* The part bloom, declared on the surface that emits it rather than on body
-     with the other two shadow families. That is a language constraint, not a
-     preference, and it is worth the paragraph because the failure is silent.
-
-     A custom property's var()s are substituted at the computed-value time of
-     the element that DECLARES it, and the already-substituted string is what
-     inherits (CSS Variables 1). Written in the body block above, this token
-     baked in body's --lit — registered `inherits:false`, so body's own value is
-     the initial 0 — and body's --part, which is the melody blue whatever the
-     desk is mounted to. Every reader in the app therefore received
-     `color(srgb 0 0 0 / 0) 0px 0px 14px 0px`: a fully transparent bloom, on a
-     .now chip whose own --lit computes to 1 and whose inherited --part is the
-     mounted part's. It had never once bloomed. --bloom-lamp has the same shape
-     and is safe, because --lamp is a literal that never varies by scope and is
-     the same colour in both themes.
-
-     Declared here the substitution happens on the pseudo instead: its own --lit
-     — 1 only under .now, set in css/run.css — and the --part it inherits down
-     from #desk[data-part]. The consequence is that this token cannot travel, so
-     every consumer has to be named in this selector. Today there is exactly
-     one. §6.12 also specifies the lane playhead in this token, but css/lane.css
-     ships it on --bloom-lamp; if that is ever brought into line, .lane-head
-     belongs in this selector and not in a second declaration. */
-  .seq-chip::before, .seq-chord::before {
-    --bloom-part:0 0 14px color-mix(in srgb,var(--part) calc(var(--lit,0) * 62%),transparent);
-  }
 }
