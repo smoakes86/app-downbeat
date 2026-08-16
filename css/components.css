@@ -46,12 +46,12 @@
      It is a deliberate band rather than an accident: the alternative is either
      losing the under-the-clock layout that makes an installed app look like an
      app, or shipping a light theme whose clock cannot be read. */
-  body.light .nav {
-    background:
-      linear-gradient(var(--chrome-solid) 0 0) padding-box,
-      linear-gradient(#26241F 0 0) border-box;
-    border-top:var(--safe-t) solid transparent;
-    padding-top:0;
+  body.light .nav::before {
+    content:'';
+    position:absolute;
+    left:0; right:0; top:0;
+    height:var(--safe-t);
+    background:#26241F;
   }
 
   .nav-inner {
