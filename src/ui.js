@@ -171,8 +171,13 @@
     if (Motion) Motion.tempo(song.bpm);
 
     arrangement = global.Arrange ? global.Arrange.plan(song) : null;
+    /* The new song has its own sections, so whatever was soloed out by the old
+       one is meaningless — but solo is a property of the player, not of the
+       song, and it has to survive. applySolo() re-derives every mute from
+       scratch: with no section active it is exactly a reset, and with solo on
+       it puts solo back rather than quietly dropping it. */
     activeSection = null;
-    clearSectionMutes();
+    applySolo();
 
     /* A song with no countermelody cannot be viewed on the Counter part. */
     if (part === 'counter' && !(song.counter && song.counter.length)) part = 'melody';
@@ -487,6 +492,9 @@
     lane.className = 'lane is-' + part;
     lane.style.setProperty('--bars', bars);
     lane.style.setProperty('--beats', bars * 4);
+    /* Written on both paths, never on one: an inline property set for the drum
+       grid stays on the element for every pitched lane drawn afterwards. */
+    lane.style.setProperty('--bar-min', part === 'drums' ? '132px' : '96px');
     lane.innerHTML = '';
 
     if (part === 'drums') renderDrumLane();
@@ -563,10 +571,9 @@
     const events = song.drums || [];
     const used = G.DRUM_VOICES.filter((v) => events.some((e) => e.instrument === v.id));
     const total = song.totalSteps;
-    lane.style.setProperty('--lane-h', 'auto');
     /* A drum grid needs a readable step, and a sixteenth of a bar 96px wide is
-       six pixels. Bars get more room here than they do on a pitched lane. */
-    lane.style.setProperty('--bar-min', '132px');
+       six pixels, so its bars are wider — see --bar-min in renderLane. */
+    lane.style.setProperty('--lane-h', 'auto');
 
     if (!used.length) {
       lane.insertAdjacentHTML('beforeend', '<p class="seq-empty">No drums in this sketch.</p>');
@@ -592,7 +599,7 @@
           `${velocity === undefined ? '' : ` style="--vel:${velocity}"`}></i>`;
       }
       html += `<div class="drum-row"><b class="drum-label">${voice.label}</b>` +
-        `<div class="drum-cells" style="--steps:${total}">${cells}</div></div>`;
+        `<div class="drum-cells">${cells}</div></div>`;
     });
     lane.insertAdjacentHTML('beforeend', html);
   }
@@ -674,6 +681,8 @@
     $('#playIcon').firstElementChild.setAttribute('href', on ? '#i-stop' : '#i-play');
     if (on) {
       requestWakeLock();
+      lastBar = -1;
+      lastStep = -1;
       if (!raf) raf = global.requestAnimationFrame(frame);
     } else {
       releaseWakeLock();
@@ -738,7 +747,9 @@
     let n = 0;
     const interval = 60000 / song.bpm;
     box.hidden = false;
+    UI.setInert(true);
     beat.textContent = String(beats);
+    $('#countInCancel').focus({ preventScroll: true });
 
     const tick = () => {
       const left = beats - n;
@@ -760,7 +771,12 @@
 
   function cancelCountIn() {
     if (countInTimer) { global.clearTimeout(countInTimer); countInTimer = 0; }
-    $('#countIn').hidden = true;
+    if (!$('#countIn').hidden) {
+      $('#countIn').hidden = true;
+      UI.setInert(false);
+      const play = $('#playButton');
+      if (play) play.focus({ preventScroll: true });
+    }
   }
 
   /* ------------------------------------------------------------- solo */
@@ -773,10 +789,6 @@
 
   function sectionMuted(id) {
     return !!(activeSection && activeSection.muted.indexOf(id) >= 0);
-  }
-
-  function clearSectionMutes() {
-    Devices.TRACKS.forEach((t) => Engine.setMute(t.id, false));
   }
 
   /* ====================================================== the song screen */
@@ -1056,7 +1068,7 @@
       row.innerHTML =
         `<span class="row-icon"><i class="sketch-dot" style="--tk:var(--t-melody)"></i></span>` +
         `<span class="row-text"><span class="row-title">${escapeHtml(entry.title)}</span>` +
-        `<span class="row-sub">${escapeHtml(entry.meta || '')} · ${escapeHtml(Library.when(entry.saved))}</span></span>` +
+        `<span class="row-sub">${escapeHtml(entry.meta || '')} · ${escapeHtml(Library.when(entry.savedAt))}</span></span>` +
         '<svg class="row-chevron" aria-hidden="true" focusable="false"><use href="#i-chevron-right"></use></svg>';
       row.addEventListener('click', () => openSketch(entry));
       body.appendChild(row);
@@ -1295,6 +1307,7 @@
     if (!force && store.get(STORE.seen)) return;
     const intro = $('#intro');
     intro.hidden = false;
+    UI.setInert(true);
     global.requestAnimationFrame(() => intro.classList.add('is-open'));
     introPage = 0;
     $('#introPages').scrollLeft = 0;
@@ -1332,7 +1345,12 @@
     store.set(STORE.seen, '1');
     const intro = $('#intro');
     intro.classList.remove('is-open');
+    UI.setInert(false);
     global.setTimeout(() => { intro.hidden = true; }, UI.reduced() ? 0 : 260);
+    /* Back to the control that opened it, or to the app if it came up on
+       first run and there is nothing to go back to. */
+    const back = $('#playButton');
+    if (back) back.focus({ preventScroll: true });
   }
 
   /* =============================================================== theme */
@@ -1532,6 +1550,9 @@
     if (button) toggleSection(button.dataset.section);
   });
   $('#arrangeReset').addEventListener('click', () => { if (activeSection) toggleSection(activeSection.id); });
+
+  $('#intro').addEventListener('keydown', (event) => UI.trap($('#intro'), event));
+  $('#countIn').addEventListener('keydown', (event) => UI.trap($('#countIn'), event));
 
   $('#introNext').addEventListener('click', () => {
     if (introPage === 2) finishIntro();

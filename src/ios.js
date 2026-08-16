@@ -95,6 +95,15 @@
   let host = null;
   let live = null;
 
+  /* The app behind whatever is presented. Guarded on `live` so a handler that
+     closes one sheet and opens another never un-inerts the app in between. */
+  function setInert(on) {
+    const app = $('.app');
+    if (!app) return;
+    if (on) app.setAttribute('inert', '');
+    else if (!live) app.removeAttribute('inert');
+  }
+
   function ensureHost() {
     if (host) return host;
     host = el('div', 'sheet-host');
@@ -114,6 +123,10 @@
     const previous = doc.activeElement;
     host.hidden = false;
     host.appendChild(node);
+    /* aria-modal keeps a screen reader inside the dialog on most engines, and
+       the Tab trap below keeps a keyboard inside it — but neither stops a
+       VoiceOver swipe on iOS from walking into the app behind. inert does. */
+    setInert(true);
 
     const controller = {
       node,
@@ -124,7 +137,7 @@
         host.classList.remove('is-open');
         const done = () => {
           if (node.parentNode === host) host.removeChild(node);
-          if (!live) host.hidden = true;
+          if (!live) { host.hidden = true; setInert(false); }
           if (previous && previous.isConnected && typeof previous.focus === 'function') {
             previous.focus({ preventScroll: true });
           }
@@ -398,11 +411,26 @@
 
   /* The thumb is one element moved with a transform. Painting a background on
      whichever button is selected cannot slide, and sliding is the whole of
-     what a UISegmentedControl does. */
+     what a UISegmentedControl does.
+
+     Wiring is delegated to the container and bound exactly once per container,
+     however many times the caller re-renders the segments inside it. This is
+     not a micro-optimisation: the parts and device switchers are rebuilt on
+     every generate, and binding per call left one live handler per render —
+     after five songs a single tap ran the callback five times, which for the
+     "tap Counter to add a second melody" branch meant five regenerations and
+     five entries on the undo stack. */
   function segmented(root, onChange) {
+    const existing = root._segmented;
+    if (existing) { existing.setHandler(onChange); existing.sync(); return existing; }
+
+    let handler = onChange;
     const buttons = () => Array.from(root.querySelectorAll('button'));
-    let thumb = root.querySelector('.seg-thumb');
-    if (!thumb) { thumb = el('i', 'seg-thumb'); thumb.setAttribute('aria-hidden', 'true'); root.appendChild(thumb); }
+    const thumbOf = () => {
+      let t = root.querySelector('.seg-thumb');
+      if (!t) { t = el('i', 'seg-thumb'); t.setAttribute('aria-hidden', 'true'); root.appendChild(t); }
+      return t;
+    };
 
     /* A tab is selected and a radio is checked. Both spellings are correct for
        the role that carries them and neither is correct for the other, so the
@@ -414,23 +442,23 @@
       root.style.setProperty('--seg-n', list.length || 1);
       const index = list.findIndex((b) => b.getAttribute(attrOf(b)) === 'true');
       root.style.setProperty('--seg-i', index < 0 ? 0 : index);
-      thumb.hidden = index < 0;
+      thumbOf().hidden = index < 0;
     }
 
     root.addEventListener('click', (event) => {
       const button = event.target.closest('button');
       if (!button || !root.contains(button)) return;
       if (button.getAttribute('aria-disabled') === 'true') {
-        if (onChange) onChange(button.dataset.value, button, true);
+        if (handler) handler(button.dataset.value, button, true);
         return;
       }
       select(button.dataset.value);
       haptic(6);
-      if (onChange) onChange(button.dataset.value, button, false);
+      if (handler) handler(button.dataset.value, button, false);
     });
 
     /* Left/right arrows move between segments, which is what the platform
-       control does and what a keyboard user expects of role="tablist". */
+       control does and what a keyboard user expects of either role. */
     root.addEventListener('keydown', (event) => {
       if (event.key !== 'ArrowLeft' && event.key !== 'ArrowRight') return;
       const list = buttons().filter((b) => b.getAttribute('aria-disabled') !== 'true');
@@ -440,7 +468,7 @@
       const next = list[(current + (event.key === 'ArrowRight' ? 1 : list.length - 1)) % list.length];
       next.focus();
       select(next.dataset.value);
-      if (onChange) onChange(next.dataset.value, next, false);
+      if (handler) handler(next.dataset.value, next, false);
     });
 
     function select(value) {
@@ -454,8 +482,10 @@
       sync();
     }
 
+    const api = { select, sync, setHandler: (fn) => { handler = fn; } };
+    root._segmented = api;
     sync();
-    return { select, sync };
+    return api;
   }
 
   /* -------------------------------------------------------------- swipe */
@@ -564,7 +594,7 @@
     sheet, actionSheet,
     alert: alertBox, confirm: confirmBox, prompt: promptBox,
     segmented, swipe, closeSwipes,
-    focusables, reduced,
+    focusables, reduced, setInert, trap,
     close: function () { if (live) live.close(); },
     isOpen: function () { return !!live; }
   };

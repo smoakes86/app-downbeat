@@ -171,10 +171,6 @@
        is carried by opacity across a band that never reaches invisible. */
     opacity:calc(.5 + var(--vel, .8) * .5);
   }
-  /* The countermelody is drawn under the melody when both are visible, so it
-     is outlined rather than filled and cannot be mistaken for the tune. */
-  .lane.is-counter .lane-note { border-radius:2px; }
-
   /* The bass letters every note with the job it is doing, because a bass line
      you can only see the shape of is not a bass line you can play. */
   .lane.is-bass .lane-note {
