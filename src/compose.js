@@ -426,6 +426,11 @@
       note.octave = Math.floor(note.midi / 12) - 1;
       note.velocity = clamp(note.velocity + (rng.next() - 0.5) * 0.06, 0.35, 1);
     });
+    /* Where the line peaks, carried out with it. The melody has always known
+       this and kept it to itself; the drums want it too, so that the band
+       arrives at the same moment rather than each part having its own idea of
+       where the song is going. */
+    notes.climaxStep = climaxStep;
     return notes;
   }
 
@@ -1227,12 +1232,71 @@
      pattern would emit a hit on every step that happens to be a letter. */
   const VOICE_IDS = G.DRUM_VOICES.map((v) => v.id);
 
+  /* How hard a hit lands, before energy, the arc and the humanising.
+
+     The old answer was two numbers — 0.95 on a beat and 0.72 off it — which
+     is a drum machine's answer, and it is why sixteen hats in a bar read as
+     sixteen hats rather than as four beats. Each voice has its own idea of
+     which positions matter, and they genuinely disagree: the bar's strongest
+     position is beat one, but the snare's is the backbeat, and a snare that
+     follows the bar's hierarchy plays the backbeat quieter than the thing it
+     is supposed to be answering. */
+  function weightFor(instrument, step) {
+    const s = step % STEPS_PER_BAR;
+    const onBeat = s % 4 === 0;
+    const onEighth = s % 2 === 0;
+
+    if (instrument === 'snare' || instrument === 'clap') {
+      /* Wherever the snare lands on a beat IS the backbeat: two and four in a
+         straight feel, three in a half-time one. Naming 2 and 4 outright made
+         a half-time trap snare — which is on three — play as a passing note,
+         and made folk's brushed accent on three quieter than the ghosts
+         either side of it. The position it falls on is the fact; 2 and 4 were
+         only ever the common case. */
+      return onBeat ? 1 : onEighth ? 0.68 : 0.56;
+    }
+    /* A rim is colour between the main hits, by its own definition on the
+       faceplate, so it never competes with the snare even on a beat. */
+    if (instrument === 'rim') return onBeat ? 0.72 : onEighth ? 0.58 : 0.5;
+    if (instrument === 'kick') {
+      return s === 0 ? 1 : onBeat ? 0.9 : onEighth ? 0.8 : 0.72;
+    }
+    /* Time-keepers accent the beat and fall away across it. That decay is the
+       whole difference between counting in four and counting in sixteen. */
+    if (instrument === 'hat' || instrument === 'openHat' || instrument === 'ride'
+      || instrument === 'shaker' || instrument === 'tambourine') {
+      return onBeat ? 0.88 : onEighth ? 0.66 : 0.54;
+    }
+    if (instrument === 'crash') return 1;
+    return onBeat ? 0.85 : onEighth ? 0.7 : 0.6;
+  }
+
+  /* The loop's own shape. A four-bar phrase that is exactly as loud at the end
+     as at the start is a phrase that never goes anywhere, and the place it
+     should be going is the one the melody already picked — so the drums lean
+     into the same bar the tune peaks in, and ease off after it rather than
+     dropping away, because a drummer does not stop playing after the chorus. */
+  function arcAt(step, totalSteps, climax) {
+    const t = totalSteps > 1 ? step / (totalSteps - 1) : 0;
+    const c = clamp(climax, 0.15, 0.95);
+    const rise = t <= c ? t / c : 1;
+    const fall = t <= c ? 0 : (t - c) / (1 - c);
+    return 0.9 + 0.12 * rise - 0.06 * fall;
+  }
+
   function buildDrums(ctx) {
     const { genre, totalBars, rng, energy } = ctx;
     const patterns = ctx.beat || pickBeat(genre, rng);
     const energyMod = G.ENERGY[energy] || G.ENERGY.flow;
     const totalSteps = totalBars * STEPS_PER_BAR;
     const events = [];
+    /* Humanising draws its own stream, seeded from the main one. Otherwise
+       the number of draws depends on how many hits the beat happens to have,
+       and every structural decision after this — the rolls, the fill — would
+       shift when a pattern gained a note. Structure should not be downstream
+       of how busy the hi-hat is. */
+    const human = makeRng(Math.floor(rng.next() * 0x7fffffff));
+    const climax = ctx.climax === undefined ? 0.66 : ctx.climax;
 
     VOICE_IDS.forEach((instrument) => {
       const pattern = patterns[instrument];
@@ -1253,14 +1317,27 @@
            player drops when the room wants less — so at the calm end the kit
            thins out rather than simply turning down. */
         if (symbol === 'g' && energyMod.ghosts === false) continue;
-        const velocity =
+        /* A ghost is a ghost wherever it falls — that is what makes it one —
+           and an open hat is a deliberate accent, so neither takes the metric
+           weight. Everything else does. */
+        const base =
           symbol === 'g' ? 0.32 :
-          symbol === 'o' ? 0.85 :
-          step % 4 === 0 ? 0.95 : 0.72;
+          symbol === 'o' ? 0.9 :
+          weightFor(instrument, step);
+        /* Last, and small: ±3.5% so that no two hits in the loop are bit
+           identical. Any more reads as a drummer who cannot play; any less
+           and a machine-gun hi-hat still sounds like one file played
+           repeatedly, which is exactly what it is. */
+        const jitter = 1 + (human.next() - 0.5) * 0.07;
+        const velocity = base * energyMod.velocity * arcAt(step, totalSteps, climax) * jitter;
         events.push({
           step,
           instrument: symbol === 'o' && instrument === 'hat' ? 'openHat' : instrument,
-          velocity: clamp(velocity * energyMod.velocity, 0.2, 1)
+          /* A ghost is a different musical object from a quiet hit, and only
+             the pattern knows which this was. Carried out so that nothing
+             downstream has to guess it back from the velocity. */
+          ghost: symbol === 'g',
+          velocity: clamp(velocity, 0.14, 1)
         });
       }
     });
@@ -1418,7 +1495,13 @@
        first one. */
     const drumRng = makeRng(harmonySeed ^ 0xc2b2ae35);
     const beat = pickBeat(genre, drumRng);
-    const drums = buildDrums({ genre, totalBars, rng: drumRng, energy, beat });
+    const drums = buildDrums({
+      genre, totalBars, rng: drumRng, energy, beat,
+      /* Where the tune peaks, as a fraction of the loop, so the kit leans in
+         at the same moment the melody does. */
+      climax: melody.climaxStep === undefined
+        ? 0.66 : melody.climaxStep / Math.max(1, totalBars * STEPS_PER_BAR - 1)
+    });
     const counter = opts.counter
       ? buildCounter({ key, genre, spans, totalBars, rng: makeRng(melodySeed ^ 0x165667b1), energy }, melody)
       : [];

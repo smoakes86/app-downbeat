@@ -583,6 +583,59 @@ await check('the beat is named, and the name is the one that played', async () =
   if (out.length) throw new Error(out.join('; '));
 });
 
+/* Three claims about how a beat is played, rather than about how many
+   different numbers appear in it. Averaged over twelve songs a genre, so one
+   unlucky draw can neither flatter nor damn the model. */
+await check('the beat is played, not stamped', async () => {
+  const out = await page.evaluate(() => {
+    const avg = (a) => (a.length ? a.reduce((x, y) => x + y, 0) / a.length : 0);
+    const bad = [];
+    window.Genres.order.forEach((g) => {
+      if (g === 'ambient') return;
+      const onBeat = [], offBeat = [], hatOn = [], hatOff = [], early = [], late = [];
+      for (let i = 0; i < 12; i++) {
+        const s = window.Compose.compose({ genre: g, bars: 4 });
+        const mid = s.totalSteps / 2;
+        s.drums.forEach((d) => {
+          const inBar = d.step % 16;
+          // A ghost is quiet wherever it falls, so it says nothing about accent.
+          if (!d.ghost && (d.instrument === 'snare' || d.instrument === 'clap')) {
+            (inBar % 4 === 0 ? onBeat : offBeat).push(d.velocity);
+          }
+          if (d.instrument === 'hat' || d.instrument === 'ride') {
+            (inBar % 4 === 0 ? hatOn : hatOff).push(d.velocity);
+          }
+          (d.step < mid ? early : late).push(d.velocity);
+        });
+      }
+      if (onBeat.length && offBeat.length && avg(onBeat) <= avg(offBeat)) {
+        bad.push(`${g}: the backbeat is not the loudest snare`);
+      }
+      if (hatOn.length && hatOff.length && avg(hatOn) <= avg(hatOff)) {
+        bad.push(`${g}: the hats are flat across the beat`);
+      }
+      if (avg(late) <= avg(early)) bad.push(`${g}: the loop does not lift`);
+    });
+    return bad.slice(0, 4);
+  });
+  if (out.length) throw new Error(out.join('; '));
+});
+
+await check('no two hits in a loop are identical', async () => {
+  const out = await page.evaluate(() => {
+    const thin = [];
+    window.Genres.order.forEach((g) => {
+      if (g === 'ambient') return;
+      const s = window.Compose.compose({ genre: g, bars: 4 });
+      const levels = new Set(s.drums.map((d) => d.velocity.toFixed(4)));
+      /* Two levels was the old model — an accent and everything else. */
+      if (levels.size < s.drums.length * 0.5) thin.push(`${g}: ${levels.size} levels over ${s.drums.length} hits`);
+    });
+    return thin;
+  });
+  if (out.length) throw new Error(out.join('; '));
+});
+
 /* Same recipe, same beat — or a share link stops being note for note. */
 await check('the beat is reproducible from the seed', async () => {
   const same = await page.evaluate(() => {
