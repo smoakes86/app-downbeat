@@ -1,19 +1,18 @@
 /* Exercises every function of Downbeat at an iPhone viewport and screenshots
    each state. Usage: node drive.mjs <outDir> */
-import { chromium } from 'playwright';
+import { launch, BASE as DEFAULT_URL } from './browser.mjs';
 import fs from 'node:fs';
 import path from 'node:path';
 
 const OUT = process.argv[2] || 'shots/drive';
-const BASE = process.argv[3] || 'http://127.0.0.1:8765/index.html';
+const BASE = process.argv[3] || DEFAULT_URL;
 const W = Number(process.argv[4] || 393);
 const H = Number(process.argv[5] || 852);
 fs.mkdirSync(OUT, { recursive: true });
 
 const UA = 'Mozilla/5.0 (iPhone; CPU iPhone OS 17_5 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.5 Mobile/15E148 Safari/604.1';
 
-const browser = await chromium.launch({
-  executablePath: '/opt/pw-browsers/chromium-1194/chrome-linux/chrome',
+const browser = await launch({
   args: ['--autoplay-policy=no-user-gesture-required', '--mute-audio'],
 });
 const ctx = await browser.newContext({

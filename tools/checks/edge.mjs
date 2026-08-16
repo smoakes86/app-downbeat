@@ -1,13 +1,13 @@
 /* Edge cases: the smallest phone, the longest song, every genre, every part. */
-import { chromium } from 'playwright';
+import { launch, BASE as DEFAULT_URL } from './browser.mjs';
 import fs from 'node:fs';
 import path from 'node:path';
 
 const OUT = 'shots/edge';
 fs.mkdirSync(OUT, { recursive: true });
-const BASE = 'http://127.0.0.1:8765/index.html';
+const BASE = DEFAULT_URL;
 
-const browser = await chromium.launch({ executablePath: '/opt/pw-browsers/chromium-1194/chrome-linux/chrome' });
+const browser = await launch();
 const problems = [];
 const errors = [];
 

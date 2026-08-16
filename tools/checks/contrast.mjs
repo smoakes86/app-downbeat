@@ -1,5 +1,5 @@
-import { chromium } from 'playwright';
-const b = await chromium.launch({ executablePath: '/opt/pw-browsers/chromium-1194/chrome-linux/chrome' });
+import { launch, BASE as DEFAULT_URL } from './browser.mjs';
+const b = await launch();
 
 const lin = (c) => (c <= 0.03928 ? c / 12.92 : Math.pow((c + 0.055) / 1.055, 2.4));
 const lum = ([r, g, b2]) => 0.2126 * lin(r / 255) + 0.7152 * lin(g / 255) + 0.0722 * lin(b2 / 255);
@@ -8,7 +8,7 @@ const ratio = (a, b2) => { const [x, y] = [lum(a), lum(b2)].sort((p, q) => q - p
 for (const scheme of ['dark', 'light']) {
   const ctx = await b.newContext({ viewport: { width: 393, height: 852 }, colorScheme: scheme, isMobile: true, hasTouch: true });
   const p = await ctx.newPage();
-  await p.goto('http://127.0.0.1:8765/index.html', { waitUntil: 'networkidle' });
+  await p.goto(DEFAULT_URL, { waitUntil: 'networkidle' });
   await p.waitForTimeout(800);
   if (await p.locator('#introSkip').isVisible()) { await p.locator('#introSkip').click(); await p.waitForTimeout(400); }
 

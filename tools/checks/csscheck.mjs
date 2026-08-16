@@ -1,8 +1,8 @@
 /* Parse every stylesheet the page loads and report rules the engine dropped. */
-import { chromium } from 'playwright';
-const b = await chromium.launch({ executablePath: '/opt/pw-browsers/chromium-1194/chrome-linux/chrome' });
+import { launch, BASE as DEFAULT_URL } from './browser.mjs';
+const b = await launch();
 const p = await (await b.newContext()).newPage();
-await p.goto('http://127.0.0.1:8765/index.html', { waitUntil: 'networkidle' });
+await p.goto(DEFAULT_URL, { waitUntil: 'networkidle' });
 const out = await p.evaluate(async () => {
   const files = Array.from(document.styleSheets).filter((s) => s.href);
   const report = [];

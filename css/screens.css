@@ -441,7 +441,6 @@
     color:#FFFFFF;
     background:var(--red-fill);
   }
-  .swipe-actions button.is-neutral { background:var(--fill-1); color:var(--label); }
   .swipe-body {
     position:relative;
     background:var(--grouped-cell);

@@ -1,16 +1,18 @@
 /* axe-core over every screen and every modal, in both appearances. */
-import { chromium } from 'playwright';
+import { launch, BASE as DEFAULT_URL } from './browser.mjs';
 import fs from 'node:fs';
+import { createRequire } from 'node:module';
 
-const AXE = fs.readFileSync('node_modules/axe-core/axe.min.js', 'utf8');
-const b = await chromium.launch({ executablePath: '/opt/pw-browsers/chromium-1194/chrome-linux/chrome' });
+/* Resolved rather than guessed at, so the check runs from any directory. */
+const AXE = fs.readFileSync(createRequire(import.meta.url).resolve('axe-core/axe.min.js'), 'utf8');
+const b = await launch();
 const all = [];
 
 for (const scheme of ['dark', 'light']) {
   const ctx = await b.newContext({ viewport: { width: 393, height: 852 }, isMobile: true, hasTouch: true, colorScheme: scheme });
   const page = await ctx.newPage();
   page.on('pageerror', (e) => console.log('ERR', e.message));
-  await page.goto('http://127.0.0.1:8765/index.html', { waitUntil: 'networkidle' });
+  await page.goto(DEFAULT_URL, { waitUntil: 'networkidle' });
   await page.waitForTimeout(900);
   await page.addScriptTag({ content: AXE });
 

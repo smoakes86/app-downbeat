@@ -1,11 +1,11 @@
 /* Layout check for Downbeat: every tab at every iPhone size.
    Usage: node shot.mjs <outDir> [baseUrl] */
-import { chromium } from 'playwright';
+import { launch, forceInsets, BASE as DEFAULT_URL } from './browser.mjs';
 import fs from 'node:fs';
 import path from 'node:path';
 
 const OUT = process.argv[2] || 'shots/current';
-const BASE = process.argv[3] || 'http://127.0.0.1:8765/index.html';
+const BASE = process.argv[3] || DEFAULT_URL;
 fs.mkdirSync(OUT, { recursive: true });
 
 const PROFILES = [
@@ -19,7 +19,7 @@ const TABS = ['play', 'song', 'arrange', 'library'];
 
 const UA = 'Mozilla/5.0 (iPhone; CPU iPhone OS 17_5 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.5 Mobile/15E148 Safari/604.1';
 
-const browser = await chromium.launch({ executablePath: '/opt/pw-browsers/chromium-1194/chrome-linux/chrome' });
+const browser = await launch();
 
 const errors = [];
 const problems = [];
@@ -34,19 +34,7 @@ for (const p of PROFILES) {
     colorScheme: 'dark', reducedMotion: 'reduce',
   });
   const page = await ctx.newPage();
-  // Chromium reports no safe-area insets. Force what an iPhone 15 actually
-  // has, so the chrome is measured against the notch and the home indicator
-  // rather than against a rectangle no phone ships.
-  await page.addInitScript(() => {
-    document.addEventListener('DOMContentLoaded', () => {
-      const land = window.innerWidth > window.innerHeight;
-      const set = (k, v) => document.documentElement.style.setProperty(k, v);
-      set('--safe-t', land ? '0px' : '59px');
-      set('--safe-b', land ? '21px' : '34px');
-      set('--safe-l', land ? '59px' : '0px');
-      set('--safe-r', land ? '59px' : '0px');
-    });
-  });
+  await forceInsets(page);
   page.on('pageerror', (e) => errors.push(`[${p.name}] pageerror: ${e.message}`));
   page.on('console', (m) => { if (m.type() === 'error') errors.push(`[${p.name}] console: ${m.text()}`); });
   await page.goto(BASE, { waitUntil: 'networkidle' });

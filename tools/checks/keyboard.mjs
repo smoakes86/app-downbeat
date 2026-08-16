@@ -1,12 +1,11 @@
 /* Everything the app does, from a keyboard only. */
-import { chromium } from 'playwright';
-const b = await chromium.launch({ executablePath:'/opt/pw-browsers/chromium-1194/chrome-linux/chrome',
-  args:['--autoplay-policy=no-user-gesture-required','--mute-audio'] });
+import { launch, BASE as DEFAULT_URL } from './browser.mjs';
+const b = await launch({ args: ['--autoplay-policy=no-user-gesture-required', '--mute-audio'] });
 const ctx = await b.newContext({ viewport:{width:393,height:852}, colorScheme:'dark' });
 const p = await ctx.newPage();
 const fails = [];
 p.on('pageerror', e=>fails.push('pageerror: '+e.message));
-await p.goto('http://127.0.0.1:8765/index.html', {waitUntil:'networkidle'});
+await p.goto(DEFAULT_URL, {waitUntil:'networkidle'});
 await p.waitForTimeout(900);
 
 const active = () => p.evaluate(() => {
