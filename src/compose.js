@@ -1284,6 +1284,50 @@
     return 0.9 + 0.12 * rise - 0.06 * fall;
   }
 
+  /* Fills, as a vocabulary rather than as one shape.
+
+     Each returns the events it adds and, optionally, how much of the last bar
+     to take away first — because the strongest fill in several genres is the
+     one where everything stops. `bar` is the first step of the bar being
+     filled, so a shape is written in steps 0–15 of its own bar. */
+  const FILL_SHAPES = {
+    snareRun: (f) => ({ add: [12, 13, 14, 15]
+      .filter(() => f.rng.chance(0.75))
+      .map((s, i) => ({ step: f.bar + s, instrument: 'snare', velocity: 0.45 + i * 0.12 })) }),
+
+    /* Down the kit. The point of a tom fill is that it descends, so the
+       velocities rise as the pitch falls and the floor tom lands hardest. */
+    tomFall: (f) => ({ add: [['tomHigh', 12, 0.62], ['tomHigh', 13, 0.66],
+      ['tomMid', 14, 0.78], ['tomLow', 15, 0.92]]
+      .map(([instrument, s, velocity]) => ({ step: f.bar + s, instrument, velocity })) }),
+
+    tomRoll: (f) => ({ add: [['tomHigh', 10, 0.5], ['tomHigh', 11, 0.55],
+      ['tomMid', 12, 0.62], ['tomMid', 13, 0.68], ['tomLow', 14, 0.8], ['tomLow', 15, 0.95]]
+      .map(([instrument, s, velocity]) => ({ step: f.bar + s, instrument, velocity })) }),
+
+    /* Kick and snare answering each other, which is what a trade is. */
+    trade: (f) => ({ add: [['kick', 12, 0.8], ['snare', 13, 0.62],
+      ['kick', 14, 0.82], ['snare', 15, 0.9]]
+      .map(([instrument, s, velocity]) => ({ step: f.bar + s, instrument, velocity })) }),
+
+    /* The open hat pulls the ear up into the next bar. */
+    lift: (f) => ({ add: [
+      { step: f.bar + 14, instrument: 'openHat', velocity: 0.8 },
+      { step: f.bar + 15, instrument: 'snare', velocity: 0.85 }
+    ] }),
+
+    /* Two snares a thirty-second apart: a hand, not a machine. */
+    flam: (f) => ({ add: [
+      { step: f.bar + 14, instrument: 'snare', velocity: 0.5 },
+      { step: f.bar + 14.5, instrument: 'snare', velocity: 0.72 },
+      { step: f.bar + 15, instrument: 'snare', velocity: 0.88 }
+    ] }),
+
+    /* Everything stops for the last beat. Nothing is added at all. */
+    drop: () => ({ clear: 12, add: [] })
+  };
+  const DEFAULT_FILLS = ['snareRun', 'tomFall', 'trade'];
+
   function buildDrums(ctx) {
     const { genre, totalBars, rng, energy } = ctx;
     const patterns = ctx.beat || pickBeat(genre, rng);
@@ -1317,7 +1361,12 @@
          an auto length that lands somewhere odd, not the common case. */
       const span = totalSteps % pattern.length === 0
         ? pattern.length : STEPS_PER_BAR;
-      for (let step = 0; step < totalSteps; step++) {
+      /* A crash marks the top of the loop, which is what the faceplate has
+         always said it does — so it is stamped once rather than looped. Left
+         to repeat, a one-bar `crash: 'x...'` fired on every bar of the song,
+         which is not a crash, it is a car alarm. */
+      const reach = instrument === 'crash' ? Math.min(span, totalSteps) : totalSteps;
+      for (let step = 0; step < reach; step++) {
         const symbol = pattern[step % span];
         if (!symbol || symbol === '.' || symbol === '-') continue;
         /* Ghost hits are colour, not the beat, and they are the first thing a
@@ -1374,20 +1423,42 @@
       });
     }
 
-    /* A small fill going into the loop point. The draw is taken either way —
-       only the odds move with the energy — so the settings that were here
-       before still land on exactly the fills they always did. */
+    /* The fill going into the loop point. The draw is taken either way — only
+       the odds move with the energy — so a settings change does not shift
+       which fills land, only whether they do. */
     const fillOdds = 0.55 * (energyMod.fill === undefined ? 1 : energyMod.fill);
-    if (patterns.snare && totalBars > 2 && rng.chance(fillOdds)) {
-      const lastBar = (totalBars - 1) * STEPS_PER_BAR;
-      [12, 13, 14, 15].forEach((offset, i) => {
-        if (rng.chance(0.7)) {
-          events.push({
-            step: lastBar + offset, instrument: 'snare',
-            nudge: nudgeFor('snare'), velocity: 0.45 + i * 0.12
-          });
+    const shapes = (G.FILLS && G.FILLS[genre.id]) || DEFAULT_FILLS;
+    if (shapes.length && totalBars > 2 && rng.chance(fillOdds)) {
+      const bar = (totalBars - 1) * STEPS_PER_BAR;
+      /* Weighted toward the front of the list: the first shape is what this
+         genre usually does, the rest are what it does for a change. */
+      const shape = shapes[Math.min(shapes.length - 1, Math.floor(-Math.log(1 - rng.next()) * 0.9))];
+      const fill = FILL_SHAPES[shape];
+      if (fill) {
+        const made = fill({ bar, rng, nudgeFor, patterns });
+        /* A drop is a fill made of silence, so it takes the last beat away
+           rather than adding to it. The hole IS the fill, and it is the one
+           house and trap actually use. */
+        if (made.clear) {
+          for (let i = events.length - 1; i >= 0; i--) {
+            if (events[i].step >= bar + made.clear) events.splice(i, 1);
+          }
         }
-      });
+        made.add.forEach((e) => {
+          e.nudge = e.nudge === undefined ? nudgeFor(e.instrument) : e.nudge;
+          /* A fill keeps its own shape — that is what makes it a fill — but it
+             is still played by the same drummer in the same room, so it takes
+             the energy and the arc like everything else. Left as literals, a
+             fill was exactly as loud in a hushed sketch as in a driving one. */
+          e.velocity = clamp(e.velocity * energyMod.velocity
+            * arcAt(e.step, totalSteps, climax), 0.14, 1);
+          /* Marked, so the arrangement can decide where a fill belongs: at
+             the end of a SECTION rather than at the end of every pass of the
+             loop inside one. */
+          e.fill = true;
+          events.push(e);
+        });
+      }
     }
 
     return events.sort((a, b) => a.step - b.step);

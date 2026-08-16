@@ -519,7 +519,11 @@
         step: d.step, track: 'drums', drum: d.instrument, velocity: d.velocity,
         /* Seconds off the grid, per hit. The grid stays where it is — this is
            one voice moving against the others, which is what a feel is. */
-        nudge: d.nudge || 0
+        nudge: d.nudge || 0,
+        /* Both carried so the arrangement can place them: a fill belongs at
+           the end of a section, and a ghost is what goes first when a section
+           wants less. */
+        fill: !!d.fill, ghost: !!d.ghost
       });
     });
     return list.sort((a, b) => a.step - b.step);
@@ -544,20 +548,57 @@
     const list = [];
     const spans = [];
     let at = 0;
-    plan.sections.forEach((section) => {
+    plan.sections.forEach((section, index) => {
       const on = {};
       section.tracks.forEach((id) => { on[id] = true; });
       spans.push({ id: section.id, name: section.name, start: at, steps: section.loops * loopSteps });
+
+      /* How hard this section is played. The form already knows — it is the
+         number the written guidance has always quoted — and until now it was
+         only ever prose. An intro at 0.2 and a last chorus at 1 should not be
+         the same performance of the same loop at the same volume. */
+      const push = 0.72 + 0.28 * (section.intensity === undefined ? 1 : section.intensity);
+      const quiet = (section.intensity || 1) < 0.4;
+
       for (let pass = 0; pass < section.loops; pass++) {
         const offset = at + pass * loopSteps;
+        const lastPass = pass === section.loops - 1;
         base.forEach((e) => {
           if (!on[e.track]) return;
+          /* A fill belongs at the end of a SECTION, not at the end of every
+             pass of the loop inside one. A verse that is two loops long got
+             filled half way through it, which announces a change that is not
+             coming. */
+          if (e.fill && !lastPass) return;
+          /* And a crash belongs at the top of a SECTION. The loop's own crash
+             marks the top of the loop, which is right when the loop is the
+             whole song and wrong once it is being played thirteen times —
+             thirteen crashes is not an arrangement, it is a warning. */
+          if (e.drum === 'crash' && pass !== 0) return;
+          /* Ghosts are the first thing a player drops when the room wants
+             less, and an intro is the room wanting less. */
+          if (e.ghost && quiet) return;
           const copy = {};
           for (const k in e) copy[k] = e[k];
           copy.step = e.step + offset;
+          if (e.track === 'drums') copy.velocity = Math.min(1, e.velocity * push);
           list.push(copy);
         });
       }
+
+      /* A crash on the downbeat of a section that has drums and is louder
+         than the one before it. This is the one thing every drummer does at a
+         section change and the arrangement could not previously express it,
+         because the loop has no idea it is being repeated. */
+      const previous = index > 0 ? plan.sections[index - 1] : null;
+      const lifts = previous && (section.intensity || 0) > (previous.intensity || 0) + 0.12;
+      /* Unless the beat already brought its own to this exact downbeat, in
+         which case two crashes on one beat is a flam nobody asked for. */
+      const already = list.some((e) => e.drum === 'crash' && e.step === at);
+      if (lifts && on.drums && !already) {
+        list.push({ step: at, track: 'drums', drum: 'crash', velocity: 0.62 + 0.3 * (section.intensity || 0), nudge: 0 });
+      }
+
       at += section.loops * loopSteps;
     });
     list.sort((a, b) => a.step - b.step);

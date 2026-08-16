@@ -773,6 +773,32 @@
      one that stamps the ids. */
   Object.keys(GENRES).forEach((id) => { GENRES[id].kit = KIT[id] || 'acoustic'; });
 
+  /* Which fills a genre reaches for. Every fill in the app used to be a snare
+     run down the last four sixteenths, in every genre, which is one drummer
+     with one idea. A house record does not fill — it drops out, and the hole
+     is the fill. Jazz trades. Rock goes round the toms.
+
+     Listed in order of preference; the draw is weighted toward the front, so
+     the first is the genre's usual answer and the others are what it does
+     when it wants a change. Ambient does not fill because ambient does not
+     have drums. */
+  const FILLS = {
+    pop:       ['snareRun', 'tomFall', 'lift'],
+    lofi:      ['flam', 'snareRun'],
+    rock:      ['tomFall', 'tomRoll', 'trade'],
+    rnb:       ['flam', 'snareRun', 'tomFall'],
+    jazz:      ['trade', 'snareRun'],
+    blues:     ['trade', 'snareRun'],
+    house:     ['drop', 'lift'],
+    synthwave: ['tomFall', 'lift', 'drop'],
+    trap:      ['drop', 'flam', 'snareRun'],
+    funk:      ['trade', 'snareRun', 'tomFall'],
+    gospel:    ['snareRun', 'tomRoll', 'trade'],
+    bossa:     ['flam', 'snareRun'],
+    folk:      ['snareRun', 'tomFall'],
+    ambient:   []
+  };
+
   global.Genres = {
     GENRES,
     ENERGY,
@@ -780,6 +806,7 @@
     DRUM_VOICES,
     FEEL,
     KIT,
+    FILLS,
     order: ['pop', 'lofi', 'rock', 'rnb', 'jazz', 'blues', 'house', 'synthwave', 'trap', 'funk', 'gospel', 'bossa', 'folk', 'ambient'],
     scalesFor: function (id) {
       const genre = GENRES[id];

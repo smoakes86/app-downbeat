@@ -550,10 +550,12 @@ await check('a long pattern that cannot divide the loop folds back to one bar', 
       rng: window.Compose.makeRng(7) });
     const four = window.Compose.buildDrums({ genre, totalBars: 4, energy: 'flow', beat,
       rng: window.Compose.makeRng(7) });
+    /* Fills excluded: the last bar legitimately differs from the others, and
+       this is a question about the pattern rather than about the performance. */
     const barsOf = (evts, n) => {
       const out = [];
       for (let i = 0; i < n; i++) {
-        out.push(evts.filter((e) => e.step >= i * 16 && e.step < (i + 1) * 16)
+        out.push(evts.filter((e) => !e.fill && e.step >= i * 16 && e.step < (i + 1) * 16)
           .map((e) => e.step - i * 16).join(','));
       }
       return out;
@@ -573,7 +575,10 @@ await check('the beat is named, and the name is the one that played', async () =
       const s = window.Compose.compose({ genre: g });
       if (!s.beatName) { bad.push(`${g}: no name`); return; }
       const voices = window.Genres.DRUM_VOICES.map((v) => v.id).filter((id) => s.beat[id]);
-      const played = [...new Set(s.drums.map((d) => d.instrument === 'openHat' && !s.beat.openHat ? 'hat' : d.instrument))];
+      /* A fill reaches for voices the beat never names — that is most of the
+         point of the toms — so this is a question about the beat alone. */
+      const played = [...new Set(s.drums.filter((d) => !d.fill)
+        .map((d) => d.instrument === 'openHat' && !s.beat.openHat ? 'hat' : d.instrument))];
       played.forEach((id) => {
         if (voices.indexOf(id) < 0) bad.push(`${g}/${s.beatName}: played ${id}, not in the beat`);
       });
@@ -598,6 +603,9 @@ await check('the beat is played, not stamped', async () => {
         const mid = s.totalSteps / 2;
         s.drums.forEach((d) => {
           const inBar = d.step % 16;
+          /* A fill has its own shape by design and says nothing about how the
+             beat under it is played. */
+          if (d.fill) return;
           // A ghost is quiet wherever it falls, so it says nothing about accent.
           if (!d.ghost && (d.instrument === 'snare' || d.instrument === 'clap')) {
             (inBar % 4 === 0 ? onBeat : offBeat).push(d.velocity);
@@ -758,6 +766,106 @@ await check('the beat is reproducible from the seed', async () => {
   if (!same) throw new Error('the same seed gave two different beats');
 });
 
+/* ---------------------------------------------------------------- fills */
+
+await check('a genre has more than one fill in it', async () => {
+  const out = await page.evaluate(() => {
+    const thin = [];
+    window.Genres.order.forEach((g) => {
+      const wanted = (window.Genres.FILLS[g] || []).length;
+      if (wanted < 2) return;
+      const shapes = new Set();
+      let filled = 0;
+      for (let i = 0; i < 40; i++) {
+        const s = window.Compose.compose({ genre: g, bars: 4 });
+        const f = s.drums.filter((d) => d.fill);
+        /* Signed by where the hits fall as well as by which voices play them:
+           lo-fi's two fills are both snare-only and differ in their rhythm,
+           which is the whole distinction between a flam and a run. */
+        if (f.length) {
+          filled++;
+          shapes.add(f.map((d) => `${d.instrument}@${(d.step % 16).toFixed(1)}`).sort().join(' '));
+        } else if (!s.drums.some((d) => d.step >= s.totalSteps - 4)) { filled++; shapes.add('drop'); }
+      }
+      if (!filled) thin.push(`${g}: never fills`);
+      else if (shapes.size < 2) thin.push(`${g}: one shape only (${[...shapes]})`);
+    });
+    return thin;
+  });
+  if (out.length) throw new Error(out.join('; '));
+});
+
+await check('a fill lands at the end of a section, not inside one', async () => {
+  const out = await page.evaluate(() => {
+    const bad = [];
+    window.Genres.order.forEach((g) => {
+      if (g === 'ambient') return;
+      const song = window.Compose.compose({ genre: g, bars: 4 });
+      const plan = window.Arrange.plan(song);
+      const laid = window.Engine.arrange(song, plan);
+      plan.sections.forEach((sec) => {
+        const from = sec.start * 16;
+        const passes = new Set(laid.events
+          .filter((e) => e.fill && e.step >= from && e.step < from + sec.bars * 16)
+          .map((e) => Math.floor((e.step - from) / song.totalSteps)));
+        passes.forEach((pass) => {
+          if (pass !== sec.loops - 1) bad.push(`${g}/${sec.name}: fill in pass ${pass + 1} of ${sec.loops}`);
+        });
+      });
+    });
+    return bad.slice(0, 3);
+  });
+  if (out.length) throw new Error(out.join('; '));
+});
+
+await check('a louder section is played louder', async () => {
+  const out = await page.evaluate(() => {
+    const avg = (a) => (a.length ? a.reduce((x, y) => x + y, 0) / a.length : 0);
+    const bad = [];
+    ['rock', 'pop', 'house', 'funk'].forEach((g) => {
+      const song = window.Compose.compose({ genre: g, bars: 4 });
+      const plan = window.Arrange.plan(song);
+      const laid = window.Engine.arrange(song, plan);
+      const rows = plan.sections.map((sec) => {
+        const from = sec.start * 16;
+        return {
+          name: sec.name, intensity: sec.intensity,
+          vel: avg(laid.events.filter((e) => e.track === 'drums' && !e.fill
+            && e.step >= from && e.step < from + sec.bars * 16).map((e) => e.velocity))
+        };
+      }).filter((r) => r.vel > 0).sort((a, b) => a.intensity - b.intensity);
+      for (let i = 1; i < rows.length; i++) {
+        if (rows[i].vel < rows[i - 1].vel - 0.02) {
+          bad.push(`${g}: ${rows[i].name} (${rows[i].intensity}) quieter than ${rows[i - 1].name}`);
+        }
+      }
+    });
+    return bad.slice(0, 3);
+  });
+  if (out.length) throw new Error(out.join('; '));
+});
+
+await check('a crash marks a section, not every bar', async () => {
+  const out = await page.evaluate(() => {
+    const bad = [];
+    window.Genres.order.forEach((g) => {
+      const song = window.Compose.compose({ genre: g, bars: 4 });
+      const plan = window.Arrange.plan(song);
+      const laid = window.Engine.arrange(song, plan);
+      const crashes = laid.events.filter((e) => e.drum === 'crash');
+      const starts = new Set(plan.sections.map((s) => s.start * 16));
+      crashes.forEach((c) => {
+        if (!starts.has(c.step)) bad.push(`${g}: crash at step ${c.step}, not a section start`);
+      });
+      /* And the loop's own crash must not simply repeat: one per bar over
+         fifty bars is a car alarm, which is what it was. */
+      if (crashes.length > plan.sections.length) bad.push(`${g}: ${crashes.length} crashes for ${plan.sections.length} sections`);
+    });
+    return bad.slice(0, 3);
+  });
+  if (out.length) throw new Error(out.join('; '));
+});
+
 /* ------------------------------------------------ playing the arrangement
 
    The claim is that each section plays its own parts and no others, which is
@@ -793,8 +901,13 @@ await check('the arrangement lays out as the form describes', async () => {
         /* Every repeat, not only the first: an off-by-one in the pass loop
            would leave the second half of every doubled section empty. */
         if (section.loops > 1) {
-          const first = laid.events.filter((e) => e.step >= from && e.step < from + song.totalSteps).length;
-          const lastPass = laid.events.filter((e) => e.step >= to - song.totalSteps && e.step < to).length;
+          /* Fills and crashes excluded: both belong to the section rather
+             than to the pass, so the last pass carries a fill the first does
+             not and the first carries the crash. */
+          const plain = (a, b2) => laid.events.filter((e) => !e.fill && e.drum !== 'crash'
+            && e.step >= a && e.step < b2).length;
+          const first = plain(from, from + song.totalSteps);
+          const lastPass = plain(to - song.totalSteps, to);
           if (first !== lastPass) wrong.push(`${g}/${section.name}: ${first} events in pass 1, ${lastPass} in the last`);
         }
       });
