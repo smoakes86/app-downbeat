@@ -220,6 +220,25 @@ current firmware:
 Every pad and key on the faceplates is tappable and previews its sound, as is
 every step chip in the run.
 
+**Notes past the ends still have a pad.** Twelve pads will not hold every tune,
+and a note off either end used to read `OFF` — a dead chip in the middle of a
+run you are trying to play. It now names the pad that plays it and the shift
+that gets you there: `pad 3 ↓` with `keys −` under it, or `oct −` on the FM.
+The pad lights in amber for the shift up and periwinkle for the shift down
+instead of in the part colour, and the key you would press — `+`/`−` on the
+EP-133, `oct+`/`oct−` on the FM-1 — lights with it.
+
+Only a note that is genuinely off the grid is marked. Twelve pads of a
+seven-note scale span nearly two octaves, so `C5` and `C6` are routinely both
+under your fingers at once; neither is flagged, because neither needs
+anything. The arithmetic is asserted rather than eyeballed: for every note in
+the audible range, in every genre, on both units, the pad named plus its shift
+has to equal the note.
+
+A note the scale grid has no pad for *at any* shift — a chromatic passing note
+against a scale mode — is a different fact with a different answer, and still
+reads `OFF`.
+
 ## Controls
 
 | | |
@@ -256,8 +275,9 @@ sends the matching `mouseleave`.
 Every label clears WCAG AA in both appearances, measured rather than eyeballed
 — including the ink on all five track colours where the segmented thumb paints
 them. Colour never carries meaning alone: the arrangement map states which
-parts play in each section, and the five track colours are always
-text-labelled.
+parts play in each section, the five track colours are always text-labelled,
+and a note that needs an octave shift says so three ways at once — an arrow on
+the chip, the press spelled out under it, and the colour.
 
 Reduced Motion takes the travel and leaves the light: a pad lighting up is
 information, and deleting it would delete the feature. Increased Contrast firms

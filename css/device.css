@@ -47,6 +47,16 @@
   .g-lit-b { stop-color:var(--part); }
   .dev-fm .g-lit-a { stop-color:color-mix(in srgb, var(--part) 55%, var(--fm-wkey-hi)); }
 
+  /* The same lamp lit from the bank above or the bank below. Same construction
+     — hot centre, coloured edge — so an out-of-bank hit reads as the same
+     physical event in a different colour, not as a different kind of thing. */
+  .g-lit-up-a { stop-color:color-mix(in srgb, var(--oct-up) 55%, var(--ep-cap-hi)); }
+  .g-lit-up-b { stop-color:var(--oct-up); }
+  .g-lit-dn-a { stop-color:color-mix(in srgb, var(--oct-dn) 55%, var(--ep-cap-hi)); }
+  .g-lit-dn-b { stop-color:var(--oct-dn); }
+  .dev-fm .g-lit-up-a { stop-color:color-mix(in srgb, var(--oct-up) 55%, var(--fm-wkey-hi)); }
+  .dev-fm .g-lit-dn-a { stop-color:color-mix(in srgb, var(--oct-dn) 55%, var(--fm-wkey-hi)); }
+
   /* --------------------------------------------------------- the lamp strike
 
      One timing, four key types. Attack rides [data-struck] at --t-lamp; decay
@@ -80,6 +90,19 @@
     stroke:var(--on-part); stroke-width:1.5;
   }
   .pad-glow-b, .key-glow-b { opacity:var(--lit); stroke:none; }
+
+  /* Which bank this hit came from. The fill switches gradients rather than
+     tinting one, and it is set on the glow rather than on the pad so the used
+     map underneath keeps the part colour throughout — the pad is still this
+     part's pad; it is the light on it that is coming from somewhere else. */
+  .pad-glow[data-oct=up], .pad-glow-b[data-oct=up],
+  .wkey-glow[data-oct=up], .bkey-glow[data-oct=up], .key-glow-b[data-oct=up] {
+    fill:var(--g-lit-up);
+  }
+  .pad-glow[data-oct=dn], .pad-glow-b[data-oct=dn],
+  .wkey-glow[data-oct=dn], .bkey-glow[data-oct=dn], .key-glow-b[data-oct=dn] {
+    fill:var(--g-lit-dn);
+  }
   .dev-pad, .dev-wkey, .dev-bkey {
     translate:0 calc(var(--lit) * .8px * var(--m-travel));
   }
@@ -167,6 +190,23 @@
     fill:color-mix(in srgb, var(--part) 20%, var(--ep-key));
     stroke:var(--part); stroke-width:1.6;
   }
+  /* The call. Not an on-state — nothing is engaged — it is the key the run is
+     asking for, lit in the same colour as the pad that is asking. Declared
+     after .is-on because on the FM the OCT keys can be both at once: already
+     shifted for the part, and being asked to shift again for this note. */
+  .dev-key.is-call { --call:var(--oct-up); }
+  .dev-key[data-el=key-minus].is-call,
+  .dev-key[data-el=oct-down].is-call { --call:var(--oct-dn); }
+  .dev-key.is-call rect {
+    fill:color-mix(in srgb, var(--call) 22%, var(--ep-key));
+    stroke:var(--call); stroke-width:1.6;
+  }
+  .dev-fm .dev-key.is-call rect {
+    fill:color-mix(in srgb, var(--call) 18%, var(--fm-body-hi));
+    stroke:var(--call);
+  }
+  .dev-fm .dev-key.is-call .dev-fn { fill:var(--call); }
+
   .dev-group-id { font-size:13px; }
   .rec-dot { fill:var(--ep-accent); }
   .dev-fader .fader-track { fill:var(--ep-key); }
@@ -410,6 +450,31 @@
     white-space:nowrap;
   }
   .chip-oct { font-style:normal; color:var(--part-ink); }
+
+  /* A chip whose note is out of bank takes the bank's colour in place of the
+     part's — the same override the pad gets, applied where every rule below
+     already reads --part, so the lit state, the bloom and the link ring all
+     follow without being written twice. The arrow and the "oct −1" on the
+     second line say it in words at the same time: three channels, none of
+     them load-bearing on its own. */
+  .seq-chip[data-oct=up], .seq-chord[data-oct=up] {
+    --part:var(--oct-up); --part-ink:var(--oct-up-ink);
+  }
+  .seq-chip[data-oct=dn], .seq-chord[data-oct=dn] {
+    --part:var(--oct-dn); --part-ink:var(--oct-dn-ink);
+  }
+  /* Not a hairline box — the chip is small and a ring at this size reads as
+     focus. A bar down the leading edge, in the bank colour, is the same signal
+     the lane already uses and cannot be confused with a state ring. */
+  .seq-chip[data-oct]::after {
+    content:'';
+    position:absolute;
+    left:0; top:6px; bottom:6px;
+    width:2.5px;
+    border-radius:0 2px 2px 0;
+    background:var(--part);
+  }
+  .seq-chip.now[data-oct]::after { background:var(--on-part); }
 
   .seq-chip:active { transform:scale(.95); background:var(--fill-3); }
 

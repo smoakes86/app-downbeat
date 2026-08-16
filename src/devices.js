@@ -185,15 +185,35 @@
       if (score > bestScore) { bestScore = score; root = r; padNotes = notes; }
     }
 
+    /* Every in-scale note gets a pad, including the ones off either end of the
+       twelve. A note above the top of the run is played on the pad an octave
+       below it with KEYS held and + pressed; a note below the bottom is the
+       pad an octave above with −. `oct` is how many of those presses it takes,
+       signed, and it is counted in OCTAVES rather than in twelve-pad banks
+       because that is what the control on the unit actually does. The two are
+       not the same thing: twelve pads of a seven-note scale span nearly two
+       octaves, so a bank shift would land you on the wrong pad by a third.
+
+       Notes outside the scale still have no pad, and that is a different
+       fact with a different answer — no amount of octave shifting puts a
+       chromatic passing note under a scale-mode grid. Those stay OFF. */
+    const top = padNotes.length === 12 ? padNotes[11] : null;
     const start = padNotes.length ? padNotes[0] : root;
     const idFor = (midi) => {
-      if (!inScale(midi) || midi < start) return null;
-      let pos = 0;
-      for (let m = start; m < midi; m++) if (inScale(m)) pos++;
-      const index = mod(pos, 12);
+      if (!inScale(midi) || top === null) return null;
+      let m = midi;
+      let oct = 0;
+      while (m < start) { m += 12; oct -= 1; }
+      while (m > top) { m -= 12; oct += 1; }
+      /* Contiguous by construction — padNotes is every in-scale note between
+         its own ends — so anything in scale that has been folded between them
+         is on it. The guard is for the octave-fold overshooting on a scale
+         whose twelve pads span less than an octave, which no scale here does. */
+      const index = padNotes.indexOf(m);
+      if (index < 0) return null;
       return {
         id: 'p' + (index + 1), pad: index + 1, index,
-        label: EP_PAD_LABELS[index], oct: Math.floor(pos / 12)
+        label: EP_PAD_LABELS[index], oct
       };
     };
 
@@ -228,9 +248,16 @@
       if (score > bestScore) { bestScore = score; best = oct; }
     }
 
+    /* The keybed is 27 keys and a tune rarely fits in 27 keys. A note off
+       either end is not unplayable — it is the same key with OCT± pressed, and
+       that is what `oct` counts. Whole octaves, because that is what the
+       control does: the same physical key, twelve semitones away. */
     const idFor = (midi) => {
-      const idx = midi - 53 - best * 12;
-      return idx >= 0 && idx <= 26 ? { id: 'k' + idx, idx } : null;
+      let idx = midi - 53 - best * 12;
+      let oct = 0;
+      while (idx < 0) { idx += 12; oct -= 1; }
+      while (idx > 26) { idx -= 12; oct += 1; }
+      return { id: 'k' + idx, idx, oct };
     };
     return { events, idFor, oct: best };
   }
@@ -264,6 +291,13 @@
      re-rasterise all twelve pads, the keybed and the display on every frame of a
      lamp decay — the exact per-frame cost §5.7 rejects. Same shadow, one
      surface. */
+  /* The three lamp gradients, handed to CSS as values it can switch between.
+     Their ids are namespaced to the mount — two faceplates are briefly in the
+     tree together during a device cross-fade — so a stylesheet cannot name
+     them and the plate has to pass them in. */
+  const litVars = (uid) =>
+    `--g-lit:url(#${uid}-lit);--g-lit-up:url(#${uid}-lit-up);--g-lit-dn:url(#${uid}-lit-dn)`;
+
   function defs(uid, isEp) {
     const grid = isEp
       /* 1x1 cells on a 2-unit pitch: the gaps *between* the dots are what the
@@ -285,6 +319,16 @@
         <stop offset="0" class="g-ground-a"/><stop offset="1" class="g-ground-b"/></radialGradient>
       <radialGradient id="${uid}-lit" cx=".5" cy=".42" r=".62">
         <stop offset="0" class="g-lit-a"/><stop offset="1" class="g-lit-b"/></radialGradient>
+      <!-- The same lamp in the two out-of-bank colours. Three gradients rather
+           than one gradient reading a variable, because a gradient stop
+           resolves its var()s against the stop element, not against whatever
+           references the gradient — so a shared one can only ever be one
+           colour at a time, and a pad lit a bank up is on screen next to a pad
+           lit at home. -->
+      <radialGradient id="${uid}-lit-up" cx=".5" cy=".42" r=".62">
+        <stop offset="0" class="g-lit-up-a"/><stop offset="1" class="g-lit-up-b"/></radialGradient>
+      <radialGradient id="${uid}-lit-dn" cx=".5" cy=".42" r=".62">
+        <stop offset="0" class="g-lit-dn-a"/><stop offset="1" class="g-lit-dn-b"/></radialGradient>
       <filter id="${uid}-cast" x="-12%" y="-8%" width="124%" height="122%">
         <feDropShadow dx="0" dy="2" stdDeviation="2" flood-opacity=".45"/>
         <feDropShadow dx="0" dy="22" stdDeviation="26" flood-opacity=".38"/></filter>
@@ -542,7 +586,7 @@
       `<text class="seg seg-right${bloom ? ' seg-bloom' : ''}" x="238" y="79" text-anchor="end" ` +
       `dx="2.2" data-el="disp-note${bloom ? '-b' : ''}"></text>`;
 
-    return `<svg class="dev-svg dev-ep" viewBox="0 0 356 540">
+    return `<svg class="dev-svg dev-ep" viewBox="0 0 356 540" style="${litVars(uid)}">
       ${defs(uid, true)}
       <ellipse class="dev-ground" cx="178" cy="502" rx="187" ry="20" fill="url(#${uid}-ground)"/>
       <rect class="dev-body" x="2" y="2" width="352" height="492" rx="16"
@@ -712,7 +756,7 @@
       `<text class="tft t3${bloom ? ' seg-bloom' : ''}" x="${tftX + 12}" y="100" ` +
       `data-el="disp-note${bloom ? '-b' : ''}"></text>`;
 
-    return `<svg class="dev-svg dev-fm" viewBox="0 0 682 366">
+    return `<svg class="dev-svg dev-fm" viewBox="0 0 682 366" style="${litVars(uid)}">
       ${defs(uid, false)}
       <ellipse class="dev-ground" cx="341" cy="328" rx="359" ry="20" fill="url(#${uid}-ground)"/>
       <rect class="dev-body" x="2" y="2" width="678" height="318" rx="16"
@@ -748,9 +792,17 @@
         ['Let the fader help', 'On OS 2.5 the fader rides group level by default — pull it for instant drops.']
       ];
     }
-    const octNote = mapping.maxOct > 0
-      ? ' A few notes sit an octave up — hold <b>keys</b> and tap <b>+</b> when you see the ↑ marker, or park the whole part one octave higher.'
-      : '';
+    /* Both directions, named separately, because they are two different
+       presses. A part that only ever reaches up needs one sentence and should
+       not be handed the other one to read past. */
+    const up = mapping.maxOct > 0;
+    const down = mapping.minOct < 0;
+    const octNote = !up && !down ? ''
+      : ' ' + (up && down
+        ? 'Some notes sit outside the twelve — hold <b>keys</b> and tap <b>+</b> for the ones marked ↑ and <b>−</b> for the ones marked ↓. The chip still names the pad you press; only the octave moves.'
+        : up
+          ? 'A few notes sit an octave up — hold <b>keys</b> and tap <b>+</b> when you see the ↑ marker. The chip still names the pad you press.'
+          : 'A few notes sit an octave down — hold <b>keys</b> and tap <b>−</b> when you see the ↓ marker. The chip still names the pad you press.');
     const scaleLine = mapping.scale
       ? `In system settings, enter <b>${mapping.scaleCode}</b> for ${mapping.scaleLabel}, then <b>${mapping.keyCode}</b> for the key of ${esc(keyName)}. The pads then run ${esc(keyName)} ${mapping.scaleLabel} instead of chromatically.`
       : `${esc(song.scaleName)} isn’t one of the K.O. II’s scales, so leave it on <b>310</b> (12T) — the pads run chromatically and every note is still reachable.`;
@@ -786,6 +838,12 @@
           : 'Turn <b>presets</b> to a lead you like — a bright FM bell or e-piano carries a tune well.'],
       ['Set the octave', octLabel]
     ];
+    /* 27 keys will not hold most tunes, so some notes are the same key with
+       OCT± pressed. Which key, and which way, is on the chip. */
+    if (mapping.maxOct > 0 || mapping.minOct < 0) {
+      steps.push(['Reach past the keybed',
+        'A few notes fall off the ends. Each one is marked ↑ or ↓ on its chip and lights the key it lands on — tap <b>oct+</b> or <b>oct−</b> once for those and back again after.']);
+    }
     if (trackId === 'chords') {
       steps.push(['Play each stack together', 'The FM-1 is fully polyphonic, so every voicing lands as written. Latch <b>arp</b> if you’d rather hear the stacks broken.']);
     } else {
@@ -811,13 +869,30 @@
      fix on its second line can be read, and it answers on the glass when you
      activate it — but it stops claiming to be pressable. That is exactly the
      bargain the empty pad already makes at the other end of the chain. */
+  /* An octave marker. The arrow is the direction and the digit is the distance,
+     omitted at one because "↑1" reads as a footnote. Two channels, not one:
+     the chip is also tinted by direction, and neither is asked to carry the
+     fact alone. */
+  const octMark = (oct) => (oct
+    ? `<i class="chip-oct">${oct > 0 ? '↑' : '↓'}${Math.abs(oct) > 1 ? Math.abs(oct) : ''}</i>`
+    : '');
+  /* Named as the press, not as the interval. "oct −1" is a description of the
+     note; "keys −" is the thing your left hand does, and that is what the run
+     is for. The unit's own word for the control on each plate. */
+  const octWord = (oct, deviceId) => {
+    if (!oct) return '';
+    const key = deviceId === 'ep133' ? 'keys' : 'oct';
+    return `${key} ${oct > 0 ? '+' : '−'}${Math.abs(oct) > 1 ? ' ×' + Math.abs(oct) : ''}`;
+  };
+  const octAttr = (oct) => (oct ? ` data-oct="${oct > 0 ? 'up' : 'dn'}" data-octn="${oct}"` : '');
+
   function chipHTML(idInfo, main, sub, name, extra) {
     const off = !idInfo;
     const light = idInfo ? ` data-light="${idInfo.id}"` : '';
-    const up = idInfo && idInfo.oct > 0 ? '<i class="chip-oct">↑</i>' : '';
-    return `<button class="seq-chip${off ? ' is-off' : ''}"${light}` +
+    const oct = idInfo ? idInfo.oct || 0 : 0;
+    return `<button class="seq-chip${off ? ' is-off' : ''}"${light}${octAttr(oct)}` +
       ` data-name="${name}"${off ? ' aria-disabled="true"' : ''}${extra || ''}>` +
-      `<b>${main}${up}</b><small>${sub}</small></button>`;
+      `<b>${main}${octMark(oct)}</b><small>${sub}</small></button>`;
   }
 
   function pitchedChips(song, trackId, mapping, deviceId) {
@@ -836,10 +911,16 @@
       const main = info
         ? (deviceId === 'ep133' ? 'pad ' + info.label : esc(noteName(song, e.midi)))
         : 'OFF';
-      const sub = deviceId === 'ep133'
-        ? esc(noteName(song, e.midi)) + (e.role ? ' · ' + e.role : '')
-        : (info ? 'key ' + (info.idx + 1) : 'out of range') + (e.role ? ' · ' + e.role : '');
-      html += chipHTML(info, main, sub, esc(noteName(song, e.midi)), ` data-midi="${e.midi}"`);
+      /* The second line is where the shift is spelt out. On the EP the first
+         line is the pad, so the note goes here; on the FM the first line is
+         the note, so the key does — and either way the bank shift is the last
+         thing said, because it is the last thing you do. */
+      const bits = deviceId === 'ep133'
+        ? [esc(noteName(song, e.midi))]
+        : [info ? 'key ' + (info.idx + 1) : 'out of range'];
+      if (info && info.oct) bits.push(octWord(info.oct, deviceId));
+      if (e.role) bits.push(e.role);
+      html += chipHTML(info, main, bits.join(' · '), esc(noteName(song, e.midi)), ` data-midi="${e.midi}"`);
     });
     return html;
   }
@@ -849,16 +930,21 @@
       const parts = [];
       let off = 0;
       const lights = [];
+      const octs = [];
       s.voicing.forEach((m) => {
         const info = mapping.idFor(m);
+        /* Still possible, and still worth saying: a voicing can reach for a
+           note the scale grid has no pad for at any bank. That is a hole in
+           the grid, not a hole in the octave. */
         if (!info) { off++; return; }
         lights.push(info.id);
-        parts.push(deviceId === 'ep133'
-          ? info.label + (info.oct > 0 ? '↑' : '')
-          : esc(noteName(song, m)));
+        octs.push(info.oct || 0);
+        const where = deviceId === 'ep133' ? info.label : esc(noteName(song, m));
+        parts.push(where + (info.oct ? (info.oct > 0 ? '↑' : '↓') : ''));
       });
       const offNote = off ? `<small class="chord-off">+${off} out of reach</small>` : '';
-      return `<button class="seq-chord" data-lights="${lights.join(' ')}" data-chord="${esc(s.chord.symbol)}">` +
+      return `<button class="seq-chord" data-lights="${lights.join(' ')}" ` +
+        `data-octs="${octs.join(' ')}" data-chord="${esc(s.chord.symbol)}">` +
         `<span class="seq-chord-name">${esc(s.chord.symbol)}</span>` +
         `<span class="seq-chord-keys">${parts.join(' + ') || '—'}</span>${offNote}</button>`;
     }).join('');
@@ -894,13 +980,18 @@
         mapping.groupHint = trackId === 'bass' ? 'B' : 'C';
         mapping.usedPads = new Set();
         let maxOct = 0;
+        let minOct = 0;
         const consider = mapping.events.map((e) => e.midi)
           .concat(trackId === 'chords' ? [].concat.apply([], (song.spans || []).map((s) => s.voicing)) : []);
         consider.forEach((m) => {
           const info = mapping.idFor(m);
-          if (info) { mapping.usedPads.add(info.pad); maxOct = Math.max(maxOct, info.oct); }
+          if (!info) return;
+          mapping.usedPads.add(info.pad);
+          maxOct = Math.max(maxOct, info.oct);
+          minOct = Math.min(minOct, info.oct);
         });
         mapping.maxOct = maxOct;
+        mapping.minOct = minOct;
       }
     } else {
       if (isDrums) {
@@ -912,12 +1003,19 @@
       } else {
         mapping = fmMapping(song, trackId);
         mapping.usedKeys = new Set();
+        let maxOct = 0;
+        let minOct = 0;
         const consider = mapping.events.map((e) => e.midi)
           .concat(trackId === 'chords' ? [].concat.apply([], (song.spans || []).map((s) => s.voicing)) : []);
         consider.forEach((m) => {
           const info = mapping.idFor(m);
-          if (info) mapping.usedKeys.add(info.id);
+          if (!info) return;
+          mapping.usedKeys.add(info.id);
+          maxOct = Math.max(maxOct, info.oct);
+          minOct = Math.min(minOct, info.oct);
         });
+        mapping.maxOct = maxOct;
+        mapping.minOct = minOct;
       }
     }
 
@@ -974,10 +1072,18 @@
      falls back to .55 rather than to black, so brushing a chip and clicking it
      is one continuous gesture. */
   function litFor(face, id) {
-    const hit = face.play[id] !== undefined ? face.play[id]
+    const played = face.play[id] !== undefined;
+    const hit = played ? face.play[id]
       : face.tap[id] !== undefined ? face.tap[id] : undefined;
     const hold = face.hold[id];
-    return { hit, hold: hold === undefined ? 0 : hold };
+    /* Which bank this particular hit came from, which is a property of the
+       hit and not of the pad — the same pad is the home bank in one bar and a
+       bank up in the next. It follows the source that is actually lighting
+       it, in the same priority order as the level. */
+    const oct = played ? (face.playOct[id] || 0)
+      : face.tap[id] !== undefined ? (face.tapOct[id] || 0)
+        : (face.holdOct[id] || 0);
+    return { hit, hold: hold === undefined ? 0 : hold, oct };
   }
 
   /* --lit is registered `inherits:false`, deliberately — an inherited numeric
@@ -1001,6 +1107,12 @@
           if (v.hold) node.setAttribute('data-preview', '');
           else node.removeAttribute('data-preview');
         }
+        /* Which bank the light is coming from. The release pass below leaves
+           this alone deliberately: the tail of a hit is the same hit, and a
+           pad that changed colour halfway down its decay would be reporting a
+           bank it was never struck in. */
+        if (level && v.oct) node.setAttribute('data-oct', v.oct > 0 ? 'up' : 'dn');
+        else node.removeAttribute('data-oct');
         node.style.setProperty('--lit', level.toFixed(2));
       });
     });
@@ -1077,8 +1189,32 @@
     setNote(face, face.tapName || face.holdName || '', true);
   }
 
+  /* The pad tells you where; this tells you what your other hand does.
+
+     Colouring the hit says a shift is needed but not which control performs
+     it, and on a plate with a +, a −, a fader and four group buttons that is
+     half an answer. So the key you would actually press lights with it — keys
+     +/− on the EP, oct+/oct− on the FM — and both can be lit at once, because
+     a chord can reach off both ends of the twelve at the same time. */
+  function paintShift(face) {
+    let up = false;
+    let down = false;
+    face.lamps.forEach((nodes, id) => {
+      const v = litFor(face, id);
+      const level = v.hit === undefined ? v.hold : v.hit;
+      if (!level || !v.oct) return;
+      if (v.oct > 0) up = true; else down = true;
+    });
+    const ep = face.deviceId === 'ep133';
+    const plus = face.refs.get(ep ? 'key-plus' : 'oct-up');
+    const minus = face.refs.get(ep ? 'key-minus' : 'oct-down');
+    if (plus) plus.classList.toggle('is-call', up);
+    if (minus) minus.classList.toggle('is-call', down);
+  }
+
   function paint(face) {
     paintLamps(face);
+    paintShift(face);
     paintNote(face);
   }
 
@@ -1126,8 +1262,10 @@
       uid, svg, host, deviceId: view.deviceId,
       refs: new Map(), lamps: new Map(),
       current: null, token: 0, raf: 0,
-      /* Three independent light sources and the display line each owns. */
+      /* Three independent light sources, the display line each owns, and the
+         bank each one is reaching into. */
       play: {}, tap: {}, hold: {},
+      playOct: {}, tapOct: {}, holdOct: {},
       playName: '', tapName: '', holdName: '',
       driven: false, tapTimer: null, slotTimer: null, slotAnim: null,
       noteText: '', noteGroup: null, noteTravel: 0
@@ -1163,8 +1301,9 @@
        does. .55 against the 1.0 of a real hit, so the two can never read as the
        same event — one is what the pad *would* do, the other is what it just
        did. */
-    face.preview = (ids, name) => {
+    face.preview = (ids, name, octs) => {
       face.hold = {};
+      face.holdOct = octs || {};
       (ids || []).forEach((id) => { face.hold[id] = 0.55; });
       face.holdName = name || '';
       paint(face);
@@ -1172,6 +1311,7 @@
     face.clearPreview = () => {
       if (!face.holdName && !Object.keys(face.hold).length) return;
       face.hold = {};
+      face.holdOct = {};
       face.holdName = '';
       paint(face);
     };
@@ -1186,8 +1326,9 @@
     /* The strike. A tap has no pointer to leave, so it expires on its own —
        long enough to read the name off the glass, short enough that the display
        is not still reporting a note you played half a second ago. */
-    face.strike = (ids, name) => {
+    face.strike = (ids, name, octs) => {
       face.tap = {};
+      face.tapOct = octs || {};
       (ids || []).forEach((id) => { face.tap[id] = 1; });
       face.tapName = name || '';
       paint(face);
@@ -1195,6 +1336,7 @@
       face.tapTimer = setTimeout(() => {
         face.tapTimer = null;
         face.tap = {};
+        face.tapOct = {};
         face.tapName = '';
         paint(face);
       }, 450);
@@ -1352,8 +1494,10 @@
        still sitting where a pad used to mean something else. */
     if (face.tapTimer) { clearTimeout(face.tapTimer); face.tapTimer = null; }
     face.play = {}; face.tap = {}; face.hold = {};
+    face.playOct = {}; face.tapOct = {}; face.holdOct = {};
     face.playName = ''; face.tapName = ''; face.holdName = '';
     paintLamps(face);
+    paintShift(face);
     setNote(face, '', false);
   }
 
@@ -1455,7 +1599,11 @@
          lit it looking untouched — half a chain. An out-of-range chip has no
          pad to light and still prints its note, because "this one you cannot
          play" is exactly the readout worth having. */
-      const enter = () => { markLink(chip, 'self', true); face.preview(id ? [id] : [], name); };
+      /* The bank travels with the pad down the same chain, so a chip marked ↓
+         lights its pad in the down colour on hover, on focus and on tap — the
+         one object, still one object. */
+      const octs = id && chip.dataset.octn ? { [id]: Number(chip.dataset.octn) } : {};
+      const enter = () => { markLink(chip, 'self', true); face.preview(id ? [id] : [], name, octs); };
       const leave = () => { markLink(chip, 'self', false); face.clearPreview(); };
       if (HOVERS) { chip.addEventListener('mouseenter', enter); chip.addEventListener('mouseleave', leave); }
       chip.addEventListener('focus', enter);
@@ -1467,12 +1615,22 @@
         if (dead()) { face.strike([], name); return; }
         if (chip.dataset.drum) global.Engine.playDrum(chip.dataset.drum, 0, 0.9);
         else if (chip.dataset.midi) global.Engine.preview(Number(chip.dataset.midi), patchFor, 0.7, trackId);
-        face.strike(id ? [id] : [], name);
+        face.strike(id ? [id] : [], name, octs);
       });
     });
     els.sequence.querySelectorAll('.seq-chord').forEach((card, i) => {
       const ids = (card.dataset.lights || '').split(' ').filter(Boolean);
-      const enter = () => { markLink(card, 'self', true); face.preview(ids, card.dataset.chord); };
+      /* Parallel to the ids, because a voicing can reach into two banks at
+         once — and where two of its notes land on one pad, the one further
+         from home is the one worth showing: it is the reason the stack cannot
+         be pressed in one go. */
+      const shifts = (card.dataset.octs || '').split(' ').map(Number);
+      const octs = {};
+      ids.forEach((id, k) => {
+        const o = shifts[k] || 0;
+        if (Math.abs(o) > Math.abs(octs[id] || 0)) octs[id] = o;
+      });
+      const enter = () => { markLink(card, 'self', true); face.preview(ids, card.dataset.chord, octs); };
       const leave = () => { markLink(card, 'self', false); face.clearPreview(); };
       if (HOVERS) { card.addEventListener('mouseenter', enter); card.addEventListener('mouseleave', leave); }
       card.addEventListener('focus', enter);
@@ -1480,7 +1638,7 @@
       card.addEventListener('click', () => {
         const span = song.spans[i];
         if (span) global.Engine.preview(span.voicing.concat([span.bassMidi]), patches.chord, 1.1);
-        face.strike(ids, card.dataset.chord);
+        face.strike(ids, card.dataset.chord, octs);
       });
     });
 
@@ -1524,6 +1682,7 @@
           lastKey = 'off';
           face.driven = false;
           face.play = {};
+          face.playOct = {};
           face.playName = '';
           /* Handing the glass back: whatever the pointer is resting on takes
              the line again the moment the transport lets go of it. */
@@ -1537,10 +1696,15 @@
       /* The peak each pad decays from. Two voices landing on one pad in the same
          window take the louder of the two, because that is what you would hear. */
       const peaks = {};
+      /* And the bank each peak came from, decided by the same rule: whichever
+         voice is loudest on that pad is the one whose light you are seeing, so
+         it is the one whose bank the colour should report. */
+      const octs = {};
       const activeChips = new Set();
-      const light = (id, name, velocity) => {
+      const light = (id, name, velocity, oct) => {
         ids.push(id);
         names.push(name);
+        if (peaks[id] === undefined || velocity > peaks[id]) octs[id] = oct || 0;
         peaks[id] = Math.max(peaks[id] || 0, velocity);
       };
 
@@ -1556,7 +1720,7 @@
         mapping.events.forEach((e) => {
           if (step >= e.start && step < e.start + e.dur) {
             const info = mapping.idFor(e.midi);
-            if (info) light(info.id, noteName(song, e.midi), e.velocity);
+            if (info) light(info.id, noteName(song, e.midi), e.velocity, info.oct);
           }
         });
         if (trackId === 'chords') {
@@ -1576,9 +1740,11 @@
            more informative than one you auditioned half a second ago. */
         if (face.tapTimer) { clearTimeout(face.tapTimer); face.tapTimer = null; }
         face.tap = {};
+        face.tapOct = {};
         face.tapName = '';
         face.driven = true;
         face.play = peaks;
+        face.playOct = octs;
         const unique = names.filter((n, i) => names.indexOf(n) === i);
         face.playName = unique.slice(0, 3).join(' ');
         paint(face);

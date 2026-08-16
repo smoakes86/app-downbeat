@@ -68,6 +68,107 @@ await check('lane bar width resets after drums', async () => {
   if (min !== '96px') throw new Error(`pitched lane kept the drum bar width (${min})`);
 });
 
+/* --------------------------------------------------------- octave shift
+
+   Two claims, and the second is the one worth checking: a note off the ends
+   of the twelve pads still names the pad it lands on, and the pad it names is
+   the one that plays it after the shift the chip is asking for. That is an
+   arithmetic property of the mapping, so it is asserted over every note in
+   the audible range rather than over whatever this song happened to write. */
+await check('every note lands on a pad that plays it', async () => {
+  const bad = await page.evaluate(() => {
+    const wrong = [];
+    let onGrid = 0;
+    let shifted = 0;
+    window.Genres.order.forEach((g) => {
+      const song = window.Compose.compose({ genre: g, keyPc: 0 });
+      ['melody', 'bass'].forEach((track) => {
+        ['ep133', 'fm1'].forEach((dev) => {
+          const map = window.Devices.build(song, track, dev).mapping;
+          if (!map.idFor) return;
+          for (let m = 24; m <= 108; m++) {
+            const info = map.idFor(m);
+            if (!info) continue;
+            const plays = dev === 'ep133'
+              ? map.padNotes[info.index]
+              : 53 + info.idx + map.oct * 12;
+            if (plays + info.oct * 12 !== m) {
+              wrong.push(`${g}/${track}/${dev} midi ${m}: pad plays ${plays}, shift ${info.oct}`);
+            }
+            /* And a note already under your fingers is never marked. Two
+               octaves of the same pitch class sit on one EP grid, and
+               flagging the upper one would be crying wolf. */
+            const home = dev === 'ep133'
+              ? map.padNotes.indexOf(m) >= 0
+              : (m - 53 - map.oct * 12) >= 0 && (m - 53 - map.oct * 12) <= 26;
+            if (home !== (info.oct === 0)) {
+              wrong.push(`${g}/${track}/${dev} midi ${m}: on grid ${home}, shift ${info.oct}`);
+            }
+            if (info.oct) shifted++; else onGrid++;
+          }
+        });
+      });
+    });
+    return { wrong: wrong.slice(0, 5), total: wrong.length, onGrid, shifted };
+  });
+  if (bad.total) throw new Error(`${bad.total} bad mappings, e.g. ${bad.wrong[0]}`);
+  if (!bad.shifted || !bad.onGrid) throw new Error('the sweep never saw both states');
+});
+
+await check('a shifted chip lights its pad and the key that reaches it', async () => {
+  /* Hunt for a song that actually needs a shift rather than asserting on one
+     that might not: the mapping picks the octave that fits the most notes, so
+     plenty of parts never leave the grid at all. */
+  let dir = null;
+  for (let i = 0; i < 30 && !dir; i++) {
+    for (const part of ['melody', 'bass', 'chords']) {
+      await tap(`#parts button[data-value="${part}"]`);
+      dir = await page.evaluate(() => document.querySelector('.seq-chip[data-oct]')?.dataset.oct || null);
+      if (dir) break;
+    }
+    if (dir) break;
+    await tap('.tab[data-tab="song"]');
+    await tap('#generateButton');
+    await page.waitForTimeout(500);
+    await tap('.tab[data-tab="play"]');
+  }
+  if (!dir) throw new Error('no song in 30 tries needed a shift');
+
+  const state = await page.evaluate(() => {
+    const chip = document.querySelector('.seq-chip[data-oct]');
+    chip.focus();
+    return new Promise((done) => setTimeout(() => {
+      const glow = document.querySelector('.pad-glow[data-oct], .wkey-glow[data-oct], .bkey-glow[data-oct]');
+      done({
+        dir: chip.dataset.oct,
+        pad: chip.dataset.light || '',
+        arrow: (chip.querySelector('.chip-oct') || {}).textContent || '',
+        said: chip.textContent,
+        glowDir: glow ? glow.dataset.oct : null,
+        fill: glow ? getComputedStyle(glow).fill : '',
+        call: [...document.querySelectorAll('.dev-key.is-call')].map((e) => e.dataset.el)
+      });
+    }, 260));
+  });
+  if (!state.pad) throw new Error('a shifted chip has no pad to light');
+  if (state.glowDir !== state.dir) throw new Error(`chip says ${state.dir}, pad says ${state.glowDir}`);
+  if (!/lit-(up|dn)/.test(state.fill)) throw new Error(`pad is not lit in a shift colour (${state.fill})`);
+  if (!state.arrow) throw new Error('a shifted chip has no arrow');
+  const want = state.dir === 'up' ? ['key-plus', 'oct-up'] : ['key-minus', 'oct-down'];
+  if (!state.call.some((k) => want.includes(k))) {
+    throw new Error(`shift ${state.dir} lit no key (${state.call.join(',') || 'none'})`);
+  }
+  if (state.call.length !== 1) throw new Error(`${state.call.length} shift keys lit for one chip`);
+  await shot(`shift-${state.dir}`);
+});
+
+await check('the shift call clears when nothing is asking', async () => {
+  await page.evaluate(() => document.querySelector('.seq-chip[data-oct]')?.blur());
+  await page.waitForTimeout(300);
+  const lit = await page.evaluate(() => document.querySelectorAll('.dev-key.is-call').length);
+  if (lit) throw new Error(`${lit} shift keys still lit with nothing previewing`);
+});
+
 /* -------------------------------------------------------------- device */
 await check('device fm1', async () => {
   await tap('#devices button[data-value="fm1"]');
