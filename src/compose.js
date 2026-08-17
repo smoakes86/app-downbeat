@@ -426,6 +426,11 @@
       note.octave = Math.floor(note.midi / 12) - 1;
       note.velocity = clamp(note.velocity + (rng.next() - 0.5) * 0.06, 0.35, 1);
     });
+    /* Where the line peaks, carried out with it. The melody has always known
+       this and kept it to itself; the drums want it too, so that the band
+       arrives at the same moment rather than each part having its own idea of
+       where the song is going. */
+    notes.climaxStep = climaxStep;
     return notes;
   }
 
@@ -1214,34 +1219,249 @@
 
   /* ----------------------------------------------------------------- drums */
 
+  /* Which beat this song plays. A genre carries several and the draw is
+     seeded, so the same recipe gives the same beat back — but two songs in the
+     same genre no longer arrive with the identical drum part. */
+  function pickBeat(genre, rng) {
+    const list = Array.isArray(genre.drums) ? genre.drums : [genre.drums || {}];
+    return (list.length ? rng.pick(list) : {}) || {};
+  }
+
+  /* A beat is a set of named voices plus its own name, so the keys have to be
+     read against the voice list rather than trusted. Stamping `name` out as a
+     pattern would emit a hit on every step that happens to be a letter. */
+  const VOICE_IDS = G.DRUM_VOICES.map((v) => v.id);
+
+  /* How hard a hit lands, before energy, the arc and the humanising.
+
+     The old answer was two numbers — 0.95 on a beat and 0.72 off it — which
+     is a drum machine's answer, and it is why sixteen hats in a bar read as
+     sixteen hats rather than as four beats. Each voice has its own idea of
+     which positions matter, and they genuinely disagree: the bar's strongest
+     position is beat one, but the snare's is the backbeat, and a snare that
+     follows the bar's hierarchy plays the backbeat quieter than the thing it
+     is supposed to be answering. */
+  function weightFor(instrument, step) {
+    const s = step % STEPS_PER_BAR;
+    const onBeat = s % 4 === 0;
+    const onEighth = s % 2 === 0;
+
+    if (instrument === 'snare' || instrument === 'clap') {
+      /* Wherever the snare lands on a beat IS the backbeat: two and four in a
+         straight feel, three in a half-time one. Naming 2 and 4 outright made
+         a half-time trap snare — which is on three — play as a passing note,
+         and made folk's brushed accent on three quieter than the ghosts
+         either side of it. The position it falls on is the fact; 2 and 4 were
+         only ever the common case. */
+      return onBeat ? 1 : onEighth ? 0.68 : 0.56;
+    }
+    /* A rim is colour between the main hits, by its own definition on the
+       faceplate, so it never competes with the snare even on a beat. */
+    if (instrument === 'rim') return onBeat ? 0.72 : onEighth ? 0.58 : 0.5;
+    if (instrument === 'kick') {
+      return s === 0 ? 1 : onBeat ? 0.9 : onEighth ? 0.8 : 0.72;
+    }
+    /* Time-keepers accent the beat and fall away across it. That decay is the
+       whole difference between counting in four and counting in sixteen. */
+    if (instrument === 'hat' || instrument === 'openHat' || instrument === 'ride'
+      || instrument === 'shaker' || instrument === 'tambourine') {
+      return onBeat ? 0.88 : onEighth ? 0.66 : 0.54;
+    }
+    if (instrument === 'crash') return 1;
+    return onBeat ? 0.85 : onEighth ? 0.7 : 0.6;
+  }
+
+  /* The loop's own shape. A four-bar phrase that is exactly as loud at the end
+     as at the start is a phrase that never goes anywhere, and the place it
+     should be going is the one the melody already picked — so the drums lean
+     into the same bar the tune peaks in, and ease off after it rather than
+     dropping away, because a drummer does not stop playing after the chorus. */
+  function arcAt(step, totalSteps, climax) {
+    const t = totalSteps > 1 ? step / (totalSteps - 1) : 0;
+    const c = clamp(climax, 0.15, 0.95);
+    const rise = t <= c ? t / c : 1;
+    const fall = t <= c ? 0 : (t - c) / (1 - c);
+    return 0.9 + 0.12 * rise - 0.06 * fall;
+  }
+
+  /* Fills, as a vocabulary rather than as one shape.
+
+     Each returns the events it adds and, optionally, how much of the last bar
+     to take away first — because the strongest fill in several genres is the
+     one where everything stops. `bar` is the first step of the bar being
+     filled, so a shape is written in steps 0–15 of its own bar. */
+  const FILL_SHAPES = {
+    snareRun: (f) => ({ add: [12, 13, 14, 15]
+      .filter(() => f.rng.chance(0.75))
+      .map((s, i) => ({ step: f.bar + s, instrument: 'snare', velocity: 0.45 + i * 0.12 })) }),
+
+    /* Down the kit. The point of a tom fill is that it descends, so the
+       velocities rise as the pitch falls and the floor tom lands hardest. */
+    tomFall: (f) => ({ add: [['tomHigh', 12, 0.62], ['tomHigh', 13, 0.66],
+      ['tomMid', 14, 0.78], ['tomLow', 15, 0.92]]
+      .map(([instrument, s, velocity]) => ({ step: f.bar + s, instrument, velocity })) }),
+
+    tomRoll: (f) => ({ add: [['tomHigh', 10, 0.5], ['tomHigh', 11, 0.55],
+      ['tomMid', 12, 0.62], ['tomMid', 13, 0.68], ['tomLow', 14, 0.8], ['tomLow', 15, 0.95]]
+      .map(([instrument, s, velocity]) => ({ step: f.bar + s, instrument, velocity })) }),
+
+    /* Kick and snare answering each other, which is what a trade is. */
+    trade: (f) => ({ add: [['kick', 12, 0.8], ['snare', 13, 0.62],
+      ['kick', 14, 0.82], ['snare', 15, 0.9]]
+      .map(([instrument, s, velocity]) => ({ step: f.bar + s, instrument, velocity })) }),
+
+    /* The open hat pulls the ear up into the next bar. */
+    lift: (f) => ({ add: [
+      { step: f.bar + 14, instrument: 'openHat', velocity: 0.8 },
+      { step: f.bar + 15, instrument: 'snare', velocity: 0.85 }
+    ] }),
+
+    /* Two snares a thirty-second apart: a hand, not a machine. */
+    flam: (f) => ({ add: [
+      { step: f.bar + 14, instrument: 'snare', velocity: 0.5 },
+      { step: f.bar + 14.5, instrument: 'snare', velocity: 0.72 },
+      { step: f.bar + 15, instrument: 'snare', velocity: 0.88 }
+    ] }),
+
+    /* Everything stops for the last beat. Nothing is added at all. */
+    drop: () => ({ clear: 12, add: [] })
+  };
+  const DEFAULT_FILLS = ['snareRun', 'tomFall', 'trade'];
+
   function buildDrums(ctx) {
     const { genre, totalBars, rng, energy } = ctx;
-    const patterns = genre.drums || {};
+    const patterns = ctx.beat || pickBeat(genre, rng);
     const energyMod = G.ENERGY[energy] || G.ENERGY.flow;
     const totalSteps = totalBars * STEPS_PER_BAR;
     const events = [];
+    /* Humanising draws its own stream, seeded from the main one. Otherwise
+       the number of draws depends on how many hits the beat happens to have,
+       and every structural decision after this — the rolls, the fill — would
+       shift when a pattern gained a note. Structure should not be downstream
+       of how busy the hi-hat is. */
+    const human = makeRng(Math.floor(rng.next() * 0x7fffffff));
+    const climax = ctx.climax === undefined ? 0.66 : ctx.climax;
+    const feel = (G.FEEL && G.FEEL[genre.id]) || genre.feel || {};
+    /* One place, so that everything a kit plays sits in the same pocket. The
+       fill and the hat rolls used to push their events straight onto the grid
+       while the pattern around them leaned, which measured as a snare landing
+       twelve per cent short of the drag its genre asked for — the drummer
+       going rigid for the last bar and nowhere else. */
+    const nudgeFor = (voice) => ((feel[voice] || 0) + (human.next() - 0.5) * 5) / 1000;
 
-    Object.keys(patterns).forEach((instrument) => {
+    VOICE_IDS.forEach((instrument) => {
       const pattern = patterns[instrument];
       if (!pattern) return;
-      for (let step = 0; step < totalSteps; step++) {
-        const symbol = pattern[step % pattern.length];
+      /* A pattern longer than one bar has to divide the loop, or its second
+         half lands in a different place every time round and the figure stops
+         being a figure. Where it does not divide, only the first bar is used
+         — a plainer beat is a better answer than a two-bar idea chopped at a
+         point the music never arrives at. Every length the app offers (4, 8
+         and 12 bars) is divisible by two and four, so this is the guard for
+         an auto length that lands somewhere odd, not the common case. */
+      const span = totalSteps % pattern.length === 0
+        ? pattern.length : STEPS_PER_BAR;
+      /* A crash marks the top of the loop, which is what the faceplate has
+         always said it does — so it is stamped once rather than looped. Left
+         to repeat, a one-bar `crash: 'x...'` fired on every bar of the song,
+         which is not a crash, it is a car alarm. */
+      const reach = instrument === 'crash' ? Math.min(span, totalSteps) : totalSteps;
+      for (let step = 0; step < reach; step++) {
+        const symbol = pattern[step % span];
         if (!symbol || symbol === '.' || symbol === '-') continue;
         /* Ghost hits are colour, not the beat, and they are the first thing a
            player drops when the room wants less — so at the calm end the kit
            thins out rather than simply turning down. */
         if (symbol === 'g' && energyMod.ghosts === false) continue;
-        const velocity =
+        /* A ghost is a ghost wherever it falls — that is what makes it one —
+           and an open hat is a deliberate accent, so neither takes the metric
+           weight. Everything else does. */
+        const base =
           symbol === 'g' ? 0.32 :
-          symbol === 'o' ? 0.85 :
-          step % 4 === 0 ? 0.95 : 0.72;
+          symbol === 'o' ? 0.9 :
+          weightFor(instrument, step);
+        /* Last, and small: ±3.5% so that no two hits in the loop are bit
+           identical. Any more reads as a drummer who cannot play; any less
+           and a machine-gun hi-hat still sounds like one file played
+           repeatedly, which is exactly what it is. */
+        const jitter = 1 + (human.next() - 0.5) * 0.07;
+        const velocity = base * energyMod.velocity * arcAt(step, totalSteps, climax) * jitter;
+        const voice = symbol === 'o' && instrument === 'hat' ? 'openHat' : instrument;
+        /* Where this hit sits against the grid: the genre's own feel for this
+           voice, plus a couple of milliseconds of wobble so that a run of
+           sixteen hats is a player rather than a metronome with a tone
+           generator on it. In seconds, because that is what the scheduler
+           speaks. */
+        const nudge = nudgeFor(voice);
         events.push({
           step,
-          instrument: symbol === 'o' && instrument === 'hat' ? 'openHat' : instrument,
-          velocity: clamp(velocity * energyMod.velocity, 0.2, 1)
+          instrument: voice,
+          /* A ghost is a different musical object from a quiet hit, and only
+             the pattern knows which this was. Carried out so that nothing
+             downstream has to guess it back from the velocity. */
+          ghost: symbol === 'g',
+          nudge,
+          velocity: clamp(velocity, 0.14, 1)
         });
       }
     });
+
+    /* ------------------------------------------------- hearing the band
+
+       Until here the kit has been deaf. It knows the genre, the energy and
+       its own pattern, and nothing whatever about the music it is playing
+       under — which is how you get four layers that start together rather
+       than a rhythm section.
+
+       Three things it can hear, all of them cheap and none of them rewriting
+       the pattern. Rewriting is the temptation and it is wrong: the beats are
+       hand-written and idiomatic, and a generator that second-guesses them
+       ends up with neither the pattern nor an idea of its own. */
+    const spans = ctx.spans || [];
+    const bassLine = ctx.bass || [];
+
+    if (spans.length) {
+      /* A drummer marks the chord change. Anything already landing on one
+         gets played a little harder — the change is a fact about the bar and
+         the kit should sound like it knows. */
+      const changes = new Set(spans.map((s) => s.start));
+      events.forEach((e) => {
+        if (changes.has(e.step)) e.velocity = clamp(e.velocity * 1.1, 0.14, 1);
+      });
+
+      /* And where a change lands on a bar line with no kick anywhere near it,
+         the kit puts one there. Only into a hole: a pattern that already has
+         a kick on the change is already doing this, and four-on-the-floor
+         never has a hole to fill.
+
+         Only if the beat has a kick at all, which is the difference between
+         filling a hole and inventing a drum part. Ambient has no kit and is
+         not asking for one. */
+      const kicks = events.filter((e) => e.instrument === 'kick');
+      if (patterns.kick) spans.forEach((span) => {
+        if (span.start % STEPS_PER_BAR !== 0) return;
+        const near = kicks.some((k) => Math.abs(k.step - span.start) <= 1);
+        if (near) return;
+        events.push({
+          step: span.start, instrument: 'kick', ghost: false,
+          nudge: nudgeFor('kick'),
+          velocity: clamp(0.78 * energyMod.velocity * arcAt(span.start, totalSteps, climax), 0.14, 1)
+        });
+      });
+    }
+
+    /* Where the kick and the bass land together they should sound like they
+       meant to. This is the whole difference between a rhythm section and two
+       parts that happen to be in the same song. */
+    if (bassLine.length) {
+      const onsets = new Set(bassLine.map((n) => Math.round(n.start)));
+      events.forEach((e) => {
+        if (e.instrument === 'kick' && onsets.has(Math.round(e.step))) {
+          e.velocity = clamp(e.velocity * 1.08, 0.14, 1);
+          e.locked = true;
+        }
+      });
+    }
 
     // Trap-style hat rolls: subdivide a few of the existing hits.
     if (genre.hatRolls) {
@@ -1253,23 +1473,49 @@
           events.push({
             step: hat.step + d / divisions,
             instrument: 'hat',
+            nudge: nudgeFor('hat'),
             velocity: hat.velocity * (0.55 + d * 0.08)
           });
         }
       });
     }
 
-    /* A small fill going into the loop point. The draw is taken either way —
-       only the odds move with the energy — so the settings that were here
-       before still land on exactly the fills they always did. */
+    /* The fill going into the loop point. The draw is taken either way — only
+       the odds move with the energy — so a settings change does not shift
+       which fills land, only whether they do. */
     const fillOdds = 0.55 * (energyMod.fill === undefined ? 1 : energyMod.fill);
-    if (patterns.snare && totalBars > 2 && rng.chance(fillOdds)) {
-      const lastBar = (totalBars - 1) * STEPS_PER_BAR;
-      [12, 13, 14, 15].forEach((offset, i) => {
-        if (rng.chance(0.7)) {
-          events.push({ step: lastBar + offset, instrument: 'snare', velocity: 0.45 + i * 0.12 });
+    const shapes = (G.FILLS && G.FILLS[genre.id]) || DEFAULT_FILLS;
+    if (shapes.length && totalBars > 2 && rng.chance(fillOdds)) {
+      const bar = (totalBars - 1) * STEPS_PER_BAR;
+      /* Weighted toward the front of the list: the first shape is what this
+         genre usually does, the rest are what it does for a change. */
+      const shape = shapes[Math.min(shapes.length - 1, Math.floor(-Math.log(1 - rng.next()) * 0.9))];
+      const fill = FILL_SHAPES[shape];
+      if (fill) {
+        const made = fill({ bar, rng, nudgeFor, patterns });
+        /* A drop is a fill made of silence, so it takes the last beat away
+           rather than adding to it. The hole IS the fill, and it is the one
+           house and trap actually use. */
+        if (made.clear) {
+          for (let i = events.length - 1; i >= 0; i--) {
+            if (events[i].step >= bar + made.clear) events.splice(i, 1);
+          }
         }
-      });
+        made.add.forEach((e) => {
+          e.nudge = e.nudge === undefined ? nudgeFor(e.instrument) : e.nudge;
+          /* A fill keeps its own shape — that is what makes it a fill — but it
+             is still played by the same drummer in the same room, so it takes
+             the energy and the arc like everything else. Left as literals, a
+             fill was exactly as loud in a hushed sketch as in a driving one. */
+          e.velocity = clamp(e.velocity * energyMod.velocity
+            * arcAt(e.step, totalSteps, climax), 0.14, 1);
+          /* Marked, so the arrangement can decide where a fill belongs: at
+             the end of a SECTION rather than at the end of every pass of the
+             loop inside one. */
+          e.fill = true;
+          events.push(e);
+        });
+      }
     }
 
     return events.sort((a, b) => a.step - b.step);
@@ -1278,8 +1524,7 @@
   /* Which voices the kit uses, and on which beats, read off the patterns —
      through the same energy filter buildDrums applies, or the notes would
      promise a rim shot the kit has just dropped. */
-  function describeDrums(genre, energyMod) {
-    const patterns = genre.drums || {};
+  function describeDrums(patterns, energyMod) {
     const ghosts = !energyMod || energyMod.ghosts !== false;
     const beatsOf = (pattern) => {
       const hits = [];
@@ -1371,6 +1616,11 @@
 
     const harmonySeed = opts.harmonySeed === undefined ? Math.floor(Math.random() * 1e9) : opts.harmonySeed;
     const melodySeed = opts.melodySeed === undefined ? Math.floor(Math.random() * 1e9) : opts.melodySeed;
+    /* Its own seed, and the reason is a user-facing one: the beat used to be
+       derived from the harmony seed, so rerolling the chords silently rerolled
+       the beat and rerolling the melody never could. Neither is what anyone
+       asked for. Three independent things you can reroll one at a time. */
+    const drumSeed = opts.drumSeed === undefined ? Math.floor(Math.random() * 1e9) : opts.drumSeed;
     const harmonyRng = makeRng(harmonySeed);
     const melodyRng = makeRng(melodySeed);
 
@@ -1391,7 +1641,22 @@
     const melody = buildMelody({ key, genre, spans, totalBars, rng: melodyRng, energy, form });
     const chordTrack = buildChordTrack({ genre, spans, rng: makeRng(harmonySeed ^ 0x27d4eb2f), energy });
     const bass = buildBass({ genre, spans, totalBars, rng: makeRng(harmonySeed ^ 0x85ebca6b), energy });
-    const drums = buildDrums({ genre, totalBars, rng: makeRng(harmonySeed ^ 0xc2b2ae35), energy });
+    /* The beat is drawn before the events are built so the choice can be kept
+       on the song: the run of pads, the set-up notes and the arrangement all
+       have to describe the beat that is actually playing, not the genre's
+       first one. */
+    const drumRng = makeRng(drumSeed);
+    const beat = pickBeat(genre, drumRng);
+    const drums = buildDrums({
+      genre, totalBars, rng: drumRng, energy, beat,
+      /* What the rest of the band is doing. The bass is built above this
+         line for exactly that reason. */
+      spans, bass,
+      /* Where the tune peaks, as a fraction of the loop, so the kit leans in
+         at the same moment the melody does. */
+      climax: melody.climaxStep === undefined
+        ? 0.66 : melody.climaxStep / Math.max(1, totalBars * STEPS_PER_BAR - 1)
+    });
     const counter = opts.counter
       ? buildCounter({ key, genre, spans, totalBars, rng: makeRng(melodySeed ^ 0x165667b1), energy }, melody)
       : [];
@@ -1402,9 +1667,10 @@
       swing: genre.swing || 0,
       swingUnit: genre.swingUnit || 8,
       progression, spans, melody, counter, chordTrack, bass, drums, form,
-      harmonySeed, melodySeed, energy,
+      harmonySeed, melodySeed, drumSeed, energy,
+      beat, beatName: beat.name || '',
       bassPlan: BASS_STYLES[genre.bass] || BASS_STYLES.roots,
-      drumPlan: describeDrums(genre, energyMod)
+      drumPlan: describeDrums(beat, energyMod)
     };
     song.theory = describe(song);
     return song;
@@ -1412,7 +1678,7 @@
 
   global.Compose = {
     compose, makeRng, STEPS_PER_BAR, chooseForm,
-    buildMelody, buildCounter, buildChordTrack, buildBass, buildDrums,
+    buildMelody, buildCounter, buildChordTrack, buildBass, buildDrums, pickBeat,
     BASS_STYLES, describeDrums
   };
 })(window);

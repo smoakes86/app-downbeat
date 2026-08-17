@@ -117,6 +117,11 @@
   let mounted = null;          /* the Devices.mount updater for the live view */
   let arrangement = null;
   let activeSection = null;
+  /* Two different things called a section. `activeSection` is the one you are
+     auditioning — a reading aid, set by tapping the map. `liveSection` is the
+     one the transport is actually inside while the arrangement plays. */
+  let liveSection = null;
+  let arrangedOn = false;
   let soloOn = false;
   /* Which parts you are HEARING, as against which one you are looking at. They
      are different questions and always were — the part switcher answers the
@@ -217,6 +222,12 @@
        document. */
     if (Motion) Motion.tempo(song.bpm);
 
+    /* The transport sets the kit when it starts, but a pad tapped before you
+       have pressed play should already answer in this song's voice — an 808
+       kick on a trap sketch and a brush on a jazz one — so the kit is set when
+       the song is written rather than when it is first heard. */
+    if (Engine.setKit) Engine.setKit(song.genre.kit);
+
     arrangement = global.Arrange ? global.Arrange.plan(song) : null;
     activeSection = null;
 
@@ -286,13 +297,27 @@
     return Object.assign(opts, extra || {});
   }
 
-  /* Regenerate with the current draft but keep whichever seed was not asked to
-     change, so rerolling one half leaves the other where it was. */
+  /* Regenerate with the current draft, keeping whichever seeds were not asked
+     to change. Three of them now, not two, and the beat is kept by everything
+     except the one control that exists to change it — "New melody" should not
+     hand you a different drummer as well. */
   function regenerate(keep) {
     const opts = optionsFromDraft();
-    if (keep === 'harmony') opts.harmonySeed = song.harmonySeed;
-    if (keep === 'melody') opts.melodySeed = song.melodySeed;
-    if (keep === 'both') { opts.harmonySeed = song.harmonySeed; opts.melodySeed = song.melodySeed; opts.title = song.title; }
+    if (keep === 'harmony') { opts.harmonySeed = song.harmonySeed; opts.drumSeed = song.drumSeed; }
+    if (keep === 'melody') { opts.melodySeed = song.melodySeed; opts.drumSeed = song.drumSeed; }
+    if (keep === 'both') {
+      opts.harmonySeed = song.harmonySeed;
+      opts.melodySeed = song.melodySeed;
+      opts.drumSeed = song.drumSeed;
+      opts.title = song.title;
+    }
+    /* Everything but the beat: the song stays exactly where it is and a
+       different drummer walks in. */
+    if (keep === 'song') {
+      opts.harmonySeed = song.harmonySeed;
+      opts.melodySeed = song.melodySeed;
+      opts.title = song.title;
+    }
     const playing = Engine.isPlaying();
     generate(opts);
     if (playing) startPlayback(true);
@@ -646,7 +671,12 @@
      separately and in the direction you would shift, which is what the ↑ and ↓
      on the chips are saying one at a time. */
   function runNoteFor(view) {
-    if (part === 'drums') return `${view.mapping.voices.length} voices`;
+    /* The beat has a name now, and it is the one thing worth knowing about a
+       drum part before you look at the grid. */
+    if (part === 'drums') {
+      const voices = `${view.mapping.voices.length} voices`;
+      return song.beatName ? `${song.beatName} · ${voices}` : voices;
+    }
     if (part === 'chords') return `${(song.spans || []).length} chords`;
     const events = view.mapping.events || [];
     let off = 0;
@@ -846,7 +876,11 @@
           : (activeSection && activeSection.muted.length ? ' · ' + activeSection.name : '');
     $('#dockPart').textContent = label + note;
     if (!Engine.isPlaying()) {
-      $('#dockPos').textContent = `${song.bars} bars · ${song.bpm} BPM`;
+      /* What pressing play would give you, which is not the same length in the
+         two modes — and the length is the whole difference between them. */
+      $('#dockPos').textContent = arrangedOn && arrangement
+        ? `${arrangement.label} · ${arrangement.totalBars} bars · ${arrangement.time}`
+        : `${song.bars} bars · ${song.bpm} BPM`;
     }
   }
 
@@ -867,12 +901,17 @@
 
   function beginPlayback() {
     Engine.setLoop(loopOn);
+    /* Auditioning a section is a way of reading the arrangement; playing it is
+       the arrangement itself. Holding both at once would silence parts the
+       form says are in, so the audition steps aside. */
+    if (arrangedOn && activeSection) clearAudition();
     Engine.start(song, {
       loop: loopOn,
+      arrangement: arrangedOn ? arrangement : null,
       onStop: () => setLive(false)
     });
     setLive(true);
-    announce('Playing');
+    announce(arrangedOn ? `Playing the arrangement, ${arrangement.totalBars} bars` : 'Playing');
   }
 
   function stopPlayback() {
@@ -880,6 +919,64 @@
     Engine.stop();
     setLive(false);
     announce('Stopped');
+  }
+
+  /* ------------------------------------------------------ the arrangement
+
+     The generator writes a loop and the Arrange screen turns it into a form:
+     which sections, how long, and what plays in each. Until now that was
+     something you read and did yourself. This plays it — the whole form, in
+     order, with each section's parts dropping in and out on the bar. */
+  function setArranged(on, andPlay) {
+    const was = arrangedOn;
+    arrangedOn = !!on && !!arrangement;
+    syncArrangeButton();
+    syncTransportReadout();
+    if (!andPlay) {
+      /* Changing the length of what is playing means restarting it — there is
+         no honest way to splice a four-bar loop into bar 30 of a form. */
+      if (was !== arrangedOn && Engine.isPlaying()) beginPlayback();
+      return;
+    }
+    if (Engine.isPlaying() || countInTimer) { stopPlayback(); if (!arrangedOn) return; }
+    startPlayback();
+  }
+
+  /* The label carries the whole state, rather than a pressed flag beside a
+     label that contradicts it — "Stop, pressed" is not a thing anyone wants
+     read to them. Armed-but-stopped looks the same as not armed here on
+     purpose: what differs is the length, and the transport says the length. */
+  function syncArrangeButton() {
+    const button = $('#arrangeButton');
+    if (!button) return;
+    const live = arrangedOn && Engine.isPlaying();
+    $('#arrangeButtonText').textContent = live ? 'Stop the arrangement' : 'Play the arrangement';
+    button.querySelector('.i use').setAttribute('href', live ? '#i-stop' : '#i-play');
+  }
+
+  function clearAudition() {
+    activeSection = null;
+    doc.querySelectorAll('#arrangeMap [data-section], #arrangeSteps [data-section]')
+      .forEach((node) => node.setAttribute('aria-pressed', 'false'));
+    $('#arrangeReset').hidden = true;
+    applyMutes();
+  }
+
+  /* Which section the ear is in, marked on the map and on the list under it.
+     Set from the playhead rather than from a timer, so it is the same clock
+     the pads and the lane are already reading and cannot drift away from
+     them. */
+  function markSection(id) {
+    if (id === liveSection) return;
+    liveSection = id;
+    doc.querySelectorAll('#arrangeMap [data-section], #arrangeSteps [data-section]')
+      .forEach((node) => node.classList.toggle('now', !!id && node.dataset.section === id));
+    if (!id) return;
+    /* Only when you are looking at it. Scrolling a screen the user is not on
+       is invisible work, and scrolling one they are reading is rude. */
+    if (tab !== 'arrange') return;
+    const row = $(`#arrangeMap [data-section="${id}"]`);
+    if (row && row.scrollIntoView) row.scrollIntoView({ block: 'nearest', inline: 'center', behavior: UI.reduced() ? 'auto' : 'smooth' });
   }
 
   function setPlayGlyph(stopping, label) {
@@ -894,16 +991,19 @@
       requestWakeLock();
       lastBar = -1;
       lastStep = -1;
+      lastSectionName = '';
       if (!raf) raf = global.requestAnimationFrame(frame);
     } else {
       releaseWakeLock();
       if (raf) { global.cancelAnimationFrame(raf); raf = 0; }
       if (mounted) mounted.update(null);
       markLaneStep(-1);
+      markSection(null);
       if (laneHead) laneHead.style.setProperty('--head', 0);
       Array.from($('#dockBars').children).forEach((node) => node.classList.remove('on'));
       syncTransportReadout();
     }
+    syncArrangeButton();
   }
 
   /* One loop, driving everything that moves with the music: the lit pads, the
@@ -912,23 +1012,40 @@
      clock query per frame. */
   let lastBar = -1;
   let lastStep = -1;
+  let lastSectionName = '';
 
   function frame() {
     raf = 0;
     if (!Engine.isPlaying()) return;
     const position = Engine.position();
-    const step = Math.floor(position);
+    /* The faceplate, the lane and the bar dots are all drawings of the LOOP.
+       Playing the arrangement moves the playhead through thirteen passes of
+       that loop, so everything on the Play screen reads the position folded
+       back into one pass — otherwise the run stops lighting at bar five of a
+       ninety-six bar form. */
+    const inLoop = arrangedOn ? position % song.totalSteps : position;
+    const step = Math.floor(inLoop);
 
     if (mounted && step !== lastStep) { mounted.update(step); markLaneStep(step); lastStep = step; }
-    if (laneHead) laneHead.style.setProperty('--head', (position / song.totalSteps).toFixed(4));
-    followLane(position);
+    if (laneHead) laneHead.style.setProperty('--head', (inLoop / song.totalSteps).toFixed(4));
+    followLane(inLoop);
 
-    const bar = Math.floor(position / 16);
+    const bar = Math.floor(inLoop / 16);
     if (bar !== lastBar) {
       lastBar = bar;
       const bars = $('#dockBars').children;
       for (let i = 0; i < bars.length; i++) bars[i].classList.toggle('on', i === bar);
-      $('#dockPos').textContent = `Bar ${Math.min(bar + 1, song.bars)} of ${song.bars} · ${song.bpm} BPM`;
+      $('#dockPos').textContent = arrangedOn
+        ? `Bar ${Math.floor(position / 16) + 1} of ${arrangement.totalBars} · ${song.bpm} BPM`
+        : `Bar ${Math.min(bar + 1, song.bars)} of ${song.bars} · ${song.bpm} BPM`;
+    }
+    if (arrangedOn) {
+      const here = Engine.sectionAt(position);
+      markSection(here ? here.id : null);
+      if (here && here.name !== lastSectionName) {
+        lastSectionName = here.name;
+        $('#dockPart').textContent = `${here.name} · ${PARTS.find((p) => p.id === part).label}`;
+      }
     }
     raf = global.requestAnimationFrame(frame);
   }
@@ -1181,6 +1298,14 @@
       regenerate('melody');
       toast('New chords');
     }));
+    /* The third thing you can reroll on its own, which until the beat had its
+       own seed was not a thing you could do at all. The toast names what you
+       got, because the beats have names and "New beat" on its own tells you
+       only that something changed. */
+    box.appendChild(actionRow('refresh', 'New beat', 'Keeps the whole song', () => {
+      regenerate('song');
+      toast(song.beatName ? `New beat — ${song.beatName}` : 'New beat');
+    }));
   }
 
   function actionRow(iconName, label, sub, onClick, danger) {
@@ -1292,6 +1417,11 @@
   function toggleSection(id) {
     const section = arrangement.sections.find((s) => s.id === id);
     if (!section) return;
+    /* Auditioning one section is the opposite request to playing all of them
+       in order, so it is also how you get back to the loop. Nothing else has
+       to carry a "leave arrangement mode" control, and the two states can
+       never both be on screen claiming to be true. */
+    if (arrangedOn) { setArranged(false); announce('Back to the loop'); }
     const already = activeSection && activeSection.id === id;
     activeSection = already ? null : section;
     soloOn = false;
@@ -1599,11 +1729,18 @@
     UI.closeSwipes();
     /* The action bar belongs to a screen, so it comes and goes with it — and
        the toast has to know, or it lands on top of the app's primary button. */
-    const cta = $('#songCta');
-    cta.hidden = id !== 'song';
+    const cta = $('#cta');
+    let owned = false;
+    cta.querySelectorAll('[data-cta]').forEach((button) => {
+      const mine = button.dataset.cta === id;
+      button.hidden = !mine;
+      owned = owned || mine;
+    });
+    cta.hidden = !owned;
     doc.documentElement.style.setProperty('--cta-h', cta.hidden ? '0px' : cta.offsetHeight + 'px');
     if (id === 'library') renderLibrary();
     if (id === 'song') renderGenres();
+    if (id === 'arrange') syncArrangeButton();
     if (id === 'play') global.requestAnimationFrame(fitFace);
     syncScrolled();
     announce(id.charAt(0).toUpperCase() + id.slice(1));
@@ -1875,6 +2012,17 @@
     UI.haptic([8, 40, 8]);
     toast('New song');
     setTab('play');
+  });
+
+  /* One button, two jobs, and which one it is doing is on its face: it arms
+     the arrangement and starts it, and while that is what is playing it is the
+     stop. Arming persists — pressing play in the transport afterwards plays
+     the form, not the loop — because a mode you have to re-arm every time is a
+     mode you stop using. */
+  $('#arrangeButton').addEventListener('click', () => {
+    if (arrangedOn && Engine.isPlaying()) { stopPlayback(); UI.haptic(6); return; }
+    UI.haptic([8, 30, 8]);
+    setArranged(true, true);
   });
 
   const tempoRange = $('#tempoRange');

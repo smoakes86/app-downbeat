@@ -67,6 +67,11 @@ await tap('#shareButton'); await collect(); await tap('.action-cancel button');
 // Every other tab, plus a section audition.
 await tap('.tab[data-tab="song"]'); await tap('.genre-card[data-genre="ambient"]');
 await tap('.tab[data-tab="arrange"]'); await tap('#arrangeMap .map-sec');
+/* Playing the form, which is the only state that marks a section as live. */
+await tap('#arrangeReset');
+await tap('#arrangeButton'); await page.waitForTimeout(2600); await collect();
+await tap('#playButton'); await page.waitForTimeout(400);
+await tap('#arrangeMap .map-sec'); await tap('#arrangeReset');
 await tap('.tab[data-tab="library"]');
 await tap('#currentActions button:nth-child(1)');
 await tap('#libraryList .sketch-row'); await collect();

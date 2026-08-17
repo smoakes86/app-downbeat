@@ -302,6 +302,7 @@
        without its ink is how an interface ends up with white on yellow. */
     --part:var(--t-melody);
     --part-ink:var(--t-melody-ink);
+    --part-fill:color-mix(in srgb, var(--part) 17%, transparent);
 
     /* src/mark.js draws the wordmark against these two names and is shared
        with tools/make-icons.js, so they are aliases rather than a rename. */
@@ -393,5 +394,14 @@
   [data-part=chords]  { --part:var(--t-chords);  --part-ink:var(--t-chords-ink); }
   [data-part=bass]    { --part:var(--t-bass);    --part-ink:var(--t-bass-ink); }
   [data-part=drums]   { --part:var(--t-drums);   --part-ink:var(--t-drums-ink); }
+
+  /* The part colour at list-row strength — what a section the transport is
+     inside is filled with, so it reads as the same colour the pads are
+     lighting in. Re-declared HERE, on the element that overrides --part,
+     rather than left on <body> with the rest of the palette: a custom property
+     resolves its var()s against the element it is DECLARED on, so the copy on
+     <body> would have read body's --part and painted every part melody blue.
+     Same trap as the appearance block above, one level further in. */
+  [data-part] { --part-fill:color-mix(in srgb, var(--part) 17%, transparent); }
 
 }

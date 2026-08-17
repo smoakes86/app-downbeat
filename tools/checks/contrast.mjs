@@ -96,6 +96,48 @@ for (const scheme of ['dark', 'light']) {
     const c2 = ratio(s2.dock[0], s2.dock[1]);
     if (c1 < 4.5) console.log(`  ${scheme}: ${part} segment label ${c1.toFixed(2)}:1`);
     if (c2 < 4.5) console.log(`  ${scheme}: ${part} transport label ${c2.toFixed(2)}:1`);
+
+    /* The section the arrangement is inside wears the part colour, and it is
+       painted over a translucent fill — so the pair has to be measured for all
+       five parts, not just for the one the app happens to open on. The class
+       is set here rather than waited for: this is a question about two colours,
+       not about the transport. */
+    const s3 = await p.evaluate(() => {
+      const parse = (c) => (c.match(/[\d.]+/g) || []).map(Number);
+      const over = (fg, bg) => { const a = fg.length > 3 ? fg[3] : 1; return [0, 1, 2].map((i) => Math.round(fg[i] * a + bg[i] * (1 - a))); };
+      const solid = (el) => {
+        for (let n = el; n; n = n.parentElement) {
+          const c = parse(getComputedStyle(n).backgroundColor);
+          if (c.length >= 3 && (c.length < 4 || c[3] > 0.9)) return [c[0], c[1], c[2]];
+        }
+        return [0, 0, 0];
+      };
+      const out = {};
+      const sec = document.querySelector('#arrangeMap .map-sec');
+      const row = document.querySelector('#arrangeSteps .section-row');
+      [['sec', sec, '.map-sec-name'], ['row', row, '.row-title']].forEach(([key, host, inner]) => {
+        if (!host) return;
+        /* The class change is animated, and getComputedStyle read straight
+           after it returns where the transition STARTED — the old colour,
+           which is exactly the wrong end. Suppressing the transition is the
+           difference between measuring the state and measuring the way in. */
+        const was = host.style.transition;
+        host.style.transition = 'none';
+        host.classList.add('now');
+        void host.offsetWidth;
+        const label = host.querySelector(inner);
+        const bg = over(parse(getComputedStyle(host).backgroundColor), solid(host.parentElement));
+        out[key] = [parse(getComputedStyle(label).color).slice(0, 3), bg];
+        host.classList.remove('now');
+        host.style.transition = was;
+      });
+      return out;
+    });
+    ['sec', 'row'].forEach((key) => {
+      if (!s3[key]) return;
+      const r = ratio(s3[key][0], s3[key][1]);
+      if (r < 4.5) console.log(`  ${scheme}: ${part} playing-${key} label ${r.toFixed(2)}:1`);
+    });
   }
   await ctx.close();
 }

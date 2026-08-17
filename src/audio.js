@@ -337,43 +337,142 @@
      pass 0, which is in the past the moment the context has been running for a
      second: the whole envelope was written behind the playhead and every drum
      preview was silent. Absent or past means now. */
+  /* Kits.
+
+     A pattern says what is hit; a kit says what it sounds like when it is, and
+     that is at least as much of what makes a beat belong to a genre. The same
+     sixteen steps on an 808 and on a jazz kit with brushes are not the same
+     beat, and until now every genre in the app played the same kick.
+
+     Multipliers rather than whole sound definitions, so a kit is a character
+     applied to one instrument set rather than a fork of it — five kits times
+     thirteen voices written out longhand would be sixty-five sounds to keep in
+     step with each other, and they would drift. */
+  const KITS = {
+    acoustic: {},
+    /* Filtered, soft and a little slack: the sound of a record rather than of
+       a room. Long-ish kick, dark hat, snare with the crack taken off. */
+    dusty:    { kickTo: 0.86, kickDecay: 1.25, click: 0.5, snareNoise: 0.78,
+                snareBody: 1.15, snareDecay: 1.2, hatFreq: 0.72, hatDecay: 1.3, tone: 0.9 },
+    /* Brushes have no attack to speak of. The snare is nearly all noise and no
+       body, and it starts rather than cracks. */
+    brushes:  { kickDecay: 0.8, kickTo: 1.1, click: 0.25, snareNoise: 1.15,
+                snareBody: 0.3, snareDecay: 1.9, snareFreq: 0.72, hatFreq: 0.88, hatDecay: 1.4 },
+    /* A drum machine: short, tight, clicky, no room. */
+    machine:  { kickFrom: 1.15, kickTo: 0.92, kickGlide: 0.55, kickDecay: 0.78,
+                click: 1.6, snareNoise: 1.1, snareBody: 0.72, snareDecay: 0.72,
+                snareFreq: 1.2, hatFreq: 1.12, hatDecay: 0.62 },
+    /* The 808: a kick that is a bass note, not a thump. It glides slowly to a
+       low sine and rings on, which is why it needs the click taken down —
+       otherwise the attack fights the sub it is supposed to introduce. */
+    eight08:  { kickFrom: 0.72, kickTo: 0.62, kickGlide: 3.2, kickDecay: 2.6,
+                click: 0.7, snareNoise: 0.95, snareBody: 0.6, snareDecay: 0.85,
+                snareFreq: 1.25, hatFreq: 1.2, hatDecay: 0.7 }
+  };
+
+  let kit = KITS.acoustic;
+  let kitName = 'acoustic';
+
+  function setKit(name) {
+    kitName = KITS[name] ? name : 'acoustic';
+    kit = KITS[kitName];
+  }
+
+  function currentKit() {
+    return kitName;
+  }
+
+  const K = (name, fallback) => (kit[name] === undefined ? fallback : kit[name]);
+
   function playDrum(instrument, when, velocity) {
     ensure();
     const target = buses.drums;
     const level = clamp(velocity === undefined ? 0.9 : velocity, 0.05, 1);
     if (!(when > ctx.currentTime)) when = ctx.currentTime + 0.005;
 
+    /* Velocity has only ever been a gain, which is not how anything struck
+       behaves: hit a drum harder and it gets BRIGHTER and rings longer as well
+       as louder. Without this a ghost note is the same sound turned down,
+       which is the single clearest tell that a kit is synthesised — and the
+       new dynamics model made it much more audible, because it put thirty
+       velocity levels where there used to be two. */
+    const open = 0.72 + 0.45 * level;   // filters travel with the hit
+    const ring = 0.8 + 0.28 * level;    // and so does the tail
+
     switch (instrument) {
       case 'kick':
-        tone(when, { type: 'sine', from: 150, to: 45, glide: 0.07, decay: 0.36, gain: 0.75 * level, target, reverb: 0.03 });
-        burst(when, { type: 'highpass', frequency: 1400, decay: 0.02, gain: 0.14 * level, target, reverb: 0.02 });
+        tone(when, {
+          type: 'sine',
+          from: 150 * K('kickFrom', 1), to: 45 * K('kickTo', 1),
+          glide: 0.07 * K('kickGlide', 1), decay: 0.36 * K('kickDecay', 1) * ring,
+          gain: 0.75 * level, target, reverb: 0.03
+        });
+        burst(when, { type: 'highpass', frequency: 1400, decay: 0.02, gain: 0.14 * level * K('click', 1), target, reverb: 0.02 });
         break;
       case 'snare':
-        burst(when, { type: 'bandpass', frequency: 1750, q: 0.9, decay: 0.17, gain: 0.4 * level, target, reverb: 0.2 });
-        tone(when, { type: 'triangle', from: 190, decay: 0.09, gain: 0.22 * level, target, reverb: 0.12 });
+        burst(when, {
+          type: 'bandpass', frequency: 1750 * K('snareFreq', 1) * open, q: 0.9,
+          decay: 0.17 * K('snareDecay', 1) * ring, gain: 0.4 * level * K('snareNoise', 1), target, reverb: 0.2
+        });
+        tone(when, {
+          type: 'triangle', from: 190, decay: 0.09 * ring,
+          gain: 0.22 * level * K('snareBody', 1), target, reverb: 0.12
+        });
         break;
       case 'hat':
-        burst(when, { type: 'highpass', frequency: 8200, decay: 0.035, gain: 0.24 * level, target, reverb: 0.08 });
+        burst(when, {
+          type: 'highpass', frequency: 8200 * K('hatFreq', 1) * open,
+          decay: 0.035 * K('hatDecay', 1) * ring, gain: 0.24 * level, target, reverb: 0.08
+        });
         break;
       case 'openHat':
-        burst(when, { type: 'highpass', frequency: 7600, decay: 0.3, gain: 0.2 * level, target, reverb: 0.16 });
+        burst(when, {
+          type: 'highpass', frequency: 7600 * K('hatFreq', 1) * open,
+          decay: 0.3 * K('hatDecay', 1) * ring, gain: 0.2 * level, target, reverb: 0.16
+        });
         break;
       case 'clap':
         [0, 0.011, 0.022].forEach((offset, i) => {
-          burst(when + offset, { type: 'bandpass', frequency: 1150, q: 1.4, decay: 0.06, gain: 0.24 * level * (1 - i * 0.15), target, reverb: 0.22 });
+          burst(when + offset, { type: 'bandpass', frequency: 1150 * open, q: 1.4, decay: 0.06, gain: 0.24 * level * (1 - i * 0.15), target, reverb: 0.22 });
         });
-        burst(when + 0.03, { type: 'bandpass', frequency: 1000, q: 1.1, decay: 0.16, gain: 0.16 * level, target, reverb: 0.3 });
+        burst(when + 0.03, { type: 'bandpass', frequency: 1000, q: 1.1, decay: 0.16 * ring, gain: 0.16 * level, target, reverb: 0.3 });
         break;
       case 'rim':
-        burst(when, { type: 'bandpass', frequency: 2400, q: 3, decay: 0.035, gain: 0.24 * level, target, reverb: 0.16 });
-        tone(when, { type: 'triangle', from: 1700, decay: 0.025, gain: 0.14 * level, target, reverb: 0.1 });
+        burst(when, { type: 'bandpass', frequency: 2400 * open, q: 3, decay: 0.035, gain: 0.24 * level, target, reverb: 0.16 });
+        tone(when, { type: 'triangle', from: 1700, decay: 0.025, gain: 0.14 * level * K('snareBody', 1), target, reverb: 0.1 });
         break;
       case 'ride':
-        burst(when, { type: 'highpass', frequency: 5200, decay: 0.42, gain: 0.1 * level, target, reverb: 0.24 });
+        burst(when, { type: 'highpass', frequency: 5200 * open, decay: 0.42 * ring, gain: 0.1 * level, target, reverb: 0.24 });
         tone(when, { type: 'square', from: 3400, decay: 0.1, gain: 0.02 * level, target, reverb: 0.2 });
         break;
       case 'crash':
-        burst(when, { type: 'highpass', frequency: 3200, decay: 1.1, gain: 0.16 * level, target, reverb: 0.4 });
+        burst(when, { type: 'highpass', frequency: 3200 * open, decay: 1.1 * ring, gain: 0.16 * level, target, reverb: 0.4 });
+        break;
+
+      /* Toms are a pitched membrane: a sine falling about a fifth, with just
+         enough noise on the front to be a stick rather than a synth blip.
+         Three of them, because a fill that does not descend is not a fill. */
+      case 'tomLow':
+      case 'tomMid':
+      case 'tomHigh': {
+        const top = { tomLow: 155, tomMid: 215, tomHigh: 290 }[instrument];
+        tone(when, {
+          type: 'sine', from: top, to: top * 0.66, glide: 0.13,
+          decay: (instrument === 'tomLow' ? 0.42 : 0.32) * K('kickDecay', 1) * ring,
+          gain: 0.5 * level, target, reverb: 0.16
+        });
+        burst(when, { type: 'bandpass', frequency: top * 5 * open, q: 1.2, decay: 0.035, gain: 0.12 * level * K('click', 1), target, reverb: 0.1 });
+        break;
+      }
+      /* Hand percussion: a short band of noise high up, with no body at all.
+         The shaker is drier and the tambourine rings, which is the whole
+         difference between them. */
+      case 'shaker':
+        burst(when, { type: 'bandpass', frequency: 6800 * open, q: 0.8, decay: 0.045 * ring, gain: 0.13 * level, target, reverb: 0.1 });
+        break;
+      case 'tamb':
+        burst(when, { type: 'bandpass', frequency: 7400 * open, q: 0.6, decay: 0.16 * ring, gain: 0.14 * level, target, reverb: 0.22 });
+        burst(when + 0.008, { type: 'highpass', frequency: 9200, decay: 0.1 * ring, gain: 0.07 * level, target, reverb: 0.2 });
         break;
       default:
         burst(when, { type: 'highpass', frequency: 6000, decay: 0.05, gain: 0.18 * level, target });
@@ -389,6 +488,13 @@
   let stepDuration = 0.125;
   let currentSong = null;
   let looping = true;
+  /* How long one pass through the transport is, in steps. The loop's own
+     length when you are playing the loop, and the whole arrangement's when you
+     are playing that — everything that wraps, ends or reports a position
+     measures against this rather than against the song, which only ever knew
+     about the loop. */
+  let spanSteps = 0;
+  let sections = null;
   let onStop = null;
   let onLoop = null;
 
@@ -409,9 +515,94 @@
       list.push({ step: b.start, track: 'bass', patch: patches.bass || 'fingerBass', midi: b.midi, dur: b.dur, velocity: b.velocity });
     });
     song.drums.forEach((d) => {
-      list.push({ step: d.step, track: 'drums', drum: d.instrument, velocity: d.velocity });
+      list.push({
+        step: d.step, track: 'drums', drum: d.instrument, velocity: d.velocity,
+        /* Seconds off the grid, per hit. The grid stays where it is — this is
+           one voice moving against the others, which is what a feel is. */
+        nudge: d.nudge || 0,
+        /* Both carried so the arrangement can place them: a fill belongs at
+           the end of a section, and a ghost is what goes first when a section
+           wants less. */
+        fill: !!d.fill, ghost: !!d.ghost
+      });
     });
     return list.sort((a, b) => a.step - b.step);
+  }
+
+  /* The arrangement, laid out flat.
+
+     A section that drops the drums is a section with no drum events in it —
+     not a section played with the drum bus turned down. The difference matters
+     at the seam: a bus ducked on the bar line cuts the tail of whatever was
+     still ringing from the section before, and the scheduler commits notes up
+     to a lookahead window early, so "mute it when the loop wraps" mutes it
+     slightly before the wrap you can hear. Scheduling only the notes that
+     belong is exact by construction and costs nothing — a verse-chorus form
+     over a four-bar loop is thirteen passes of a hundred-odd events.
+
+     The section id rides along on each event so the transport can say what is
+     playing without recomputing it from the clock. */
+  function buildArrangement(song, plan) {
+    const base = buildEvents(song);
+    const loopSteps = song.totalSteps;
+    const list = [];
+    const spans = [];
+    let at = 0;
+    plan.sections.forEach((section, index) => {
+      const on = {};
+      section.tracks.forEach((id) => { on[id] = true; });
+      spans.push({ id: section.id, name: section.name, start: at, steps: section.loops * loopSteps });
+
+      /* How hard this section is played. The form already knows — it is the
+         number the written guidance has always quoted — and until now it was
+         only ever prose. An intro at 0.2 and a last chorus at 1 should not be
+         the same performance of the same loop at the same volume. */
+      const push = 0.72 + 0.28 * (section.intensity === undefined ? 1 : section.intensity);
+      const quiet = (section.intensity || 1) < 0.4;
+
+      for (let pass = 0; pass < section.loops; pass++) {
+        const offset = at + pass * loopSteps;
+        const lastPass = pass === section.loops - 1;
+        base.forEach((e) => {
+          if (!on[e.track]) return;
+          /* A fill belongs at the end of a SECTION, not at the end of every
+             pass of the loop inside one. A verse that is two loops long got
+             filled half way through it, which announces a change that is not
+             coming. */
+          if (e.fill && !lastPass) return;
+          /* And a crash belongs at the top of a SECTION. The loop's own crash
+             marks the top of the loop, which is right when the loop is the
+             whole song and wrong once it is being played thirteen times —
+             thirteen crashes is not an arrangement, it is a warning. */
+          if (e.drum === 'crash' && pass !== 0) return;
+          /* Ghosts are the first thing a player drops when the room wants
+             less, and an intro is the room wanting less. */
+          if (e.ghost && quiet) return;
+          const copy = {};
+          for (const k in e) copy[k] = e[k];
+          copy.step = e.step + offset;
+          if (e.track === 'drums') copy.velocity = Math.min(1, e.velocity * push);
+          list.push(copy);
+        });
+      }
+
+      /* A crash on the downbeat of a section that has drums and is louder
+         than the one before it. This is the one thing every drummer does at a
+         section change and the arrangement could not previously express it,
+         because the loop has no idea it is being repeated. */
+      const previous = index > 0 ? plan.sections[index - 1] : null;
+      const lifts = previous && (section.intensity || 0) > (previous.intensity || 0) + 0.12;
+      /* Unless the beat already brought its own to this exact downbeat, in
+         which case two crashes on one beat is a flam nobody asked for. */
+      const already = list.some((e) => e.drum === 'crash' && e.step === at);
+      if (lifts && on.drums && !already) {
+        list.push({ step: at, track: 'drums', drum: 'crash', velocity: 0.62 + 0.3 * (section.intensity || 0), nudge: 0 });
+      }
+
+      at += section.loops * loopSteps;
+    });
+    list.sort((a, b) => a.step - b.step);
+    return { events: list, totalSteps: at, spans };
   }
 
   /* Swing pushes the offbeats later. Which subdivision counts as an offbeat
@@ -422,18 +613,26 @@
     return step % 4 === 2 ? song.swing * stepDuration * 0.66 : 0;
   }
 
+  /* Where a step falls, and where an event falls — which are not the same
+     thing. The step is the grid, shared by every part and moved as a whole by
+     swing. The event may sit a few milliseconds off it, which is one voice
+     leaning against the others rather than the grid bending. */
   function timeOf(step) {
     return loopStart + step * stepDuration + swingOffset(currentSong, step);
+  }
+
+  function timeOfEvent(event) {
+    return timeOf(event.step) + (event.nudge || 0);
   }
 
   function tick() {
     if (!currentSong) return;
     const horizon = ctx.currentTime + SCHEDULE_AHEAD;
-    const totalSteps = currentSong.totalSteps;
+    const totalSteps = spanSteps;
 
-    while (cursor < events.length && timeOf(events[cursor].step) < horizon) {
+    while (cursor < events.length && timeOfEvent(events[cursor]) < horizon) {
       const event = events[cursor];
-      const when = timeOf(event.step);
+      const when = timeOfEvent(event);
       if (when >= ctx.currentTime - 0.02) {
         if (event.drum) {
           playDrum(event.drum, when, event.velocity);
@@ -464,10 +663,23 @@
     stop(true);
     const opts = options || {};
     currentSong = song;
+    /* The kit belongs to the song, so the transport sets it — and leaves it
+       set, so that a pad tapped after the music stops answers in the same
+       voice it was just playing in. */
+    if (song.genre) setKit(song.genre.kit);
     looping = opts.loop !== false;
     onStop = opts.onStop || null;
     onLoop = opts.onLoop || null;
-    events = buildEvents(song);
+    if (opts.arrangement) {
+      const laid = buildArrangement(song, opts.arrangement);
+      events = laid.events;
+      spanSteps = laid.totalSteps;
+      sections = laid.spans;
+    } else {
+      events = buildEvents(song);
+      spanSteps = song.totalSteps;
+      sections = null;
+    }
     stepDuration = 60 / song.bpm / 4;
     loopStart = ctx.currentTime + 0.14;
     cursor = 0;
@@ -506,6 +718,7 @@
     currentSong = null;
     events = [];
     cursor = 0;
+    sections = null;
     if (wasPlaying) silence();
     if (!silent && onStop) onStop();
     if (!silent) onStop = null;
@@ -530,7 +743,22 @@
     if (!currentSong || !ctx) return 0;
     const elapsed = ctx.currentTime - outputDelay() - loopStart;
     if (elapsed < 0) return 0;
-    return Math.min(currentSong.totalSteps, elapsed / stepDuration);
+    return Math.min(spanSteps, elapsed / stepDuration);
+  }
+
+  /* How long the thing being played is, and where its sections fall — null
+     when the transport is on the bare loop. The caller asks rather than
+     assuming, because the same play button now drives two different lengths. */
+  function span() {
+    return spanSteps;
+  }
+
+  function sectionAt(step) {
+    if (!sections) return null;
+    for (let i = sections.length - 1; i >= 0; i--) {
+      if (step >= sections[i].start) return sections[i];
+    }
+    return sections[0];
   }
 
   function setLoop(value) {
@@ -549,7 +777,13 @@
 
   // Deliberately not called `Audio` — that name is already taken in a browser.
   global.Engine = {
-    ensure, start, stop, isPlaying, position, setLoop, setMute, isMuted,
+    ensure, start, stop, isPlaying, position, span, sectionAt,
+    setLoop, setMute, isMuted, setKit, currentKit,
+    /* Pure, and exported because the claim the arrangement makes — this
+       section plays these parts and no others — is a property of the laid-out
+       events rather than of anything you can observe from outside while it
+       runs. Callers get the layout without the transport having to be live. */
+    arrange: buildArrangement,
     playNote, playDrum, preview, PATCHES, TRACKS
   };
 })(window);
