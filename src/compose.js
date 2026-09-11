@@ -7,6 +7,12 @@
    tones, weak beats fill in with passing and neighbour notes, leaps resolve by
    contrary step, each phrase has a single climax, and the last bar cadences.
 
+   A song is two sections, a verse and a chorus, written whole — each with its
+   own progression, tune, second line, comping, bass and drums — against one
+   key, one tempo, one beat and one energy. The chorus is the loop this engine
+   has always written; the verse is the same engine asked for a line that sits
+   under it. See `compose` for how the two are drawn.
+
    Time is measured in sixteenth-note steps. One bar of 4/4 is 16 steps. */
 (function (global) {
   'use strict';
@@ -200,6 +206,14 @@
     }
   ];
 
+  /* One note fewer in a bar, by resting the first or tying two together —
+     and never an empty bar. */
+  function breathe(cell, rng) {
+    const wanted = rng.chance(0.5) ? 'restFirst' : 'mergePair';
+    const out = RHYTHM_OPS.find((fn) => fn.name === wanted)(cell, rng);
+    return cellNotes(out) ? out : cell;
+  }
+
   function varyRhythm(cell, times, rng) {
     let out = cell.slice();
     for (let i = 0; i < times; i++) out = RHYTHM_OPS[rng.int(0, RHYTHM_OPS.length - 1)](out, rng);
@@ -220,11 +234,18 @@
     const { key, genre, rng, spans, totalBars, energy } = ctx;
     const spec = genre.melody;
     const energyMod = G.ENERGY[energy] || G.ENERGY.flow;
+    /* What kind of line this is. The chorus is the genre's melody exactly as
+       it has always been written; the verse is the same generator told to sit
+       lower, rest more, step rather than leap and leave its last note hanging
+       — see verseCharacter. Every field is optional and every default is the
+       chorus, so a line with no character draws precisely the notes it always
+       did, from precisely the same random draws. */
+    const character = ctx.character || {};
 
-    const lo = spec.range[0];
-    const hi = spec.range[1];
-    const wantRest = clamp(spec.restiness + energyMod.restiness, 0, 0.6);
-    const leapiness = clamp((spec.leapiness || 0.25) + energyMod.leapiness, 0.05, 0.7);
+    const lo = character.range ? character.range[0] : spec.range[0];
+    const hi = character.range ? character.range[1] : spec.range[1];
+    const wantRest = clamp(spec.restiness + energyMod.restiness + (character.restiness || 0), 0, 0.6);
+    const leapiness = clamp((spec.leapiness || 0.25) + energyMod.leapiness + (character.leapiness || 0), 0.05, 0.7);
     const pentBias = spec.pentatonicBias || 0;
     const chromatic = spec.chromaticApproach || 0;
 
@@ -271,9 +292,12 @@
 
     const totalSteps = totalBars * STEPS_PER_BAR;
     const climaxStep = Math.floor(totalSteps * rng.range(0.55, 0.76));
-    const shape = rng.pick(['arch', 'arch', 'rise', 'fall', 'wave']);
+    const shape = rng.pick(character.shapes || ['arch', 'arch', 'rise', 'fall', 'wave']);
 
     // Where the line should sit at a given moment, and how high it may go.
+    // `seat` is the slice of the range the contour moves through: the upper
+    // three quarters by default, lower for a verse.
+    const seat = character.seat || [0.25, 1];
     function targetAt(step) {
       const t = step / Math.max(1, totalSteps - 1);
       const low = lo + 2;
@@ -283,7 +307,7 @@
       else if (shape === 'rise') f = t;
       else if (shape === 'fall') f = 1 - t;
       else f = 0.5 + 0.5 * Math.sin(Math.PI * 2 * t - Math.PI / 2);
-      return low + (high - low) * (0.25 + 0.75 * f);
+      return low + (high - low) * (seat[0] + (seat[1] - seat[0]) * f);
     }
     function ceilingAt(step) {
       return Math.abs(step - climaxStep) < STEPS_PER_BAR ? hi : hi - 3;
@@ -317,7 +341,13 @@
       const isHalfCadenceBar = bar === halfBar && totalBars > 4;
 
       if (!rhythms[base]) {
-        rhythms[base] = pickCell(spec.cells, rng, wantRest, energyMod.density, isCadenceBar);
+        rhythms[base] = pickCell(spec.cells, rng, wantRest, energyMod.density + (character.density || 0), isCadenceBar);
+        /* A verse breathes: some of its motifs start after the downbeat or tie
+           two notes into one, so it has fewer notes than the hook whatever the
+           genre's cells offer — most banks carry no rests at all, and a taste
+           for rests can only choose among cells that have them. Only a line
+           with `breath` draws for this, so the chorus draws nothing. */
+        if (character.breath && rng.chance(character.breath)) rhythms[base] = breathe(rhythms[base], rng);
       }
       let rhythm = variation ? varyRhythm(rhythms[base], variation, rng) : rhythms[base].slice();
       if (isCadenceBar && rhythm[rhythm.length - 1] < 4) rhythm = varyRhythm(rhythm, 1, rng);
@@ -377,10 +407,14 @@
       // the opposite and deliberately stays open.
       if (isCadenceBar) {
         const last = slots.length - 1;
-        barPitches[last] = cadenceNote(
-          barPitches[last - 1] !== undefined ? barPitches[last - 1] : prevPitch,
-          slots[last].chord, key, pitches, indexOfPitch
-        );
+        /* A verse does not close. It leaves its last note hanging the way the
+           midpoint does, so the chorus has something to resolve. */
+        barPitches[last] = character.open
+          ? openNote(barPitches[last], slots[last].chord, key, pitches, indexOfPitch)
+          : cadenceNote(
+            barPitches[last - 1] !== undefined ? barPitches[last - 1] : prevPitch,
+            slots[last].chord, key, pitches, indexOfPitch
+          );
       } else if (isHalfCadenceBar) {
         const last = slots.length - 1;
         barPitches[last] = openNote(barPitches[last], slots[last].chord, key, pitches, indexOfPitch);
@@ -409,12 +443,14 @@
     const settle = () => { for (let pass = 0; pass < 6 && repairMelody(notes, repairOpts); pass++); };
     settle();
     if (notes.length) {
-      // The repair pass may have moved the last note; put the cadence back.
+      // The repair pass may have moved the last note; put the ending back.
       const final = notes[notes.length - 1];
-      final.midi = cadenceNote(
-        notes.length > 1 ? notes[notes.length - 2].midi : null,
-        chordAt(final.start), key, pitches, indexOfPitch
-      );
+      final.midi = character.open
+        ? openNote(final.midi, chordAt(final.start), key, pitches, indexOfPitch)
+        : cadenceNote(
+          notes.length > 1 ? notes[notes.length - 2].midi : null,
+          chordAt(final.start), key, pitches, indexOfPitch
+        );
       final.appoggiatura = false;
     }
     if (chromatic > 0) applyChromaticApproach(notes, rng, chromatic, lo, hi);
@@ -1564,8 +1600,11 @@
 
   /* ------------------------------------------------------------ commentary */
 
-  function describe(song) {
-    const { spans, key, genre, melody, form } = song;
+  /* One section, as a clause: "over I – V – vi – IV, closes with a perfect
+     cadence; brings the opening bar's idea back twice". The song's own note
+     puts a subject in front of it. */
+  function describe(section, key, genre) {
+    const { spans, melody, form } = section;
     const parts = [];
     const romans = spans.map((s) => s.chord.roman);
 
@@ -1575,34 +1614,204 @@
     if (secondLast) {
       const from = degreeOf(secondLast);
       const to = degreeOf(last);
-      if (from === 7 && to === 0) parts.push('it closes with a perfect cadence, V back to I');
-      else if (from === 5 && to === 0) parts.push('it closes plagally, IV falling to I');
-      else if (from === 7 && (to === 9 || to === 8)) parts.push('it sidesteps into a deceptive cadence on vi');
-      else if (to === 7) parts.push('it leaves the door open, resting on V');
-      else if (from === to) parts.push(`it settles on ${last.roman}`);
-      else parts.push(`it turns around on ${last.roman}`);
+      if (from === 7 && to === 0) parts.push('closes with a perfect cadence, V back to I');
+      else if (from === 5 && to === 0) parts.push('closes plagally, IV falling to I');
+      else if (from === 7 && (to === 9 || to === 8)) parts.push('sidesteps into a deceptive cadence on vi');
+      else if (to === 7) parts.push('leaves the door open, resting on V');
+      else if (from === to) parts.push(`settles on ${last.roman}`);
+      else parts.push(`turns around on ${last.roman}`);
     }
 
     const borrowed = spans.filter((s) => s.chord.borrowed);
     if (borrowed.length) {
       const names = [];
       borrowed.forEach((s) => { if (names.indexOf(s.chord.roman) < 0) names.push(s.chord.roman); });
-      parts.push(`${names.join(' and ')} ${names.length > 1 ? 'are borrowed' : 'is borrowed'} from outside the key`);
+      parts.push(`borrows ${names.join(' and ')} from outside the key`);
     }
 
     const repeated = form.filter((label) => label[0] === form[0][0]).length;
     if (repeated > 1) {
-      parts.push(`the opening bar's idea comes back ${repeated - 1} more time${repeated > 2 ? 's' : ''}, re-fitted to each chord`);
+      const times = repeated - 1;
+      parts.push(`brings the opening bar's idea back ${times === 1 ? 'once' : times === 2 ? 'twice' : times + ' more times'}, re-fitted to each chord`);
     }
 
-    if (melody.some((n) => n.chromatic)) parts.push('a few chromatic approach notes slide into the strong beats');
-    if (genre.melody.blueNotes) parts.push('the flat third and flat fifth colour the line');
+    if (melody.some((n) => n.chromatic)) parts.push('slides chromatic approach notes into the strong beats');
+    if (genre.melody.blueNotes) parts.push('colours the line with the flat third and flat fifth');
 
     // A twelve-bar blues is mostly one chord repeated; list what changes.
     const distinct = romans.filter((roman, i) => roman !== romans[i - 1]);
     const shown = distinct.slice(0, 6).join(' – ') + (distinct.length > 6 ? ' …' : '');
-    const intro = `${key.rootName} ${key.scaleName} over ${shown}`;
-    return `${intro}. ${parts.length ? parts.join('; ') : 'Strong beats land on chord tones throughout'}.`;
+    return `over ${shown}, ${parts.length ? parts.join('; ') : 'lands every strong beat on a chord tone'}`;
+  }
+
+  function intervalName(semitones) {
+    if (semitones <= 2) return 'a step';
+    if (semitones <= 4) return 'a third';
+    if (semitones === 5) return 'a fourth';
+    if (semitones <= 7) return 'a fifth';
+    if (semitones <= 9) return 'a sixth';
+    if (semitones <= 11) return 'a seventh';
+    return 'an octave';
+  }
+
+  /* The sentence the two sections need between them: what the verse does so
+     that the chorus lands. Only claims that are true of this song are made —
+     a verse that happens to sit no lower than its chorus is not said to. */
+  function relate(verse, chorus, key) {
+    const parts = [];
+    const degreeOf = (chord) => mod(chord.rootPc - key.rootPc, 12);
+    const verseOpens = verse.spans[0].chord;
+    const chorusOpens = chorus.spans[0].chord;
+    const verseCloses = verse.spans[verse.spans.length - 1].chord;
+    if (verseOpens.roman !== chorusOpens.roman) {
+      parts.push(degreeOf(chorusOpens) === 0
+        ? `the verse starts out on ${verseOpens.roman} so the chorus can come home to ${chorusOpens.roman}`
+        : `the verse opens on ${verseOpens.roman} and the chorus on ${chorusOpens.roman}`);
+    } else if (verse.progression !== chorus.progression) {
+      parts.push(`both open on ${chorusOpens.roman} and go their own way from there`);
+    } else {
+      parts.push('both sit on the same changes and the tune does the work');
+    }
+    if (degreeOf(verseCloses) === 7 && degreeOf(chorusOpens) !== 7) {
+      parts.push(`the verse leaves off on ${verseCloses.roman}, which leans into the chorus`);
+    }
+    const mean = (notes) => (notes.length ? notes.reduce((sum, n) => sum + n.midi, 0) / notes.length : 0);
+    const gap = Math.round(mean(chorus.melody) - mean(verse.melody));
+    if (gap >= 2) parts.push(`the chorus tune sits about ${intervalName(gap)} above the verse`);
+    if (verse.melody.length < chorus.melody.length * 0.9) parts.push('the verse rests more');
+    const text = parts.join('; ');
+    return text.charAt(0).toUpperCase() + text.slice(1);
+  }
+
+  function describeSong(song) {
+    const { key, sections } = song;
+    const verse = sections[0];
+    const chorus = sections[1];
+    return `${key.rootName} ${key.scaleName}. The verse, ${verse.theory}. ` +
+      `The chorus, ${chorus.theory}. ${relate(verse, chorus, key)}.`;
+  }
+
+  /* ------------------------------------------------------------- sections */
+
+  /* How the verse differs from the chorus, as nudges on the genre's own
+     melody spec. The top of its range comes down a fourth and its contour
+     sits in the lower part of what is left, so the hook has somewhere to go;
+     it rests more and steps rather than leaps, which is most of what makes a
+     verse read as spoken and a chorus as sung; its contour is likelier to
+     wander or fall than to arch; and it leaves its last note hanging so the
+     chorus has something to resolve. */
+  function verseCharacter(spec) {
+    const lo = spec.range[0];
+    const hi = spec.range[1];
+    return {
+      range: [lo, Math.max(lo + 9, hi - 5)],
+      seat: [0, 0.6],
+      restiness: 0.08,
+      leapiness: -0.06,
+      density: -0.6,
+      breath: 0.6,
+      shapes: ['wave', 'fall', 'wave', 'arch'],
+      open: true
+    };
+  }
+
+  /* The verse's changes. A different progression from the same pool, the same
+     length as the chorus so the two sit on one grid and every section of the
+     form is a whole number of either, and chosen so that the chorus lands: it
+     would rather open somewhere the chorus does not, and rather end on the
+     dominant than at home. One of its own length beats one that has to repeat
+     to fill the bars.
+
+     Where the pool has nothing else that fits, the chorus's own changes are
+     turned to start elsewhere — vi IV I V against I V vi IV — which is the
+     oldest verse-and-chorus trick there is. Only for a short loop, though: a
+     twelve-bar blues turned round is not a blues any more, so a form that
+     long keeps its changes and lets the tune do the work. */
+  function pickVerseProgression(genre, scaleName, key, chorus, bars, rng) {
+    const inScale = genre.progressions.filter((p) => p.scale === scaleName);
+    const pool = inScale.length ? inScale : genre.progressions;
+    const spelled = (p) => p.chords.join(' ');
+    const fits = (p) => p.chords.length === bars || bars % p.chords.length === 0;
+    const degreeOf = (entry) => {
+      const chord = T.parseChord(String(entry).split('|')[0], key, {});
+      return chord ? mod(chord.rootPc - key.rootPc, 12) : null;
+    };
+
+    const candidates = pool.filter((p) => fits(p) && spelled(p) !== spelled(chorus));
+    if (!candidates.length && chorus.chords.length <= 4) {
+      for (let k = 1; k < chorus.chords.length; k++) {
+        const chords = chorus.chords.slice(k).concat(chorus.chords.slice(0, k));
+        const turned = { scale: chorus.scale, chords, turned: k };
+        if (spelled(turned) !== spelled(chorus) && !candidates.some((c) => spelled(c) === spelled(turned))) {
+          candidates.push(turned);
+        }
+      }
+    }
+    if (!candidates.length) return chorus;
+
+    const chorusOpens = degreeOf(chorus.chords[0]);
+    const items = candidates.map((p) => {
+      let w = 1;
+      const opens = degreeOf(p.chords[0]);
+      const closes = degreeOf(p.chords[p.chords.length - 1]);
+      if (opens === chorusOpens) w *= 0.3;
+      if (closes === 7) w *= 1.6;
+      else if (closes === 0) w *= 0.7;
+      if (p.chords.length === bars) w *= 1.25;
+      return { p, w };
+    });
+    return weightedPick(rng, items).p;
+  }
+
+  /* One section, written whole: its chords, its tune, its second line, its
+     comping, its bass and its drums, against the key, tempo, beat and energy
+     the other section shares. Each section has three seeds of its own — the
+     chorus the song's, the verse three derived from them — so a section is
+     reproducible on its own and a reroll of one seed moves the same thing in
+     both. */
+  function writeSection(ctx) {
+    const { id, label, key, genre, energy, bars, progression, seeds, character } = ctx;
+    const { spans, totalBars } = buildChords(progression, key, genre, bars);
+    const form = chooseForm(totalBars, makeRng(seeds.melody ^ 0x9e3779b9));
+    const melody = buildMelody({ key, genre, spans, totalBars, rng: makeRng(seeds.melody), energy, form, character });
+    const chordTrack = buildChordTrack({ genre, spans, rng: makeRng(seeds.harmony ^ 0x27d4eb2f), energy });
+    const bass = buildBass({ genre, spans, totalBars, rng: makeRng(seeds.harmony ^ 0x85ebca6b), energy });
+    /* The beat is drawn before the events are built so the choice can be kept
+       on the song: the run of pads, the set-up notes and the arrangement all
+       have to describe the beat that is actually playing, not the genre's
+       first one. Both sections draw it from the same seed, so they are the
+       same drummer playing the same beat; what differs is what it hears. */
+    const drumRng = makeRng(seeds.drum);
+    const beat = pickBeat(genre, drumRng);
+    const drums = buildDrums({
+      genre, totalBars, rng: drumRng, energy, beat,
+      /* What the rest of the band is doing. The bass is built above this
+         line for exactly that reason. */
+      spans, bass,
+      /* Where the tune peaks, as a fraction of the loop, so the kit leans in
+         at the same moment the melody does. */
+      climax: melody.climaxStep === undefined
+        ? 0.66 : melody.climaxStep / Math.max(1, totalBars * STEPS_PER_BAR - 1)
+    });
+    const counter = ctx.counter
+      ? buildCounter({ key, genre, spans, totalBars, rng: makeRng(seeds.melody ^ 0x165667b1), energy }, melody)
+      : [];
+    const section = {
+      id, label, bars: totalBars, totalSteps: totalBars * STEPS_PER_BAR,
+      progression, spans, melody, counter, chordTrack, bass, drums, form, beat
+    };
+    section.theory = describe(section, key, genre);
+    return section;
+  }
+
+  /* One of a song's sections, as a song. Everything that draws or plays one
+     pass of the music — the faceplate, the run, the lane, the transport on
+     the bare loop — takes a song and reads its notes off the top level. This
+     hands back one of those with a section's notes where the chorus's would
+     be, and the whole song still underneath. */
+  function section(song, id) {
+    const found = (song.sections || []).find((s) => s.id === id);
+    return found ? Object.assign({}, song, found) : song;
   }
 
   /* ------------------------------------------------------------------ main */
@@ -1622,7 +1831,6 @@
        asked for. Three independent things you can reroll one at a time. */
     const drumSeed = opts.drumSeed === undefined ? Math.floor(Math.random() * 1e9) : opts.drumSeed;
     const harmonyRng = makeRng(harmonySeed);
-    const melodyRng = makeRng(melodySeed);
 
     const available = G.scalesFor(genreId);
     const scaleName = available.indexOf(opts.scale) >= 0 ? opts.scale : harmonyRng.pick(available);
@@ -1630,54 +1838,61 @@
     const key = T.makeKey(keyPc, scaleName);
 
     const bars = opts.bars === undefined ? 'auto' : opts.bars;
+
+    /* The chorus draws first, and draws exactly what the loop always drew: the
+       same progression from the same stream, the same tune from the same
+       seed. Every sketch anyone has saved or shared comes back note for note,
+       as the chorus of a song that now has a verse as well. */
     const progression = pickProgression(genre, scaleName, bars, harmonyRng);
-    const { spans, totalBars } = buildChords(progression, key, genre, bars, harmonyRng);
+    const chorus = writeSection({
+      id: 'chorus', label: 'Chorus', key, genre, energy, bars, progression,
+      seeds: { harmony: harmonySeed, melody: melodySeed, drum: drumSeed },
+      counter: opts.counter
+    });
+    /* The verse draws after it: its changes from the same harmony stream, so
+       they can be chosen against the chorus's, and everything else from seeds
+       of its own, so the two tunes are two tunes. The drum seed is shared —
+       one drummer, one beat, the whole song. */
+    const verse = writeSection({
+      id: 'verse', label: 'Verse', key, genre, energy, bars: chorus.bars,
+      progression: pickVerseProgression(genre, scaleName, key, progression, chorus.bars, harmonyRng),
+      seeds: {
+        harmony: (harmonySeed ^ 0x7f4a7c15) >>> 0,
+        melody: (melodySeed ^ 0x3c6ef372) >>> 0,
+        drum: drumSeed
+      },
+      counter: opts.counter,
+      character: verseCharacter(genre.melody)
+    });
 
     const bpm = opts.bpm !== undefined && opts.bpm !== null
       ? opts.bpm
       : Math.round(genre.tempo[0] + (genre.tempo[1] - genre.tempo[0]) * energyMod.tempo);
 
-    const form = chooseForm(totalBars, makeRng(melodySeed ^ 0x9e3779b9));
-    const melody = buildMelody({ key, genre, spans, totalBars, rng: melodyRng, energy, form });
-    const chordTrack = buildChordTrack({ genre, spans, rng: makeRng(harmonySeed ^ 0x27d4eb2f), energy });
-    const bass = buildBass({ genre, spans, totalBars, rng: makeRng(harmonySeed ^ 0x85ebca6b), energy });
-    /* The beat is drawn before the events are built so the choice can be kept
-       on the song: the run of pads, the set-up notes and the arrangement all
-       have to describe the beat that is actually playing, not the genre's
-       first one. */
-    const drumRng = makeRng(drumSeed);
-    const beat = pickBeat(genre, drumRng);
-    const drums = buildDrums({
-      genre, totalBars, rng: drumRng, energy, beat,
-      /* What the rest of the band is doing. The bass is built above this
-         line for exactly that reason. */
-      spans, bass,
-      /* Where the tune peaks, as a fraction of the loop, so the kit leans in
-         at the same moment the melody does. */
-      climax: melody.climaxStep === undefined
-        ? 0.66 : melody.climaxStep / Math.max(1, totalBars * STEPS_PER_BAR - 1)
-    });
-    const counter = opts.counter
-      ? buildCounter({ key, genre, spans, totalBars, rng: makeRng(melodySeed ^ 0x165667b1), energy }, melody)
-      : [];
-
+    /* The song is its chorus at the top level, with both sections under it.
+       The top-level notes ARE the chorus's — the same arrays, not copies —
+       because everything written before there was a verse reads the loop off
+       the song, and the loop it should find is the one it always found. */
     const song = {
-      genreId, genre, key, scaleName, bpm, bars: totalBars,
-      totalSteps: totalBars * STEPS_PER_BAR,
+      genreId, genre, key, scaleName, bpm, bars: chorus.bars,
+      totalSteps: chorus.totalSteps,
       swing: genre.swing || 0,
       swingUnit: genre.swingUnit || 8,
-      progression, spans, melody, counter, chordTrack, bass, drums, form,
+      progression, spans: chorus.spans, melody: chorus.melody, counter: chorus.counter,
+      chordTrack: chorus.chordTrack, bass: chorus.bass, drums: chorus.drums, form: chorus.form,
       harmonySeed, melodySeed, drumSeed, energy,
-      beat, beatName: beat.name || '',
+      beat: chorus.beat, beatName: chorus.beat.name || '',
       bassPlan: BASS_STYLES[genre.bass] || BASS_STYLES.roots,
-      drumPlan: describeDrums(beat, energyMod)
+      drumPlan: describeDrums(chorus.beat, energyMod),
+      /* In song order: the verse comes first. */
+      sections: [verse, chorus]
     };
-    song.theory = describe(song);
+    song.theory = describeSong(song);
     return song;
   }
 
   global.Compose = {
-    compose, makeRng, STEPS_PER_BAR, chooseForm,
+    compose, section, makeRng, STEPS_PER_BAR, chooseForm,
     buildMelody, buildCounter, buildChordTrack, buildBass, buildDrums, pickBeat,
     BASS_STYLES, describeDrums
   };

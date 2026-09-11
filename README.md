@@ -1,9 +1,9 @@
 # Downbeat
 
-Play your hardware. Downbeat writes you a progression, a bass line, drums and a
-melody, then shows you how to perform each part on a Teenage Engineering EP-133
-K.O. II or an M-VAVE FM-1 — the exact pads and keys, in order, lighting up in
-time with playback.
+Play your hardware. Downbeat writes you a verse and a chorus — a progression,
+a bass line, drums and a melody for each — then shows you how to perform every
+part on a Teenage Engineering EP-133 K.O. II or an M-VAVE FM-1: the exact pads
+and keys, in order, lighting up in time with playback.
 
 An iPhone app, built as a zero-dependency PWA. No build step, no dependencies.
 Open `index.html` in a browser, or serve the directory with anything static.
@@ -42,7 +42,7 @@ two-column desk instead.
 
 | | |
 |---|---|
-| **Play** | The part you are playing: the faceplate, the run of pads, the shape |
+| **Play** | The section and the part you are playing: the faceplate, the run of pads, the shape |
 | **Song** | Genre, key, scale, feel, length, tempo, second melody, count-in |
 | **Arrange** | The form, the map, section by section, the theory note |
 | **Library** | Saved sketches, sharing, export, and how it works |
@@ -50,6 +50,19 @@ two-column desk instead.
 Between the content and the tab bar sits the transport — play, the part you are
 on, your position in the loop, solo and loop. A performance tool has to be able
 to stop from wherever you are, so it is always there and never scrolls.
+
+**The section switcher sits above the parts**: *Verse* or *Chorus*, a plain
+segmented control in the platform's own grey so it reads as a level above the
+part switcher rather than as a sixth part. The faceplate, the run and the shape
+are all drawings of the section you are on. Stopped, switching is immediate.
+While the loop plays, the switch is taken at the top of the next pass — a
+sampler changes pattern at the end of the pattern, and cutting to bar one of
+the chorus from beat three of the verse is not a thing anyone asks for — and
+until then the screen keeps drawing what is sounding, with the transport
+reading `Bar 3 of 4 · Chorus next`. While the form plays, the form decides
+what is sounding and the switcher follows it, so the pads light for the
+chorus in the chorus; asking for a section then is asking to leave the form
+and loop that one.
 
 **The part switcher is a segmented control whose thumb takes that part's
 colour**, so the control is also the legend for the five colours used
@@ -117,6 +130,31 @@ the part.
 Synthwave, Trap, Funk, Gospel, Bossa Nova, Folk, and Ambient. Each one brings
 its own scales, progressions, tempo range, swing, comping style, bass
 behaviour, drum pattern and synth voices.
+
+**A verse and a chorus.** Every song is two sections, written whole — each
+with its own progression, tune, second line, comping, bass and drums —
+against one key, one tempo, one beat and one energy. The chorus is the loop
+the engine has always written. The verse is the same engine asked for a line
+that sits under it: the top of its range comes down a fourth and its contour
+sits low in what is left, so the hook has somewhere to go; it rests more,
+some of its motifs starting after the downbeat or tying two notes into one,
+and steps rather than leaps, which is most of what makes a verse read as
+spoken and a chorus as sung; and it leaves its last note hanging so the
+chorus has something to resolve. Its changes are a different progression
+from the same pool at the same length, chosen so the chorus lands — it would
+rather open somewhere the chorus does not, and rather end on the dominant
+than at home. Where the pool has nothing else that fits, the chorus's own
+four chords are turned to start elsewhere, `vi IV I V` against `I V vi IV`,
+which is the oldest verse-and-chorus trick there is; a twelve-bar blues
+keeps its changes and lets the tune do the work. The two share one drummer:
+the beat is drawn from the same seed in both, and only what it hears — the
+chord changes it marks, the bass it locks to, the bar the tune peaks in —
+differs.
+
+The theory note reads both, and the sentence between them: *the verse starts
+out on vi so the chorus can come home to I; the verse leaves off on V, which
+leans into the chorus; the chorus tune sits about a fourth above the verse;
+the verse rests more.* Only claims true of this song are made.
 
 **Melodies built the way melodies work.** Rhythm comes first, from per-genre
 cells that carry rests and syncopation. A one-bar motif is stated, then
@@ -221,14 +259,19 @@ envelopes; drums are synthesised; everything shares a reverb send into a
 soft-clipper and compressor. A count-in clicks you in so you can start playing
 on the downbeat without looking at the screen.
 
-**An arrangement guide.** The generator writes a loop; this turns it into a
-song. Each genre gets the shape its songs actually take — verse/chorus for
-pop, rock, folk, R&B, gospel and funk; build/drop for house, trap and
-synthwave; head-and-solos for jazz, blues and bossa; a slow fade up and down
-for lo-fi and ambient. Sections are whole numbers of loops, so nothing ever
-lands mid-progression. A map drawn to scale shows which of the five parts
-play in each section, and every section is tappable: it mutes the parts that
-section drops so you hear the idea instead of just reading it.
+**An arrangement guide.** The generator writes a verse and a chorus; this
+turns them into a song. Each genre gets the shape its songs actually take —
+verse/chorus for pop, rock, folk, R&B, gospel and funk; build/drop for house,
+trap and synthwave; head-and-solos for jazz, blues and bossa; a slow fade up
+and down for lo-fi and ambient. Every section of the form is passes of one of
+the two: the verse's own chords and tune where the form wants to state it and
+hold back, the chorus's where it wants the lift, and a stripped section is the
+verse stripped, so the full chorus after it changes the harmony and the
+weight at once. Sections are whole numbers of passes, so nothing ever lands
+mid-progression. A map drawn to scale shows which of the five parts play in
+each section and which of the two it plays, and every section is tappable: it
+takes the Play screen to that section's music and mutes the parts the form
+drops, so you hear the idea instead of just reading it.
 
 **And it plays.** *Play the arrangement* runs the whole form — every section
 in order, at its own length, with its parts dropping in and out on the bar.
@@ -245,10 +288,12 @@ can hear. Laying the form out as one flat sequence is exact by construction —
 a verse/chorus over a four-bar loop is thirteen passes of a hundred-odd
 events, which is nothing.
 
-The Play screen keeps drawing the loop while the form runs: the faceplate, the
-run of pads and the shape are all pictures of one pass, so the playhead is
-folded back into it. Otherwise the pads would stop lighting at bar five of a
-fifty-two bar song.
+The Play screen keeps drawing one pass while the form runs: the faceplate,
+the run of pads and the shape are all pictures of one pass of one section, so
+the playhead is folded back into the pass that is sounding and the screen
+follows the form from the verse's music to the chorus's. Otherwise the pads
+would stop lighting at bar five of a fifty-two bar song, or light for a tune
+you cannot hear.
 
 Arming persists, so the transport's own play button gives you the form too,
 and auditioning a section is how you go back to the loop — the opposite
@@ -258,7 +303,9 @@ screen claiming to be true.
 **Saving and sharing.** A sketch is stored as the recipe that produced it —
 genre, key, scale choice, energy, length, tempo and the three seeds — rather
 than as a dump of notes. Reloading one replays exactly the same decisions, so
-it comes back note for note, and the recipe is small enough to live in a URL:
+it comes back note for note, and the recipe is small enough to live in a URL.
+A sketch saved before there was a verse comes back as the chorus of a song
+that has grown one, every note where it was:
 Share hands the link to the system share sheet, which can put it in Messages,
 in a note or on the clipboard. Saves live in the browser's local storage, and
 swipe left on one to delete it. The sketch you are working on is kept as a
@@ -277,7 +324,8 @@ current firmware:
   three degrees up the run. The scale and key are given as the system codes you
   actually type — `311` for major through `319` for minor pentatonic, and
   `320`–`331` for C through B — and the octave is chosen to put as much of the
-  part under the pads as possible. The K.O. II has no harmonic minor, melodic
+  part under the pads as possible, counting the verse and the chorus together,
+  so a note is the same pad in both. The K.O. II has no harmonic minor, melodic
   minor or phrygian dominant, so sketches in those keys fall back to `12T` and
   the pads run chromatically. Also the TIMING-plus-pads arpeggio for broken
   chords and a pad-per-voice kit map for the drum track. Notes that fall
@@ -320,6 +368,7 @@ reads `OFF`.
 | Count-in | Off, one bar or two |
 | New melody / New chords / New beat | Three seeds, rerolled one at a time |
 | Write a new song | Rerolls both seeds |
+| Section switcher | Verse or chorus. Immediate when stopped; at the top of the next pass while the loop plays; while the form plays it follows the form, and tapping it leaves the form |
 | Part switcher | Which part you are playing — the faceplate, the run and the shape all follow |
 | Mix | Five toggles under the switcher: any combination of the parts, on or off |
 | Every part on | Appears beside *Parts* whenever something is off, and puts the whole song back |
@@ -327,8 +376,8 @@ reads `OFF`.
 | Solo | Hear only the part you are on. It follows the selection, and gives your mix back when you let it go |
 | Loop | Round and round, or once through |
 | Play the arrangement | The whole form, section by section, from the Arrange tab |
-| Arrangement sections | Tap one to hear it with its parts dropped — and to come back off the form |
-| Share | The system share sheet: link, text, MIDI, or save to the library |
+| Arrangement sections | Tap one to hear its music with its parts dropped — and to come back off the form |
+| Share | The system share sheet: link, text, MIDI (verse then chorus, with markers), or save to the library |
 | Undo | Appears in the title bar whenever a change can be taken back |
 
 With a hardware keyboard: `Space` plays and stops, `G` writes a new song,
@@ -377,10 +426,19 @@ found:
   counts: the backbeat is the loudest snare, the hats are not flat across the
   beat, the loop lifts, every voice sits where its genre's feel asks it to,
   every voice sounds in every kit, a crash marks a section rather than a bar,
-  and the three seeds reroll three independent things. The
-  arrangement is checked as a layout rather than by listening: in every genre,
-  every section contains exactly the parts the form lists and no others, on
-  every repeat, in time order, for the full length the plan claims. The mix is
+  and the three seeds reroll three independent things. The two sections are
+  checked as claims too: the top of every song is its chorus by reference,
+  the verse is never the chorus's tune, the two share a beat and a length,
+  the verse sits lower and rests more in the great majority of songs across
+  every genre and energy, a new drum seed moves neither section's tune and a
+  new melody seed moves both.
+  The arrangement is checked as a layout rather than by listening: in every
+  genre, every section contains exactly the parts the form lists and no
+  others, on every repeat, in time order, for the full length the plan claims
+  — and a verse section is the verse's own notes, a chorus section the
+  chorus's. The switcher's three rules are driven: switching redraws the
+  screen, a switch mid-loop waits for the wrap while the screen stays with
+  the sound, and the form carries the switcher with it. The mix is
   checked exhaustively: every one of the 2ⁿ combinations of the parts a song
   has, driven a tap at a time and asserted against what the engine is
   actually playing.
@@ -409,11 +467,11 @@ css/device.css      everything src/devices.js draws
 css/a11y.css        reduced motion, increased contrast, focus
 src/theory.js       note spelling, scales, roman numerals, chords, voice leading
 src/genres.js       the 14 genre definitions — pure data
-src/compose.js      melody, countermelody, bass, drums, chord comping
+src/compose.js      a verse and a chorus: melody, countermelody, bass, drums, chord comping
 src/audio.js        synth voices, drum synthesis, effects, scheduler
 src/midi.js         Standard MIDI File export
 src/devices.js      hardware faceplates, note-to-pad/key mapping, lighting
-src/arrange.js      section plans per genre family — pure data plus a scaler
+src/arrange.js      section plans per genre family, each section naming which of the two it plays
 src/library.js      sketch recipes, local storage, shareable links
 src/ios.js          modal presentation, action sheets, alerts, swipe, segments
 src/ui.js           the app: state, transport, the four screens, platform glue

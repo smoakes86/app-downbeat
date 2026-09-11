@@ -491,6 +491,10 @@
     overflow:hidden;
   }
   .map-sec-bars { font-size:9px; color:var(--label-2); white-space:nowrap; }
+  /* Which of the song's two sections this one is passes of. Only drawn where
+     the name does not already say so — "Verse 2" needs no "verse" under it,
+     "Bridge" and "Intro" do. */
+  .map-sec-plays { font-size:9px; font-style:italic; color:var(--label-2); white-space:nowrap; }
   .map-tracks { display:flex; flex-direction:column; gap:2px; margin-top:2px; }
   .map-track { height:4px; border-radius:2px; background:var(--fill-4); }
   .map-track.on { background:var(--tk); }

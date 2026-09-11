@@ -10,7 +10,7 @@
          touch-action:manipulation instead. -->
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
     <title>Downbeat — play it on your hardware</title>
-    <meta name="description" content="Write a progression, a bass line, drums and a melody, then play every part on your EP-133 or FM-1 — pads and keys lighting in time.">
+    <meta name="description" content="Write a verse and a chorus — progression, bass line, drums and melody — then play every part on your EP-133 or FM-1, pads and keys lighting in time.">
     <!-- iOS turns anything that looks like a phone number into a link, and a
          tempo, a bar count and a scale code all look like phone numbers. -->
     <meta name="format-detection" content="telephone=no">
@@ -147,13 +147,20 @@
         <section class="screen is-active" data-screen="play" id="screenPlay" role="tabpanel" aria-label="Play">
           <div class="screen-inner">
 
-            <!-- Two questions about the same five parts, asked in the same
-                 order, under one heading: which one you are PLAYING, and which
-                 ones you are HEARING. -->
+            <!-- Three questions under one heading, in the order you answer
+                 them: which SECTION of the song you are in, which of its five
+                 parts you are PLAYING, and which ones you are HEARING. -->
             <section class="block parts-block">
               <div class="block-head">
-                <h3 class="group-title">Parts</h3>
+                <h3 class="group-title">Playing</h3>
                 <button class="block-action" id="mixReset" hidden>Every part on</button>
+              </div>
+
+              <!-- The verse or the chorus. A plain segmented control, in the
+                   platform's own grey, so it reads as a level above the part
+                   switcher rather than as a sixth part. -->
+              <div class="seg-ctl-wrap">
+                <div class="seg-ctl" id="sections" role="radiogroup" aria-label="Which section of the song you are playing"></div>
               </div>
 
               <!-- The thumb takes that part's colour, so the control is also
@@ -390,7 +397,7 @@
           <span class="intro-mark" data-beat="1" aria-hidden="true"></span>
           <p class="intro-eyebrow">Create</p>
           <h2>A complete song sketch in seconds</h2>
-          <p>Pick a sound and Downbeat writes the harmony, melody, bass line and drums together — in a real key, with real voice leading.</p>
+          <p>Pick a sound and Downbeat writes a verse and a chorus — harmony, melody, bass line and drums together, in a real key, with real voice leading.</p>
         </div>
         <div class="intro-page" data-page="1">
           <span class="intro-mark" data-beat="2" aria-hidden="true"></span>
