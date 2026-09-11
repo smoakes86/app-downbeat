@@ -497,24 +497,40 @@
   let sections = null;
   let onStop = null;
   let onLoop = null;
+  let onSection = null;
+  /* Which of the song's two sections the bare loop is playing, and which one
+     it has been asked to play from the top of the next pass. Null when the
+     form is playing, because then the form decides. */
+  let sounding = null;
+  let pending = null;
 
-  /* Flatten a song into one time-ordered event list. */
-  function buildEvents(song) {
+  /* Which of a song's sections to lay out. A song from before there were two
+     has none, and is its own loop; so is a song asked for no section in
+     particular, whose top level is the chorus. */
+  function loopOf(song, id) {
+    if (!id || !song.sections) return song;
+    return song.sections.find((s) => s.id === id) || song;
+  }
+
+  /* Flatten one section into one time-ordered event list. The patches are
+     the song's; the notes are the section's. */
+  function buildEvents(song, loop) {
+    const source = loop || song;
     const patches = song.genre.patches || {};
     const list = [];
-    song.melody.forEach((n) => {
+    source.melody.forEach((n) => {
       list.push({ step: n.start, track: 'melody', patch: patches.lead || 'sineLead', midi: n.midi, dur: n.dur, velocity: n.velocity });
     });
-    (song.counter || []).forEach((n) => {
+    (source.counter || []).forEach((n) => {
       list.push({ step: n.start, track: 'counter', patch: patches.counter || 'nylon', midi: n.midi, dur: n.dur, velocity: n.velocity });
     });
-    (song.chordTrack || []).forEach((c) => {
+    (source.chordTrack || []).forEach((c) => {
       list.push({ step: c.start, track: 'chords', patch: patches.chord || 'epiano', midi: c.midi, dur: c.dur, velocity: c.velocity });
     });
-    song.bass.forEach((b) => {
+    source.bass.forEach((b) => {
       list.push({ step: b.start, track: 'bass', patch: patches.bass || 'fingerBass', midi: b.midi, dur: b.dur, velocity: b.velocity });
     });
-    song.drums.forEach((d) => {
+    source.drums.forEach((d) => {
       list.push({
         step: d.step, track: 'drums', drum: d.instrument, velocity: d.velocity,
         /* Seconds off the grid, per hit. The grid stays where it is — this is
@@ -540,18 +556,29 @@
      belong is exact by construction and costs nothing — a verse-chorus form
      over a four-bar loop is thirteen passes of a hundred-odd events.
 
+     Each section of the form is passes of one of the song's two sections —
+     the verse's own chords and tune for a verse, the chorus's for a chorus —
+     so the events it is built from are that section's, not the song's.
+
      The section id rides along on each event so the transport can say what is
      playing without recomputing it from the clock. */
   function buildArrangement(song, plan) {
-    const base = buildEvents(song);
-    const loopSteps = song.totalSteps;
+    const built = {};
+    const eventsOf = (id) => built[id] || (built[id] = buildEvents(song, loopOf(song, id)));
     const list = [];
     const spans = [];
     let at = 0;
     plan.sections.forEach((section, index) => {
       const on = {};
       section.tracks.forEach((id) => { on[id] = true; });
-      spans.push({ id: section.id, name: section.name, start: at, steps: section.loops * loopSteps });
+      const base = eventsOf(section.plays);
+      const loopSteps = loopOf(song, section.plays).totalSteps;
+      spans.push({
+        id: section.id, name: section.name, start: at, steps: section.loops * loopSteps,
+        /* Which song section this is passes of, and how long one pass is: the
+           fold the Play screen draws one pass of the right music with. */
+        plays: section.plays || null, loopSteps
+      });
 
       /* How hard this section is played. The form already knows — it is the
          number the written guidance has always quoted — and until now it was
@@ -650,12 +677,41 @@
         if (loopEnd < horizon) {
           loopStart = loopEnd;
           cursor = 0;
+          if (pending) swapSection();
           if (onLoop) onLoop();
         }
       } else if (ctx.currentTime > loopEnd + 0.6) {
         stop();
       }
     }
+  }
+
+  /* The switch a section change asked for, taken at the top of the pass. Both
+     sections are written to the same length, so the wrap the new one starts
+     on is the wrap the old one would have had. */
+  function swapSection() {
+    const loop = loopOf(currentSong, pending);
+    sounding = pending;
+    pending = null;
+    events = buildEvents(currentSong, loop);
+    spanSteps = loop.totalSteps;
+    if (onSection) onSection(sounding);
+  }
+
+  /* Ask for a different section while the loop runs. It is taken at the top
+     of the next pass rather than now: a sampler changes pattern at the end of
+     the pattern, and cutting to bar one of the chorus from beat three of the
+     verse is not a thing anyone asks for. Returns whether there is a switch
+     to wait for — nothing is queued when the transport is stopped, when the
+     form is playing (the form decides its own sections), or when the section
+     asked for is already the one sounding, which also cancels a switch still
+     waiting. */
+  function setSection(id) {
+    if (!timer || !currentSong || sections) return false;
+    if (!currentSong.sections || !currentSong.sections.some((s) => s.id === id)) return false;
+    if (id === sounding) { pending = null; return false; }
+    pending = id;
+    return true;
   }
 
   function start(song, options) {
@@ -670,15 +726,23 @@
     looping = opts.loop !== false;
     onStop = opts.onStop || null;
     onLoop = opts.onLoop || null;
+    onSection = opts.onSection || null;
+    pending = null;
     if (opts.arrangement) {
       const laid = buildArrangement(song, opts.arrangement);
       events = laid.events;
       spanSteps = laid.totalSteps;
       sections = laid.spans;
+      sounding = null;
     } else {
-      events = buildEvents(song);
-      spanSteps = song.totalSteps;
+      /* Which of the song's sections to loop. Asked for none, the song's own
+         top level — the chorus, or for a song from before there were two,
+         the loop. */
+      const loop = loopOf(song, opts.section);
+      events = buildEvents(song, loop);
+      spanSteps = loop.totalSteps;
       sections = null;
+      sounding = loop === song ? null : loop.id;
     }
     stepDuration = 60 / song.bpm / 4;
     loopStart = ctx.currentTime + 0.14;
@@ -719,6 +783,8 @@
     events = [];
     cursor = 0;
     sections = null;
+    sounding = null;
+    pending = null;
     if (wasPlaying) silence();
     if (!silent && onStop) onStop();
     if (!silent) onStop = null;
@@ -761,6 +827,28 @@
     return sections[0];
   }
 
+  /* Which of the song's sections is sounding at a step, and where that pass
+     of it began — the fold the Play screen needs to draw one pass of the
+     right music while the transport runs through many. On the bare loop it
+     is the section the transport was started on, or last switched to at a
+     wrap; null when the song has no sections. */
+  function passAt(step) {
+    if (!currentSong) return null;
+    if (!sections) return { section: sounding, start: 0, steps: spanSteps };
+    const span = sectionAt(step);
+    const pass = Math.floor(Math.max(0, step - span.start) / span.loopSteps);
+    return { section: span.plays, start: span.start + pass * span.loopSteps, steps: span.loopSteps, span };
+  }
+
+  function currentSection() {
+    if (!currentSong) return null;
+    return sections ? passAt(position()).section : sounding;
+  }
+
+  function pendingSection() {
+    return pending;
+  }
+
   function setLoop(value) {
     looping = !!value;
   }
@@ -778,6 +866,7 @@
   // Deliberately not called `Audio` — that name is already taken in a browser.
   global.Engine = {
     ensure, start, stop, isPlaying, position, span, sectionAt,
+    passAt, setSection, currentSection, pendingSection,
     setLoop, setMute, isMuted, setKit, currentKit,
     /* Pure, and exported because the claim the arrangement makes — this
        section plays these parts and no others — is a property of the laid-out

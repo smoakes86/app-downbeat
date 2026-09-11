@@ -141,12 +141,33 @@
     })).sort((a, b) => a.start - b.start || a.midi - b.midi);
   }
 
+  /* The verse and the chorus are played back to back on one setting of one
+     unit, so a pitch has to land on the same pad in both and a drum on the
+     same pad in both. Everything that decides where things sit — the octave
+     shift, the kit map — is decided over the whole song rather than over the
+     section on screen; only the chips are the section's. A song from before
+     there were two is its own one section. */
+  function sectionsOf(song) {
+    return song.sections && song.sections.length ? song.sections : [song];
+  }
+
+  /* Every pitch this track plays anywhere in the song, for placing the pads. */
+  function songMaterial(song, trackId) {
+    const midis = [];
+    sectionsOf(song).forEach((s) => {
+      pitchedEvents(s, trackId).forEach((e) => midis.push(e.midi));
+      if (trackId === 'chords') (s.spans || []).forEach((span) => midis.push.apply(midis, span.voicing));
+    });
+    return midis;
+  }
+
   /* `limit` because the EP-133 has twelve pads and the kit now has thirteen
      voices in it. Nothing the composer writes comes close, but the order is
      deliberate — kick and snare first, crash last — so if a kit ever did
      overflow, what falls off the end is the cymbal rather than the backbeat. */
   function usedDrums(song, limit) {
-    const seen = new Set(song.drums.map((h) => h.instrument));
+    const seen = new Set();
+    sectionsOf(song).forEach((s) => (s.drums || []).forEach((h) => seen.add(h.instrument)));
     const used = DRUM_ORDER.filter((id) => seen.has(id));
     return limit ? used.slice(0, limit) : used;
   }
@@ -165,8 +186,7 @@
     const pcs = scale ? song.key.scalePcs : Array.from({ length: 12 }, (_, i) => mod(rootPc + i, 12));
     const inScale = (m) => pcs.indexOf(mod(m, 12)) >= 0;
 
-    const pool = events.map((e) => e.midi);
-    if (trackId === 'chords') (song.spans || []).forEach((s) => pool.push.apply(pool, s.voicing));
+    const pool = songMaterial(song, trackId);
 
     /* The twelve pads for a given root: walk down the scale to find where the
        run starts, then back up filling every pad. */
@@ -182,9 +202,10 @@
       return notes;
     }
 
-    /* One octave setting has to serve the whole track, so pick the root octave
-       that puts the most of it under the pads — the same choice fmMapping
-       makes for its OCT shift, ties broken toward the middle of the grid. */
+    /* One octave setting has to serve the whole track through the whole song,
+       so pick the root octave that puts the most of it under the pads — the
+       same choice fmMapping makes for its OCT shift, ties broken toward the
+       middle of the grid. */
     let root = rootPc + 48;
     let padNotes = runFor(root);
     let bestScore = -1;
@@ -247,8 +268,7 @@
      fingers, breaking ties toward the middle of the keyboard. */
   function fmMapping(song, trackId) {
     const events = pitchedEvents(song, trackId);
-    const midis = events.map((e) => e.midi);
-    if (trackId === 'chords') (song.spans || []).forEach((s) => midis.push.apply(midis, s.voicing));
+    const midis = songMaterial(song, trackId);
 
     let best = 0;
     let bestScore = -1;

@@ -808,6 +808,88 @@ await check('a recipe from before the drum seed still reproduces', async () => {
   }
 });
 
+/* ------------------------------------------------- a verse and a chorus
+
+   The generator writes two sections now, not one loop. The chorus is the loop
+   it always wrote — every saved sketch and share link comes back as the
+   chorus of a song that has grown a verse — and the verse is a second section
+   against the same key, tempo and beat: its own changes, its own tune,
+   sitting under the chorus. */
+await check('a song has a verse and a chorus, and the chorus is the loop it always was', async () => {
+  const bad = await page.evaluate(() => {
+    const wrong = [];
+    window.Genres.order.forEach((g) => {
+      const s = window.Compose.compose({ genre: g, harmonySeed: 4242, melodySeed: 999, drumSeed: 77, counter: true });
+      const ids = (s.sections || []).map((x) => x.id).join(',');
+      if (ids !== 'verse,chorus') { wrong.push(`${g}: sections are [${ids}]`); return; }
+      const [verse, chorus] = s.sections;
+      if (verse.label !== 'Verse' || chorus.label !== 'Chorus') wrong.push(`${g}: sections are labelled ${verse.label}, ${chorus.label}`);
+      if (verse.bars !== chorus.bars || verse.totalSteps !== chorus.totalSteps) wrong.push(`${g}: verse is ${verse.bars} bars, chorus ${chorus.bars}`);
+      /* By reference, not by value: the top of the song IS the chorus. */
+      if (s.melody !== chorus.melody || s.spans !== chorus.spans || s.drums !== chorus.drums
+        || s.bass !== chorus.bass || s.chordTrack !== chorus.chordTrack || s.counter !== chorus.counter) {
+        wrong.push(`${g}: the top level is not the chorus`);
+      }
+      const tune = (m) => m.map((n) => `${n.start}:${n.midi}`).join(',');
+      if (tune(verse.melody) === tune(chorus.melody)) wrong.push(`${g}: the verse is the chorus's tune`);
+      if (!verse.melody.length || !chorus.melody.length) wrong.push(`${g}: a section has no tune`);
+      if (!verse.counter.length || !chorus.counter.length) wrong.push(`${g}: a section has no second line`);
+      if (verse.beat !== chorus.beat) wrong.push(`${g}: the two sections have different beats`);
+      if (!verse.theory || !chorus.theory || !/verse/.test(s.theory) || !/chorus/.test(s.theory)) wrong.push(`${g}: the theory note does not cover both`);
+      const view = window.Compose.section(s, 'verse');
+      if (view.melody !== verse.melody || view.sections !== s.sections || view.genre !== s.genre || view.id !== 'verse') {
+        wrong.push(`${g}: the verse view is not the verse over the song`);
+      }
+    });
+    return wrong.slice(0, 4);
+  });
+  if (bad.length) throw new Error(bad.join('; '));
+});
+
+await check('the verse sits under the chorus, rests more and has its own changes', async () => {
+  const out = await page.evaluate(() => {
+    let lower = 0; let sparer = 0; let n = 0; let ownChords = 0;
+    window.Genres.order.forEach((g) => {
+      Object.keys(window.Genres.ENERGY).forEach((energy) => {
+        for (let i = 0; i < 4; i++) {
+          const s = window.Compose.compose({ genre: g, energy, harmonySeed: i * 7919 + 13, melodySeed: i * 104729 + 7, drumSeed: i });
+          const [v, c] = s.sections;
+          const mean = (m) => m.reduce((x, y) => x + y.midi, 0) / Math.max(1, m.length);
+          n++;
+          if (mean(v.melody) < mean(c.melody)) lower++;
+          if (v.melody.length <= c.melody.length) sparer++;
+          if (v.progression.chords.join() !== c.progression.chords.join()) ownChords++;
+        }
+      });
+    });
+    return { lower, sparer, n, ownChords };
+  });
+  if (out.lower < out.n * 0.8) throw new Error(`the verse sits lower in only ${out.lower} of ${out.n} songs`);
+  if (out.sparer < out.n * 0.7) throw new Error(`the verse is no busier in only ${out.sparer} of ${out.n} songs`);
+  if (out.ownChords < out.n * 0.8) throw new Error(`the verse has its own changes in only ${out.ownChords} of ${out.n} songs`);
+});
+
+await check('the same recipe writes the same verse, and the seeds move the same things in both sections', async () => {
+  const bad = await page.evaluate(() => {
+    const wrong = [];
+    const base = { genre: 'folk', bars: 4, harmonySeed: 31337, melodySeed: 271828, drumSeed: 161803, counter: true };
+    const verseOf = (s) => s.sections[0];
+    const tune = (s) => verseOf(s).melody.map((n) => `${n.start}:${n.midi}`).join(',');
+    const chords = (s) => verseOf(s).spans.map((x) => x.chord.symbol).join(',');
+    const sig = (s) => JSON.stringify(s.sections.map((x) => [x.progression.chords, x.melody.map((n) => [n.start, n.midi]),
+      x.counter.map((n) => [n.start, n.midi]), x.bass.map((n) => [n.start, n.midi]), x.drums.map((d) => [d.step, d.instrument])]));
+    const a = window.Compose.compose(base);
+    if (sig(a) !== sig(window.Compose.compose(base))) wrong.push('the same recipe gave two different songs');
+    const beat = window.Compose.compose(Object.assign({}, base, { drumSeed: 999 }));
+    if (tune(a) !== tune(beat) || chords(a) !== chords(beat)) wrong.push('a new drum seed moved the verse');
+    const melody = window.Compose.compose(Object.assign({}, base, { melodySeed: 999 }));
+    if (chords(a) !== chords(melody)) wrong.push('a new melody seed moved the verse chords');
+    if (tune(a) === tune(melody)) wrong.push('a new melody seed left the verse tune where it was');
+    return wrong;
+  });
+  if (bad.length) throw new Error(bad.join('; '));
+});
+
 await check('New beat keeps the song', async () => {
   await tap('.tab[data-tab="song"]');
   const before = await page.evaluate(() => {
@@ -1029,6 +1111,51 @@ await check('the arrangement lays out as the form describes', async () => {
   if (bad.sections < 40) throw new Error(`only ${bad.sections} sections swept`);
 });
 
+/* A verse section is passes of the verse — its chords, its tune, its bass —
+   and a chorus section passes of the chorus. Asserted on the layout, over
+   every genre and every pass, against the section's own notes. */
+await check('the form plays each section’s own music', async () => {
+  const bad = await page.evaluate(() => {
+    const wrong = [];
+    window.Genres.order.forEach((g) => {
+      const song = window.Compose.compose({ genre: g, keyPc: 2, counter: true });
+      const plan = window.Arrange.plan(song);
+      const laid = window.Engine.arrange(song, plan);
+      let verses = 0;
+      let choruses = 0;
+      plan.sections.forEach((sec, i) => {
+        const own = song.sections.find((s) => s.id === sec.plays);
+        if (!own) { wrong.push(`${g}/${sec.name}: plays nothing the song has`); return; }
+        if (sec.plays === 'verse') verses++; else choruses++;
+        if (laid.spans[i].plays !== sec.plays) wrong.push(`${g}/${sec.name}: the span does not say what it plays`);
+        const from = sec.start * 16;
+        for (let pass = 0; pass < sec.loops; pass++) {
+          const at = from + pass * own.totalSteps;
+          ['melody', 'counter', 'bass', 'chords'].forEach((track) => {
+            if (sec.tracks.indexOf(track) < 0) return;
+            const notes = track === 'chords' ? own.chordTrack : own[track];
+            /* Rounded, because a strum spreads its notes a fraction of a step
+               apart and 64.18 − 64 is not 0.18 in floating point. */
+            const near = (v) => Math.round(v * 1000) / 1000;
+            const want = notes.map((n) => `${near(n.start)}:${n.midi}`).sort().join(',');
+            const got = laid.events.filter((e) => e.track === track && e.step >= at && e.step < at + own.totalSteps)
+              .map((e) => `${near(e.step - at)}:${e.midi}`).sort().join(',');
+            if (want !== got) wrong.push(`${g}/${sec.name} pass ${pass + 1}: the ${track} is not the ${sec.plays}'s`);
+          });
+        }
+      });
+      if (!verses || !choruses) wrong.push(`${g}: the form never plays the ${verses ? 'chorus' : 'verse'}`);
+      /* And the verse's tune is heard somewhere, or the song grew a section
+         nobody gets to hear. */
+      if (!plan.sections.some((sec) => sec.plays === 'verse' && sec.tracks.indexOf('melody') >= 0)) {
+        wrong.push(`${g}: the verse's tune is never played`);
+      }
+    });
+    return wrong.slice(0, 4);
+  });
+  if (bad.length) throw new Error(bad.join('; '));
+});
+
 /* The loop's own length, measured rather than assumed: the song may be four
    bars or twelve by the time the driver gets here, so every "is this the form
    or the loop" assertion below compares against this. */
@@ -1148,6 +1275,130 @@ await check('it stays armed, and auditioning a section disarms it', async () => 
   await page.waitForTimeout(300);
   if (loop !== loopSpan) throw new Error(`auditioning left the form armed (${loop} steps, loop is ${loopSpan})`);
   await tap('#arrangeReset');
+});
+
+/* ------------------------------------------------- the section switcher
+
+   Two sections on the Play screen, and three rules about switching: stopped,
+   it is immediate; on the loop, it is taken at the top of the next pass and
+   the screen keeps drawing what is sounding until then; on the form, the form
+   decides and the switcher follows it. */
+await page.evaluate(() => {
+  window.__runSig = () => Array.from(document.querySelectorAll('#run .seq-chip, #run .seq-chord'))
+    .map((c) => c.dataset.midi || c.dataset.chord || c.dataset.drum || '').join(',');
+});
+await check('the Play screen has a Verse and a Chorus, and switching redraws it', async () => {
+  await tap('.tab[data-tab="play"]');
+  await tap('#parts button[data-value="melody"]');
+  const labels = await page.locator('#sections button').allTextContents();
+  if (labels.join(',') !== 'Verse,Chorus') throw new Error(`the switcher reads [${labels}]`);
+  await tap('#sections button[data-value="verse"]');
+  const verse = await page.evaluate(() => ({ run: window.__runSig(), part: document.querySelector('#dockPart').textContent }));
+  if (verse.part.indexOf('Verse') !== 0) throw new Error(`transport reads "${verse.part}"`);
+  await tap('#sections button[data-value="chorus"]');
+  const chorus = await page.evaluate(() => ({
+    run: window.__runSig(), part: document.querySelector('#dockPart').textContent,
+    checked: document.querySelector('#sections [aria-checked=true]').dataset.value
+  }));
+  if (chorus.checked !== 'chorus') throw new Error('the switcher did not take');
+  if (chorus.run === verse.run) throw new Error('the run of pads did not change with the section');
+  if (chorus.part.indexOf('Chorus') !== 0) throw new Error(`transport reads "${chorus.part}"`);
+  await shot('section-chorus');
+});
+
+await check('a section switch mid-loop is taken at the top of the next pass', async () => {
+  await tap('#sections button[data-value="verse"]');
+  await tap('#playButton');
+  await page.waitForTimeout(900);
+  const before = await page.evaluate(() => ({ now: window.Engine.currentSection(), run: window.__runSig() }));
+  if (before.now !== 'verse') throw new Error(`the loop started on ${before.now}`);
+  await tap('#sections button[data-value="chorus"]');
+  const asked = await page.evaluate(() => ({
+    now: window.Engine.currentSection(), pending: window.Engine.pendingSection(), run: window.__runSig(),
+    checked: document.querySelector('#sections [aria-checked=true]').dataset.value
+  }));
+  if (asked.now !== 'verse') throw new Error('the switch was taken mid-pass');
+  if (asked.pending !== 'chorus') throw new Error('the switch was not queued');
+  if (asked.run !== before.run) throw new Error('the screen jumped ahead of the sound');
+  if (asked.checked !== 'chorus') throw new Error('the switcher does not show what you asked for');
+  await page.waitForTimeout(400);
+  const pos = await page.locator('#dockPos').textContent();
+  if (!/Chorus next/.test(pos)) throw new Error(`transport reads "${pos}" while a switch waits`);
+  const swapped = await page.evaluate(() => new Promise((done) => {
+    const started = Date.now();
+    const poll = setInterval(() => {
+      if (window.Engine.currentSection() === 'chorus') { clearInterval(poll); done(true); }
+      else if (Date.now() - started > 45000) { clearInterval(poll); done(false); }
+    }, 100);
+  }));
+  if (!swapped) throw new Error('the switch never came');
+  await page.evaluate(() => new Promise((done) => requestAnimationFrame(() => requestAnimationFrame(done))));
+  await page.waitForTimeout(150);
+  const after = await page.evaluate(() => ({
+    run: window.__runSig(), part: document.querySelector('#dockPart').textContent,
+    pos: document.querySelector('#dockPos').textContent, playing: window.Engine.isPlaying(),
+    pending: window.Engine.pendingSection()
+  }));
+  if (!after.playing) throw new Error('playback stopped at the switch');
+  if (after.run === before.run) throw new Error('the screen did not follow the switch');
+  if (after.part.indexOf('Chorus') !== 0) throw new Error(`transport reads "${after.part}" after the switch`);
+  if (/next/.test(after.pos)) throw new Error(`transport still reads "${after.pos}"`);
+  if (after.pending) throw new Error('a switch is still queued');
+  await shot('section-switched');
+  await tap('#playButton');
+  await page.waitForTimeout(400);
+});
+
+await check('the Play screen follows the form from section to section', async () => {
+  /* Jazz, four bars: the Head is one pass of the chorus and the Solo after it
+     is the verse, so the seam is a few seconds away at any tempo. */
+  await tap('.tab[data-tab="song"]');
+  await page.locator('.genre-card[data-genre="jazz"]').tap();
+  await page.waitForTimeout(500);
+  await page.selectOption('#barsSelect', '4');
+  await page.waitForTimeout(500);
+  await tap('.tab[data-tab="play"]');
+  await tap('#parts button[data-value="melody"]');
+  await tap('.tab[data-tab="arrange"]');
+  await tap('#arrangeButton');
+  await page.waitForTimeout(1200);
+  const head = await page.evaluate(() => ({
+    section: window.Engine.currentSection(), run: window.__runSig(),
+    checked: document.querySelector('#sections [aria-checked=true]').dataset.value
+  }));
+  if (head.section !== 'chorus') throw new Error(`the head is the ${head.section}`);
+  if (head.checked !== 'chorus') throw new Error(`the switcher shows ${head.checked} during the head`);
+  const moved = await page.evaluate(() => new Promise((done) => {
+    const started = Date.now();
+    const poll = setInterval(() => {
+      if (window.Engine.currentSection() === 'verse') { clearInterval(poll); done(true); }
+      else if (Date.now() - started > 30000) { clearInterval(poll); done(false); }
+    }, 100);
+  }));
+  if (!moved) throw new Error('the form never reached the solo');
+  await page.evaluate(() => new Promise((done) => requestAnimationFrame(() => requestAnimationFrame(done))));
+  await page.waitForTimeout(150);
+  const solo = await page.evaluate(() => ({
+    run: window.__runSig(), part: document.querySelector('#dockPart').textContent,
+    checked: document.querySelector('#sections [aria-checked=true]').dataset.value
+  }));
+  if (solo.checked !== 'verse') throw new Error('the switcher did not follow the form to the verse');
+  if (solo.run === head.run) throw new Error('the run did not follow the form to the verse');
+  if (solo.part.indexOf('Solo') !== 0) throw new Error(`transport reads "${solo.part}"`);
+  /* Asking for a section while the form plays leaves the form and loops it. */
+  await tap('.tab[data-tab="play"]');
+  await tap('#sections button[data-value="chorus"]');
+  await page.waitForTimeout(600);
+  const left = await page.evaluate(() => ({
+    span: window.Engine.span(), section: window.Engine.currentSection(),
+    playing: window.Engine.isPlaying(), cta: document.querySelector('#arrangeButtonText').textContent
+  }));
+  if (!left.playing) throw new Error('asking for a section stopped the transport');
+  if (left.span !== 64) throw new Error(`still on the form (${left.span} steps)`);
+  if (left.section !== 'chorus') throw new Error(`looping the ${left.section}`);
+  if (left.cta !== 'Play the arrangement') throw new Error(`the arrange button reads "${left.cta}"`);
+  await tap('#playButton');
+  await page.waitForTimeout(400);
 });
 
 /* ----------------------------------------------------------- library */

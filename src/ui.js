@@ -115,6 +115,14 @@
   }
   let tab = 'play';
   let mounted = null;          /* the Devices.mount updater for the live view */
+  /* Which of the song's two sections you are on — the verse or the chorus —
+     and which one the Play screen is drawing. They differ only while the
+     transport is between your asking and the top of the next pass, or while
+     the form is playing and deciding for itself: the screen draws what is
+     SOUNDING, because pads that light for a tune you cannot hear are wrong. */
+  let sectionId = 'verse';
+  let shownSection = 'verse';
+  let sectionsControl = null;
   let arrangement = null;
   let activeSection = null;
   /* Two different things called a section. `activeSection` is the one you are
@@ -201,6 +209,25 @@
     return song.key.nameForPc(midi) + Math.floor(midi / 12 - 1);
   }
 
+  /* The song as the section the Play screen is drawing: the same song, with
+     that section's notes where the chorus's would be. Everything that draws
+     one pass of the music reads from this rather than from the song. */
+  function shownSong() {
+    return C.section ? C.section(song, shownSection) : song;
+  }
+
+  function sectionLabel(id) {
+    const found = (song.sections || []).find((s) => s.id === id);
+    return found ? found.label : '';
+  }
+
+  /* Whether the song has anything on a part, in either of its sections. */
+  function hasTrack(id) {
+    const sections = song.sections && song.sections.length ? song.sections : [song];
+    const field = id === 'chords' ? 'chordTrack' : id;
+    return sections.some((s) => s[field] && s[field].length > 0);
+  }
+
   /* ============================================================ the song */
 
   function generate(options) {
@@ -231,10 +258,17 @@
     arrangement = global.Arrange ? global.Arrange.plan(song) : null;
     activeSection = null;
 
+    /* The new song has the same two sections, so the one you were on is the
+       one you are on — and it is what is drawn, because a regenerate restarts
+       the transport if it was running, so nothing is sounding for the screen
+       to be behind. */
+    if (!(song.sections || []).some((s) => s.id === sectionId)) sectionId = 'verse';
+    shownSection = sectionId;
+
     /* Before anything reads it. A song with no countermelody cannot be viewed
        on the Counter part, and everything below — the mutes solo applies, the
        colour the screen takes, the lane, the run — is derived from `part`. */
-    if (part === 'counter' && !(song.counter && song.counter.length)) part = 'melody';
+    if (part === 'counter' && !hasTrack('counter')) part = 'melody';
     app.dataset.part = part;
 
     /* The new song has its own sections, so whatever was soloed out by the old
@@ -273,6 +307,7 @@
     doc.title = `${song.title} — Downbeat`;
 
     keepingFocus(() => {
+      renderSections();
       renderParts();
       renderMix();
       renderPart();
@@ -375,6 +410,59 @@
     if (!tempoTouched) draft.bpm = null;
   }
 
+  /* ====================================================== the sections */
+
+  /* The verse or the chorus. A plain segmented control above the part
+     switcher: two things you can be on, and the parts under it are the parts
+     of that one. */
+  function renderSections() {
+    const box = $('#sections');
+    if (!box) return;
+    const list = song.sections || [];
+    box.hidden = list.length < 2;
+    box.innerHTML = list.map((s) =>
+      `<button type="button" role="radio" data-value="${s.id}" ` +
+      `aria-checked="${s.id === sectionId ? 'true' : 'false'}" tabindex="${s.id === sectionId ? 0 : -1}">` +
+      `${escapeHtml(s.label)}</button>`).join('') + '<i class="seg-thumb" aria-hidden="true"></i>';
+    sectionsControl = UI.segmented(box, (value) => setSection(value));
+    sectionsControl.select(sectionId);
+  }
+
+  /* Which section you are on. Stopped, it is immediate. While the loop plays,
+     the switch is taken at the top of the next pass — a sampler changes
+     pattern at the end of the pattern, and cutting to bar one of the chorus
+     from beat three of the verse is not a thing anyone asks for — and until
+     then the screen keeps drawing what is sounding, with the transport saying
+     what is coming. While the form plays, the form decides what is sounding,
+     so asking for a section is asking to leave the form and loop that one. */
+  function setSection(id, opts) {
+    if (!(song.sections || []).some((s) => s.id === id)) return;
+    const quiet = !!(opts && opts.silent);
+    sectionId = id;
+    if (sectionsControl) sectionsControl.select(id);
+    if (Engine.isPlaying()) {
+      if (arrangedOn) {
+        shownSection = id;
+        renderPart();
+        setArranged(false);
+        if (!quiet) announce(`${sectionLabel(id)}, back to the loop`);
+        return;
+      }
+      if (Engine.setSection(id)) {
+        /* The transport says what is coming; the bar readout is rewritten on
+           the next frame rather than the next bar. */
+        lastBar = -1;
+        syncTransportReadout();
+        if (!quiet) toast(`${sectionLabel(id)} from the top of the next pass`);
+        return;
+      }
+    }
+    if (shownSection !== id) { shownSection = id; renderPart(); }
+    lastBar = -1;
+    syncTransportReadout();
+    if (!quiet) announce(`${sectionLabel(id)} selected`);
+  }
+
   /* ========================================================= the parts */
 
   let partsControl = null;
@@ -382,7 +470,7 @@
 
   function renderParts() {
     const box = $('#parts');
-    const hasCounter = !!(song && song.counter && song.counter.length);
+    const hasCounter = !!(song && hasTrack('counter'));
     box.innerHTML = PARTS.map((p) => {
       /* Counter is dimmed when the song has no second line, but it is NOT
          disabled: a dead segment can only tell you that you cannot have the
@@ -393,14 +481,14 @@
          where there is nothing to go and get, so it stays selectable and its
          lane says why. */
       const off = (p.id === 'counter' && !hasCounter) ||
-        (p.id === 'drums' && !(song && song.drums && song.drums.length));
+        (p.id === 'drums' && !(song && hasTrack('drums')));
       return `<button type="button" role="radio" data-value="${p.id}" ` +
         `aria-checked="${p.id === part ? 'true' : 'false'}" tabindex="${p.id === part ? 0 : -1}"` +
         `${off ? ' data-off="true"' : ''}>${p.short}</button>`;
     }).join('') + '<i class="seg-thumb" aria-hidden="true"></i>';
 
     partsControl = UI.segmented(box, (value, button) => {
-      if (value === 'counter' && !(song.counter && song.counter.length)) {
+      if (value === 'counter' && !hasTrack('counter')) {
         draft.counter = true;
         regenerate('both');
         setPart('counter');
@@ -416,7 +504,7 @@
     if (!PARTS.some((p) => p.id === id)) return;
     /* The same guard stepPart applies. Landing on Counter with no second line
        draws an empty lane, an empty run and a faceplate with nothing lit. */
-    if (id === 'counter' && !(song.counter && song.counter.length)) return;
+    if (id === 'counter' && !hasTrack('counter')) return;
     part = id;
     app.dataset.part = id;
     if (partsControl) partsControl.select(id);
@@ -434,11 +522,7 @@
      — every combination is legal, including none of them. */
   function renderMix() {
     const box = $('#mix');
-    const has = (id) => {
-      if (id === 'counter') return !!(song.counter && song.counter.length);
-      if (id === 'drums') return !!(song.drums && song.drums.length);
-      return true;
-    };
+    const has = (id) => (id === 'counter' || id === 'drums' ? hasTrack(id) : true);
 
     /* Built once, then only ever updated. The five chips are the same five
        chips for the life of the app, and rebuilding them on every toggle would
@@ -509,7 +593,7 @@
   }
 
   function stepPart(direction) {
-    const usable = PARTS.filter((p) => p.id !== 'counter' || (song.counter && song.counter.length));
+    const usable = PARTS.filter((p) => p.id !== 'counter' || hasTrack('counter'));
     const index = usable.findIndex((p) => p.id === part);
     setPart(usable[(index + direction + usable.length) % usable.length].id);
   }
@@ -646,7 +730,7 @@
 
   function renderPart() {
     if (!song) return;
-    const view = Devices.build(song, part, device);
+    const view = Devices.build(shownSong(), part, device);
     mounted = Devices.mount(view, { stage: faceStage, sequence: runBox });
     runBox.classList.toggle('is-chords', part === 'chords');
 
@@ -677,7 +761,7 @@
       const voices = `${view.mapping.voices.length} voices`;
       return song.beatName ? `${song.beatName} · ${voices}` : voices;
     }
-    if (part === 'chords') return `${(song.spans || []).length} chords`;
+    if (part === 'chords') return `${(view.song.spans || []).length} chords`;
     const events = view.mapping.events || [];
     let off = 0;
     let up = 0;
@@ -750,10 +834,11 @@
   }
 
   function eventsFor(id) {
-    if (id === 'melody') return song.melody || [];
-    if (id === 'counter') return song.counter || [];
-    if (id === 'bass') return song.bass || [];
-    if (id === 'chords') return song.chordTrack || [];
+    const shown = shownSong();
+    if (id === 'melody') return shown.melody || [];
+    if (id === 'counter') return shown.counter || [];
+    if (id === 'bass') return shown.bass || [];
+    if (id === 'chords') return shown.chordTrack || [];
     return [];
   }
 
@@ -788,7 +873,7 @@
 
     /* Chord symbols along the top of the chord lane, one per span. */
     if (part === 'chords') {
-      (song.spans || []).forEach((s) => {
+      (shownSong().spans || []).forEach((s) => {
         html += `<span class="lane-chord" style="--x:${s.start / total}">${escapeHtml(s.chord.symbol)}</span>`;
       });
     }
@@ -796,7 +881,7 @@
   }
 
   function renderDrumLane() {
-    const events = song.drums || [];
+    const events = shownSong().drums || [];
     const used = G.DRUM_VOICES.filter((v) => events.some((e) => e.instrument === v.id));
     const total = song.totalSteps;
     /* A drum grid needs a readable step, and a sixteenth of a bar 96px wide is
@@ -847,7 +932,7 @@
   function laneDescription() {
     const label = PARTS.find((p) => p.id === part).label;
     if (part === 'drums') {
-      const used = G.DRUM_VOICES.filter((v) => (song.drums || []).some((e) => e.instrument === v.id));
+      const used = G.DRUM_VOICES.filter((v) => (shownSong().drums || []).some((e) => e.instrument === v.id));
       return `${label}: ${used.map((v) => v.label).join(', ')} over ${song.bars} bars.`;
     }
     const events = eventsFor(part);
@@ -874,7 +959,11 @@
       : off.length === 1 ? ` · ${off[0].label.toLowerCase()} off`
         : off.length ? ` · ${off.length} parts off`
           : (activeSection && activeSection.muted.length ? ' · ' + activeSection.name : '');
-    $('#dockPart').textContent = label + note;
+    /* The section first and then the part, the way the form reads while it
+       plays — "Chorus · Melody". On the bare loop it is the section that is
+       sounding, or the one you asked for while nothing is. */
+    const where = sectionLabel(shownSection);
+    $('#dockPart').textContent = (where ? `${where} · ` : '') + label + note;
     if (!Engine.isPlaying()) {
       /* What pressing play would give you, which is not the same length in the
          two modes — and the length is the whole difference between them. */
@@ -907,6 +996,7 @@
     if (arrangedOn && activeSection) clearAudition();
     Engine.start(song, {
       loop: loopOn,
+      section: sectionId,
       arrangement: arrangedOn ? arrangement : null,
       onStop: () => setLive(false)
     });
@@ -996,6 +1086,9 @@
     } else {
       releaseWakeLock();
       if (raf) { global.cancelAnimationFrame(raf); raf = 0; }
+      /* A switch that was waiting for a wrap that never came — the transport
+         stopped first, or was playing once — is taken now. */
+      if (shownSection !== sectionId) { shownSection = sectionId; renderPart(); }
       if (mounted) mounted.update(null);
       markLaneStep(-1);
       markSection(null);
@@ -1018,16 +1111,33 @@
     raf = 0;
     if (!Engine.isPlaying()) return;
     const position = Engine.position();
-    /* The faceplate, the lane and the bar dots are all drawings of the LOOP.
-       Playing the arrangement moves the playhead through thirteen passes of
-       that loop, so everything on the Play screen reads the position folded
-       back into one pass — otherwise the run stops lighting at bar five of a
-       ninety-six bar form. */
-    const inLoop = arrangedOn ? position % song.totalSteps : position;
+    /* Which section is sounding, and where this pass of it began. The
+       faceplate, the lane and the bar dots are all drawings of ONE PASS of
+       ONE SECTION. Playing the form moves the playhead through thirteen
+       passes of two of them, so everything on the Play screen reads the
+       position folded back into the pass — otherwise the run stops lighting
+       at bar five of a ninety-six bar form — and is drawn from the section
+       that is sounding, so that a chorus lights the chorus's pads. */
+    const pass = Engine.passAt ? Engine.passAt(position) : null;
+    if (pass && pass.section && pass.section !== shownSection) {
+      shownSection = pass.section;
+      /* The form decides its sections and the switcher follows it, so that
+         stopping leaves you on the section you were hearing. On the bare
+         loop this is the switch you asked for, arriving at the wrap. */
+      sectionId = pass.section;
+      if (sectionsControl) sectionsControl.select(pass.section);
+      renderPart();
+      lastStep = -1;
+      lastBar = -1;
+      lastSectionName = '';
+      syncTransportReadout();
+    }
+    const passSteps = pass && pass.steps ? pass.steps : song.totalSteps;
+    const inLoop = pass ? Math.max(0, position - pass.start) : position;
     const step = Math.floor(inLoop);
 
     if (mounted && step !== lastStep) { mounted.update(step); markLaneStep(step); lastStep = step; }
-    if (laneHead) laneHead.style.setProperty('--head', (inLoop / song.totalSteps).toFixed(4));
+    if (laneHead) laneHead.style.setProperty('--head', (inLoop / passSteps).toFixed(4));
     followLane(inLoop);
 
     const bar = Math.floor(inLoop / 16);
@@ -1035,9 +1145,12 @@
       lastBar = bar;
       const bars = $('#dockBars').children;
       for (let i = 0; i < bars.length; i++) bars[i].classList.toggle('on', i === bar);
+      /* A section switch waiting for the wrap is said here, where the tempo
+         usually is: "Bar 3 of 4 · Chorus next". */
+      const next = !arrangedOn && Engine.pendingSection ? Engine.pendingSection() : null;
       $('#dockPos').textContent = arrangedOn
         ? `Bar ${Math.floor(position / 16) + 1} of ${arrangement.totalBars} · ${song.bpm} BPM`
-        : `Bar ${Math.min(bar + 1, song.bars)} of ${song.bars} · ${song.bpm} BPM`;
+        : `Bar ${Math.min(bar + 1, song.bars)} of ${song.bars} · ${next ? sectionLabel(next) + ' next' : song.bpm + ' BPM'}`;
     }
     if (arrangedOn) {
       const here = Engine.sectionAt(position);
@@ -1378,11 +1491,18 @@
       const tracks = arrangement.tracks.map((t) =>
         `<i class="map-track${s.tracks.indexOf(t.id) >= 0 ? ' on' : ''}" style="--tk:var(--t-${t.id})"></i>`).join('');
       const playing = s.tracks.map((id) => (PARTS.find((pt) => pt.id === id) || {}).label).filter(Boolean);
+      /* Which song section this one is passes of, said where the name does
+         not already say it: "Verse 2" and "Last chorus" need no tag, "Bridge"
+         and "Intro" do. */
+      const plays = s.playsLabel ? s.playsLabel.toLowerCase() : '';
+      const tag = plays && s.name.toLowerCase().indexOf(plays) < 0
+        ? `<span class="map-sec-plays">${escapeHtml(plays)}</span>` : '';
       return `<button type="button" class="map-sec" data-section="${s.id}" style="--w:${s.bars}" ` +
-        `aria-pressed="false" aria-label="${escapeHtml(s.name)}, ${s.bars} bars. ` +
+        `aria-pressed="false" aria-label="${escapeHtml(s.name)}, ${s.bars} bars` +
+        `${plays ? ' of the ' + escapeHtml(plays) : ''}. ` +
         `${playing.length ? escapeHtml(playing.join(', ')) + '.' : 'Nothing plays.'} Activate to hear it.">` +
         `<span class="map-sec-name">${escapeHtml(s.name)}</span>` +
-        `<span class="map-sec-bars">${s.bars} bars</span>` +
+        `<span class="map-sec-bars">${s.bars} bars</span>${tag}` +
         `<span class="map-tracks">${tracks}</span></button>`;
     }).join('');
 
@@ -1402,7 +1522,7 @@
       `<span class="row-icon">${i + 1}</span>` +
       `<span class="row-text"><span class="row-title">${escapeHtml(s.name)} · ${s.bars} bars</span>` +
       `<span class="row-sub" style="white-space:normal">${escapeHtml(s.how)}</span>` +
-      `<span class="sr-only">Plays: ${s.tracks.length
+      `<span class="sr-only">${s.playsLabel ? 'Of the ' + escapeHtml(s.playsLabel.toLowerCase()) + '. ' : ''}Plays: ${s.tracks.length
         ? escapeHtml(s.tracks.map((id) => (PARTS.find((pt) => pt.id === id) || {}).label).filter(Boolean).join(', '))
         : 'nothing'}.</span></span>` +
       '<svg class="row-chevron" aria-hidden="true" focusable="false"><use href="#i-play"></use></svg></button>').join('');
@@ -1417,12 +1537,16 @@
   function toggleSection(id) {
     const section = arrangement.sections.find((s) => s.id === id);
     if (!section) return;
+    const already = activeSection && activeSection.id === id;
+    /* Hearing a section means hearing its own music — the verse's chords and
+       tune for a verse, the chorus's for a chorus — so the Play screen goes
+       to the song section this one is passes of, as well as to its mix. */
+    if (!already && section.plays) setSection(section.plays, { silent: true });
     /* Auditioning one section is the opposite request to playing all of them
        in order, so it is also how you get back to the loop. Nothing else has
        to carry a "leave arrangement mode" control, and the two states can
        never both be on screen claiming to be true. */
     if (arrangedOn) { setArranged(false); announce('Back to the loop'); }
-    const already = activeSection && activeSection.id === id;
     activeSection = already ? null : section;
     soloOn = false;
     $('#soloButton').setAttribute('aria-pressed', 'false');
@@ -1450,7 +1574,7 @@
     box.appendChild(actionRow('library', 'Save to library', 'Kept on this device', saveCurrent));
     box.appendChild(actionRow('link', 'Copy link', 'Rebuilds the sketch anywhere', copyLink));
     box.appendChild(actionRow('copy', 'Copy as text', 'Chords, key and tempo', copyText));
-    box.appendChild(actionRow('download', 'Download MIDI', 'Five parts, ready to drop in', downloadMidi));
+    box.appendChild(actionRow('download', 'Download MIDI', 'Verse then chorus, five parts each', downloadMidi));
   }
 
   function renderLibrary() {
@@ -1615,17 +1739,21 @@
     const out = [
       `${song.title} — Downbeat`,
       `${song.genre.label} · ${song.key.rootName} ${song.scaleName} · ${song.bpm} BPM · ${song.bars} bars`,
-      `Feel: ${(ENERGIES.find((e) => e.id === song.energy) || {}).label || song.energy}`,
-      '',
-      `Chords:   ${(song.spans || []).map((s) => s.chord.symbol).join(' | ')}`,
-      `Numerals: ${((song.progression || {}).chords || []).join(' | ')}`
+      `Feel: ${(ENERGIES.find((e) => e.id === song.energy) || {}).label || song.energy}`
     ];
-    const melody = line(song.melody);
-    const counter = line(song.counter);
-    const bass = line(song.bass);
-    if (melody) out.push('', 'Melody:  ' + melody);
-    if (counter) out.push('Counter: ' + counter);
-    if (bass) out.push('Bass:    ' + bass);
+    /* Each section written out whole, the verse first. */
+    (song.sections && song.sections.length ? song.sections : [song]).forEach((s) => {
+      out.push('');
+      if (s.label) out.push(`${s.label} — ${s.bars} bars`);
+      out.push(`Chords:   ${(s.spans || []).map((x) => x.chord.symbol).join(' | ')}`);
+      out.push(`Numerals: ${((s.progression || {}).chords || []).join(' | ')}`);
+      const melody = line(s.melody);
+      const counter = line(s.counter);
+      const bass = line(s.bass);
+      if (melody) out.push('Melody:  ' + melody);
+      if (counter) out.push('Counter: ' + counter);
+      if (bass) out.push('Bass:    ' + bass);
+    });
     const kit = G.DRUM_VOICES.filter((v) => (song.drums || []).some((e) => e.instrument === v.id));
     if (kit.length) out.push('Drums:   ' + kit.map((v) => v.label).join(', '));
     if (song.theory) out.push('', String(song.theory).replace(/<[^>]+>/g, ''));

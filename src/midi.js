@@ -1,6 +1,7 @@
 /* Downbeat — Standard MIDI File export.
    Hand-rolled format 1 bytes, no dependency. Five parts: melody,
-   countermelody, chords, bass, and drums on channel 10. */
+   countermelody, chords, bass, and drums on channel 10. The verse and then
+   the chorus, back to back, each marked. */
 (function (global) {
   'use strict';
 
@@ -80,39 +81,54 @@
 
   function build(song) {
     const patches = song.genre.patches || {};
-    const tickOf = (note) => Math.round((note.start !== undefined ? note.start : note.step) * TICKS_PER_STEP);
+    /* The verse, then the chorus, one after the other, with a marker at the
+       top of each — so a DAW shows the two as two and you can arrange from
+       there. A song from before there were two is one section long. */
+    const sections = song.sections && song.sections.length ? song.sections : [song];
 
-    // Track 0 carries tempo and metre only.
+    // Track 0 carries tempo, metre and the section markers.
     const microsecondsPerQuarter = Math.round(60000000 / song.bpm);
-    const conductor = track('Downbeat', [
+    const conductorEvents = [
       { tick: 0, order: 0, data: [0xff, 0x51, 0x03,
         (microsecondsPerQuarter >> 16) & 0xff,
         (microsecondsPerQuarter >> 8) & 0xff,
         microsecondsPerQuarter & 0xff] },
       { tick: 0, order: 1, data: [0xff, 0x58, 0x04, 4, 2, 24, 8] }
-    ]);
-
-    const melody = track('Melody', [programChange(0, patches.lead)]
-      .concat(noteEvents(song.melody, 0, tickOf, (n) => n.velocity)));
-
-    const counter = track('Countermelody', [programChange(3, patches.counter)]
-      .concat(noteEvents(song.counter || [], 3, tickOf, (n) => n.velocity)));
-
-    const chords = track('Chords', [programChange(1, patches.chord)]
-      .concat(noteEvents(song.chordTrack || [], 1, tickOf, (n) => n.velocity)));
-
-    const bass = track('Bass', [programChange(2, patches.bass)]
-      .concat(noteEvents(song.bass, 2, tickOf, (n) => n.velocity)));
-
+    ];
+    const melodyEvents = [programChange(0, patches.lead)];
+    const counterEvents = [programChange(3, patches.counter)];
+    const chordEvents = [programChange(1, patches.chord)];
+    const bassEvents = [programChange(2, patches.bass)];
     const drumEvents = [];
-    (song.drums || []).forEach((hit) => {
-      const key = DRUM_KEYS[hit.instrument];
-      if (!key) return;
-      const start = Math.round(hit.step * TICKS_PER_STEP);
-      const velocity = Math.max(1, Math.min(127, Math.round(hit.velocity * 127)));
-      drumEvents.push({ tick: start, order: 1, data: [0x99, key, velocity] });
-      drumEvents.push({ tick: start + TICKS_PER_STEP / 2, order: 0, data: [0x89, key, 0x40] });
+
+    let offset = 0;
+    sections.forEach((section) => {
+      const at = offset;
+      const tickOf = (note) => Math.round(((note.start !== undefined ? note.start : note.step) + at) * TICKS_PER_STEP);
+      if (section.label) {
+        const name = text(section.label);
+        conductorEvents.push({ tick: at * TICKS_PER_STEP, order: 2, data: [0xff, 0x06, name.length].concat(name) });
+      }
+      melodyEvents.push.apply(melodyEvents, noteEvents(section.melody || [], 0, tickOf, (n) => n.velocity));
+      counterEvents.push.apply(counterEvents, noteEvents(section.counter || [], 3, tickOf, (n) => n.velocity));
+      chordEvents.push.apply(chordEvents, noteEvents(section.chordTrack || [], 1, tickOf, (n) => n.velocity));
+      bassEvents.push.apply(bassEvents, noteEvents(section.bass || [], 2, tickOf, (n) => n.velocity));
+      (section.drums || []).forEach((hit) => {
+        const key = DRUM_KEYS[hit.instrument];
+        if (!key) return;
+        const start = Math.round((hit.step + at) * TICKS_PER_STEP);
+        const velocity = Math.max(1, Math.min(127, Math.round(hit.velocity * 127)));
+        drumEvents.push({ tick: start, order: 1, data: [0x99, key, velocity] });
+        drumEvents.push({ tick: start + TICKS_PER_STEP / 2, order: 0, data: [0x89, key, 0x40] });
+      });
+      offset += section.totalSteps;
     });
+
+    const conductor = track('Downbeat', conductorEvents);
+    const melody = track('Melody', melodyEvents);
+    const counter = track('Countermelody', counterEvents);
+    const chords = track('Chords', chordEvents);
+    const bass = track('Bass', bassEvents);
     const drums = track('Drums', drumEvents);
 
     const header = chunk('MThd', [
