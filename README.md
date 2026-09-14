@@ -327,9 +327,13 @@ current firmware:
   part under the pads as possible, counting the verse and the chorus together,
   so a note is the same pad in both. The K.O. II has no harmonic minor, melodic
   minor or phrygian dominant, so sketches in those keys fall back to `12T` and
-  the pads run chromatically. Also the TIMING-plus-pads arpeggio for broken
-  chords and a pad-per-voice kit map for the drum track. Notes that fall
-  outside the chosen scale are flagged rather than silently dropped.
+  the pads run chromatically. So does any part that reaches outside its scale
+  — the raised seventh under a minor key's V, a blue note, a chromatic
+  approach, a walking bass leaning onto the next root — because a scale-mode
+  grid has no pad for those at any octave; the set-up names the notes that
+  made the call and, for the chords, the chord that wants each. Also the
+  TIMING-plus-pads arpeggio for broken chords and a pad-per-voice kit map for
+  the drum track.
 - **M-VAVE FM-1** (firmware V15) — the 27-key F3–G5 silicone keybed, with
   the OCT −/+ shift (and its LED blink code) computed so the whole part fits
   under the fingers, POLY for chord stacks, MONO and V15's glide for bass
@@ -354,8 +358,11 @@ the audible range, in every genre, on both units, the pad named plus its shift
 has to equal the note.
 
 A note the scale grid has no pad for *at any* shift — a chromatic passing note
-against a scale mode — is a different fact with a different answer, and still
-reads `OFF`.
+against a scale mode — is a different fact with a different answer: the part
+is played on `12T` instead, where every note has a pad, so nothing Downbeat
+writes is ever off the K.O. II's grid. `OFF` stays as the honest reading for a
+hole that somehow remains, and `tools/checks/drive.mjs` sweeps every genre,
+scale and section to assert it never shows.
 
 ## Controls
 

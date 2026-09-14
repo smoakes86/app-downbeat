@@ -115,6 +115,63 @@ await check('every note lands on a pad that plays it', async () => {
   if (!bad.shifted || !bad.onGrid) throw new Error('the sweep never saw both states');
 });
 
+/* And the grid a note lands on is one the part can be played on at all. The
+   composer writes outside the scale on purpose — the raised seventh under a
+   minor key's V, blue notes, chromatic approaches, a walking bass leaning
+   onto the next root — and a scale-mode grid has no pad for those at any
+   shift. The mapping's answer is to hand such a part 12T, so the claim here
+   is total: nothing Downbeat writes, in any genre, scale, key or section, is
+   off the K.O. II's grid, and the run never shows a dead chip. Swept over
+   seeds rather than over the song on screen, because the song on screen
+   might happen to be diatonic. */
+await check('nothing the composer writes is off the K.O. II grid', async () => {
+  const result = await page.evaluate(() => {
+    const off = [];
+    let checked = 0;
+    let chromatic = 0;
+    let onScale = 0;
+    let explained = 0;
+    window.Genres.order.forEach((g) => {
+      window.Genres.scalesFor(g).forEach((scale) => {
+        [0, 4, 9].forEach((keyPc) => {
+          for (let seed = 1; seed <= 3; seed++) {
+            const song = window.Compose.compose({
+              genre: g, scale, keyPc, counter: true,
+              harmonySeed: seed * 7919 + keyPc, melodySeed: seed * 104729 + keyPc, drumSeed: seed
+            });
+            song.sections.forEach((sec) => {
+              const shown = window.Compose.section(song, sec.id);
+              ['melody', 'counter', 'chords', 'bass'].forEach((track) => {
+                const built = window.Devices.build(shown, track, 'ep133');
+                const map = built.mapping;
+                if (map.scale) onScale++; else chromatic++;
+                const midis = map.events.map((e) => e.midi);
+                if (track === 'chords') shown.spans.forEach((s) => midis.push(...s.voicing));
+                midis.forEach((m) => {
+                  checked++;
+                  if (!map.idFor(m)) off.push(`${g}/${scale}/${keyPc}/${seed} ${sec.id} ${track} midi ${m}`);
+                });
+                if (/is-off|out of reach/.test(built.chips)) off.push(`${g}/${scale} ${track}: the run shows a dead chip`);
+                /* A part on 12T says so, and a part on 12T whose scale the
+                   unit does have says which notes cost it the scale grid. */
+                const step = built.setup.find((s) => /12T/.test(s[0]));
+                if (!map.scale && !step) off.push(`${g}/${scale} ${track}: on 12T with no step saying so`);
+                if (!map.scale && map.offered) {
+                  if (!step || !/has no pad for at any octave/.test(step[1])) off.push(`${g}/${scale} ${track}: 12T with no reason given`);
+                  else explained++;
+                }
+              });
+            });
+          }
+        });
+      });
+    });
+    return { off: off.slice(0, 5), total: off.length, checked, chromatic, onScale, explained };
+  });
+  if (result.total) throw new Error(`${result.total} problems, e.g. ${result.off[0]}`);
+  if (!result.chromatic || !result.onScale || !result.explained) throw new Error('the sweep never saw both grids');
+});
+
 await check('a shifted chip lights its pad and the key that reaches it', async () => {
   /* Hunt for a song that actually needs a shift rather than asserting on one
      that might not: the mapping picks the octave that fits the most notes, so

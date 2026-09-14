@@ -178,15 +178,36 @@
      bottom left. The root is not the first pad: it sits on the pad marked "1",
      three degrees up the run, so the three pads underneath it play the degrees
      below the root. Notes past the twelfth pad belong to the next octave (hold
-     KEYS and press +); notes outside the scale have no pad at all. */
+     KEYS and press +); notes outside the scale have no pad at all, which is
+     what decides between the scale grid and 12T below. */
   function epMapping(song, trackId) {
     const events = pitchedEvents(song, trackId);
-    const scale = EP_SCALES[song.scaleName] || null;
     const rootPc = song.key.scalePcs[0];
-    const pcs = scale ? song.key.scalePcs : Array.from({ length: 12 }, (_, i) => mod(rootPc + i, 12));
-    const inScale = (m) => pcs.indexOf(mod(m, 12)) >= 0;
-
     const pool = songMaterial(song, trackId);
+
+    /* Which grid. The scale grid is the one to want — twelve pads of a
+       seven-note scale span nearly two octaves, so most of a part sits under
+       the fingers with no shifting at all — but it only has pads for the
+       scale, and the composer does not stop at the scale: the V of a minor
+       key wants the raised seventh, blues wants its flat fifth, jazz and
+       gospel slide into strong beats from a semitone away, a walking bass
+       leans onto the next root from below. No amount of octave shifting puts
+       any of those under a scale-mode grid. The unit's own answer to
+       chromatic music is 12T, where every note has a pad and the shift is the
+       only cost, so a part that reaches outside its scale is handed 12T
+       rather than a grid with holes in it. Decided over the whole song, like
+       the octave, so the verse and the chorus are played on one setting; and
+       per part, so a chromatic bass line does not cost the tune its grid. */
+    const offered = EP_SCALES[song.scaleName] || null;
+    const scalePcs = song.key.scalePcs;
+    const outside = [];
+    pool.forEach((m) => {
+      const pc = mod(m, 12);
+      if (scalePcs.indexOf(pc) < 0 && outside.indexOf(pc) < 0) outside.push(pc);
+    });
+    const scale = offered && !outside.length ? offered : null;
+    const pcs = scale ? scalePcs : Array.from({ length: 12 }, (_, i) => mod(rootPc + i, 12));
+    const inScale = (m) => pcs.indexOf(mod(m, 12)) >= 0;
 
     /* The twelve pads for a given root: walk down the scale to find where the
        run starts, then back up filling every pad. */
@@ -230,9 +251,11 @@
        not the same thing: twelve pads of a seven-note scale span nearly two
        octaves, so a bank shift would land you on the wrong pad by a third.
 
-       Notes outside the scale still have no pad, and that is a different
-       fact with a different answer — no amount of octave shifting puts a
-       chromatic passing note under a scale-mode grid. Those stay OFF. */
+       A note outside the scale would have no pad, and no octave shift would
+       give it one — which is why a part with any such note is on 12T by now
+       (see above), where nothing is outside. The null stays as the honest
+       answer for a hole that somehow remains: it reads OFF on the run rather
+       than pretending to be a pad, and the checks assert it never shows. */
     const top = padNotes.length === 12 ? padNotes[11] : null;
     const start = padNotes.length ? padNotes[0] : root;
     const idFor = (midi) => {
@@ -255,6 +278,11 @@
 
     return {
       events, idFor, padNotes, root, start, scale,
+      /* Why the grid is what it is: the scale the unit offers for this song,
+         if any, and the pitch classes this part plays that it has no pad for.
+         Both empty on a scale grid; the set-up reads them to say which notes
+         cost the part its scale. */
+      offered, outside,
       scaleCode: scale ? scale.code : EP_CHROMATIC.code,
       scaleLabel: scale ? scale.label : EP_CHROMATIC.label,
       keyCode: String(320 + mod(rootPc, 12))
@@ -818,6 +846,36 @@
 
   /* ------------------------------------------------------- setup recipes */
 
+  /* The sentence that explains 12T on a part whose scale the unit does have:
+     which notes fall outside it and, for the chords, which chord asks for
+     each — so the reason can be checked against the run rather than taken on
+     trust. The chord named is the first in the song to want the note; the
+     verse's chords count, because the grid is chosen over both sections. */
+  function outsideText(song, trackId, mapping) {
+    const name = (pc) => esc(song.key.nameForPc(pc));
+    const chordFor = (pc) => {
+      let found = null;
+      sectionsOf(song).forEach((s) => {
+        if (!found) found = (s.spans || []).find((span) => span.chord.pcs.indexOf(pc) >= 0) || null;
+      });
+      return found ? found.chord.symbol : null;
+    };
+    const items = mapping.outside.map((pc) => {
+      const chord = trackId === 'chords' ? chordFor(pc) : null;
+      return chord ? `${name(pc)} in ${esc(chord)}` : name(pc);
+    });
+    const list = items.length > 1
+      ? items.slice(0, -1).join(', ') + ' and ' + items[items.length - 1]
+      : items[0];
+    const who = {
+      melody: 'The tune reaches for',
+      counter: 'The second line reaches for',
+      chords: 'The chords want',
+      bass: 'The bass line reaches for'
+    }[trackId] || 'This part reaches for';
+    return `${who} ${list}, which ${esc(song.key.rootName)} ${mapping.offered.label} has no pad for at any octave — so leave the scale on <b>310</b> (12T). The pads run chromatically and every note has a pad.`;
+  }
+
   function epSetup(song, trackId, mapping) {
     const keyName = song.key.rootName;
     if (trackId === 'drums') {
@@ -838,13 +896,19 @@
         : up
           ? 'A few notes sit an octave up — hold <b>keys</b> and tap <b>+</b> when you see the ↑ marker. The chip still names the pad you press.'
           : 'A few notes sit an octave down — hold <b>keys</b> and tap <b>−</b> when you see the ↓ marker. The chip still names the pad you press.');
+    /* Three answers, because there are three facts. The unit has the scale
+       and the part sits in it: type the codes. The unit has the scale but the
+       part reaches outside it: 12T, and say which notes made the call. The
+       unit does not have the scale at all: 12T, and say so. */
     const scaleLine = mapping.scale
       ? `In system settings, enter <b>${mapping.scaleCode}</b> for ${mapping.scaleLabel}, then <b>${mapping.keyCode}</b> for the key of ${esc(keyName)}. The pads then run ${esc(keyName)} ${mapping.scaleLabel} instead of chromatically.`
-      : `${esc(song.scaleName)} isn’t one of the K.O. II’s scales, so leave it on <b>310</b> (12T) — the pads run chromatically and every note is still reachable.`;
+      : mapping.offered && mapping.outside && mapping.outside.length
+        ? outsideText(song, trackId, mapping)
+        : `${esc(song.scaleName)} isn’t one of the K.O. II’s scales, so leave it on <b>310</b> (12T) — the pads run chromatically and every note is still reachable.`;
     const steps = [
       [`Pick a ${trackId === 'bass' ? 'bass' : 'melodic'} sound`, `Select its pad${trackId === 'bass' ? ' (group B is the usual home for bass)' : ''} and press <b>keys</b> — the sound spreads across all 12 pads.`],
       [mapping.scale ? `Set the scale and key` : 'Leave the scale on 12T', scaleLine],
-      ['Put the root on pad 1', `Hold <b>keys</b> and press <b>−</b>/<b>+</b> until pad <b>1</b> plays ${esc(noteName(song, mapping.root))}. That is where the root sits by default, with <b>.</b> <b>0</b> <b>enter</b> underneath it playing the degrees below.${octNote}`]
+      ['Put the root on pad 1', `Hold <b>keys</b> and press <b>−</b>/<b>+</b> until pad <b>1</b> plays ${esc(noteName(song, mapping.root))}. That is where the root sits by default, with <b>.</b> <b>0</b> <b>enter</b> underneath it playing the ${mapping.scale ? 'degrees' : 'three semitones'} below.${octNote}`]
     ];
     if (trackId === 'chords') {
       steps.push(['Play each stack together', 'Press every pad in a card at once. For a broken-chord feel, OS 2.5 will do it for you: hold <b>timing</b> and press the pads to arpeggiate — the sample has to be set to oneshot or legato (<b>shift</b> + <b>sound</b>) for that to work.']);
