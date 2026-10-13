@@ -1,7 +1,7 @@
 /* Downbeat — saved sketches.
 
    A generated song is fully determined by its genre, key, scale, energy,
-   length, tempo and the two seeds, so a save is that recipe rather than a
+   length, tempo, its seeds and the engine that wrote it, so a save is that recipe rather than a
    dump of every note. It stays small enough to sit in a URL, which is what
    makes a sketch shareable as well as storable. */
 (function (global) {
@@ -38,7 +38,7 @@
      replay the same choices, not the same answers. */
   function recipeOf(song) {
     const opts = song.opts || {};
-    return {
+    const recipe = {
       v: 1,
       g: song.genreId,
       k: song.key.rootPc,
@@ -55,6 +55,11 @@
       d: song.drumSeed,
       n: song.title || ''
     };
+    /* Which engine wrote it. Only written from engine 2 on, so a sketch from
+       engine 1 encodes to exactly the bytes it always did — the same link,
+       and the library's duplicate check still recognises it. */
+    if (song.engine && song.engine > 1) recipe.x = song.engine;
+    return recipe;
   }
 
   /* The options `Compose.compose` needs to rebuild that exact song. */
@@ -77,7 +82,11 @@
       drumSeed: recipe.d === undefined || recipe.d === null || recipe.d === ''
         ? (Number(recipe.h) ^ 0xc2b2ae35) >>> 0
         : Number(recipe.d),
-      title: recipe.n || ''
+      title: recipe.n || '',
+      /* No engine named means engine 1: every recipe from before there was a
+         second engine. Composing it on the current one would hand back a
+         different song under the same link. */
+      engine: recipe.x === undefined || recipe.x === null || recipe.x === '' ? 1 : Number(recipe.x)
     };
     // An empty scale means the song was generated on "Pick for me".
     if (recipe.s) opts.scale = recipe.s;

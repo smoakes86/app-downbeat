@@ -903,6 +903,61 @@ await check('a song has a verse and a chorus, and the chorus is the loop it alwa
   if (bad.length) throw new Error(bad.join('; '));
 });
 
+/* ------------------------------------------------------- the engines
+
+   A recipe is seeds, and seeds replay only against the engine that rolled
+   them. A recipe with no engine in it is from engine 1 and must come back
+   on engine 1, byte for byte; a new song is written on the current engine
+   and says so. */
+await check('a sketch replays on the engine that wrote it', async () => {
+  const out = await page.evaluate(() => {
+    const L = window.Library;
+    const C = window.Compose;
+    const wrong = [];
+    const legacy = { v: 1, g: 'gospel', k: 5, s: '', e: 'flow', b: 8, t: 88, c: 1, h: 4242, m: 999, d: 77, n: 'Old' };
+    const opts = L.optionsOf(legacy);
+    if (opts.engine !== 1) wrong.push(`a recipe with no engine reads as engine ${opts.engine}`);
+    const old = C.compose(opts);
+    const pinned = C.compose(Object.assign({}, opts, { engine: 1 }));
+    const notes = (s) => JSON.stringify(s.sections.map((x) => [x.melody, x.bass, x.chordTrack, x.drums]));
+    if (notes(old) !== notes(pinned)) wrong.push('an engine-1 recipe does not compose as engine 1');
+    old.opts = opts; old.title = 'Old';
+    if (L.encode(L.recipeOf(old)) !== L.encode(legacy)) wrong.push('re-saving an engine-1 sketch changes its link');
+    const fresh = C.compose({ genre: 'pop' });
+    fresh.opts = { genre: 'pop' };
+    const recipe = L.recipeOf(fresh);
+    if (fresh.engine !== C.ENGINE || recipe.x !== C.ENGINE) wrong.push(`a new song is engine ${fresh.engine}, its recipe says ${recipe.x}`);
+    if (notes(C.compose(L.optionsOf(recipe))) !== notes(fresh)) wrong.push('a new song does not come back from its recipe');
+    return wrong;
+  });
+  if (out.length) throw new Error(out.join('; '));
+});
+
+/* Variety is the point of engine 2, so it is asserted rather than hoped for:
+   thirty songs in one genre should not share one left hand, one bass player
+   or one set of changes. */
+await check('a genre does not write the same band twice', async () => {
+  const out = await page.evaluate(() => {
+    const bad = [];
+    window.Genres.order.forEach((g) => {
+      const comping = new Set(); const bass = new Set(); const changes = new Set(); const beats = new Set();
+      for (let i = 0; i < 30; i++) {
+        const s = window.Compose.compose({ genre: g, bars: 4, harmonySeed: i * 7919 + 1, melodySeed: i * 31 + 2, drumSeed: i * 977 + 3 });
+        s.sections.forEach((sec) => {
+          comping.add(sec.comping); bass.add(sec.bassStyle); beats.add(sec.beat.name);
+          changes.add(sec.spans.map((sp) => sp.chord.symbol + '@' + sp.start).join(' '));
+        });
+      }
+      if (comping.size < 3) bad.push(`${g}: ${comping.size} comping patterns`);
+      if (bass.size < 3) bad.push(`${g}: ${bass.size} bass lines`);
+      if (changes.size < 15) bad.push(`${g}: ${changes.size} sets of changes in 60 sections`);
+      if (g !== 'ambient' && beats.size < 5) bad.push(`${g}: ${beats.size} beats`);
+    });
+    return bad.slice(0, 6);
+  });
+  if (out.length) throw new Error(out.join('; '));
+});
+
 await check('the verse sits under the chorus, rests more and has its own changes', async () => {
   const out = await page.evaluate(() => {
     let lower = 0; let sparer = 0; let n = 0; let ownChords = 0;
@@ -1080,7 +1135,11 @@ await check('a louder section is played louder', async () => {
         const from = sec.start * 16;
         return {
           name: sec.name, intensity: sec.intensity,
-          vel: avg(laid.events.filter((e) => e.track === 'drums' && !e.fill
+          /* Ghosts left out: they are quiet wherever they fall, and a quiet
+             section drops them on purpose — which raised its AVERAGE while
+             every hit in it got softer, so a ghost-heavy beat read its
+             outro as louder than its build. */
+          vel: avg(laid.events.filter((e) => e.track === 'drums' && !e.fill && !e.ghost
             && e.step >= from && e.step < from + sec.bars * 16).map((e) => e.velocity))
         };
       }).filter((r) => r.vel > 0).sort((a, b) => a.intensity - b.intensity);

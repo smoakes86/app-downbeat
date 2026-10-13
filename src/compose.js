@@ -58,11 +58,30 @@
 
   const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
 
+  /* Which engine writes a new song. A saved sketch is a recipe of seeds, and
+     seeds replay only against the engine that rolled them, so the engine is
+     part of the recipe: a sketch written on engine 1 is composed on engine 1
+     for ever, note for note, and everything engine 2 adds is behind a check
+     for it. Engine 2 is the one that chooses — between comping patterns,
+     bass lines, voicings, substitutions, beats, fills, motif developments
+     and ways to write a second line — where engine 1 had one answer each. */
+  const ENGINE = 2;
+  const moreOf = (genre) => genre.more || {};
+
+  /* Draw from a list that leans toward its front: the first entry is the
+     genre's usual answer and is drawn about a third of the time, and each one
+     after it a little less often than the one before. */
+  function leanPick(rng, list) {
+    if (!list || !list.length) return null;
+    return list[Math.min(list.length - 1, Math.floor(-Math.log(1 - rng.next()) * 2.2))];
+  }
+
   /* -------------------------------------------------------------- harmony */
 
-  function pickProgression(genre, scaleName, bars, rng) {
-    const inScale = genre.progressions.filter((p) => p.scale === scaleName);
-    const pool = inScale.length ? inScale : genre.progressions;
+  function pickProgression(genre, scaleName, bars, rng, extra) {
+    const all = extra && extra.length ? genre.progressions.concat(extra) : genre.progressions;
+    const inScale = all.filter((p) => p.scale === scaleName);
+    const pool = inScale.length ? inScale : all;
     if (bars === 'auto') return rng.pick(pool);
     const exact = pool.filter((p) => p.chords.length === bars);
     if (exact.length) return rng.pick(exact);
@@ -74,7 +93,7 @@
   /* Expand a progression into per-bar chord spans, honouring the "ii7|V7"
      notation for two chords sharing a bar, and repeating the loop if the user
      asked for more bars than the progression holds. */
-  function buildChords(progression, key, genre, bars, rng) {
+  function buildChords(progression, key, genre, bars, voicing) {
     const withSeventh = genre.extensions === 'sevenths';
     const natural = progression.chords.length;
     const totalBars = bars === 'auto' ? natural : bars;
@@ -100,13 +119,217 @@
     const bassRange = genre.bassRange || (genre.bass === 'sub808' ? [28, 43] : [36, 50]);
     let prev = null;
     spans.forEach((span) => {
-      span.voicing = T.voiceChord(span.chord, prev, genre.voicing);
+      span.voicing = T.voiceChord(span.chord, prev, voicing || genre.voicing);
       if (span.voicing.length) prev = span.voicing;
       span.bassMidi = T.bassPitch(span.chord.bassPc, bassRange[0], bassRange[1]);
       span.rootMidi = T.bassPitch(span.chord.rootPc, bassRange[0], bassRange[1]);
     });
 
     return { spans, totalBars };
+  }
+
+  /* ------------------------------------------------------ reharmonisation
+
+     Engine 2 does not play a progression as written. It plays it the way a
+     player who knows the genre would, which means reaching for the things
+     players reach for: a secondary dominant into the chord that follows, a
+     tritone substitute in place of a V7, a suspension that resolves inside
+     the bar, a turnaround in the last bar, a passing diminished, the minor iv
+     after the IV, the backdoor ii–V, a slash chord that walks the bass, an
+     added ninth. Each genre says how readily it does each one, so a trap
+     loop stays plain and a gospel one rarely does.
+
+     Everything is written back as roman numerals in the same notation the
+     genre tables use — `ii7|V7` for two chords in one bar — so the result is
+     parsed, voiced and described exactly like a hand-written progression,
+     and a substitution that fails to parse is simply not made. */
+  const NUMERAL_RE = /^(b|#)?([ivIV]+)/;
+  const ROMAN_UP = ['I', 'II', 'III', 'IV', 'V', 'VI', 'VII'];
+
+  function reharmonise(chords, weights, key, genre, rng) {
+    const out = chords.slice();
+    const sevenths = genre.extensions === 'sevenths';
+    const major = key.flavour !== 'minor';
+    const parse = (token) => T.parseChord(String(token).split('|')[0], key, { withSeventh: sevenths });
+    const lastOf = (token) => T.parseChord(String(token).split('|').pop(), key, { withSeventh: sevenths });
+    const degreeOf = (chord) => (chord ? mod(chord.rootPc - key.rootPc, 12) : null);
+    const split = (token) => String(token).indexOf('|') >= 0;
+    const plain = (token) => !split(token) && String(token).indexOf('/') < 0;
+    /* A numeral for a root a given number of semitones above the tonic, on a
+       given degree of the scale — with whatever accidental this mode needs.
+       bVII is VII in a minor key, and II is bII in phrygian. */
+    const numeral = (degree, semis, upper) => {
+      const diff = mod(semis - key.scale.steps[degree], 12);
+      const accidental = diff === 11 ? 'b' : diff === 1 ? '#' : diff === 0 ? '' : null;
+      if (accidental === null) return null;
+      const name = ROMAN_UP[degree];
+      return accidental + (upper ? name : name.toLowerCase());
+    };
+    const n = out.length;
+    const wants = (name) => rng.chance(weights[name] || 0);
+    const pickIndex = (test) => {
+      const found = [];
+      for (let i = 0; i < n; i++) if (test(i)) found.push(i);
+      return found.length ? rng.pick(found) : -1;
+    };
+    const valid = (token) => String(token).split('|').every((part) => !!T.parseChord(part, key, { withSeventh: sevenths }));
+    const set = (i, token) => { if (token && valid(token)) out[i] = token; };
+    const next = (i) => out[(i + 1) % n];
+    const isDominant = (chord) => chord && ['dom7', 'dom9', 'dom13', 'dom7b9', 'dom7s9', 'alt'].indexOf(chord.type) >= 0;
+
+    /* Colour: an added ninth or a sus2 on a triad, a ninth on a seventh. */
+    if (wants('colour')) {
+      const count = rng.int(1, 2);
+      for (let c = 0; c < count; c++) {
+        const i = pickIndex((j) => plain(out[j]) && /^(b|#)?[ivIV]+(maj7|7)?$/.test(out[j]));
+        if (i < 0) break;
+        const token = out[i];
+        const chord = parse(token);
+        if (!chord) continue;
+        const base = NUMERAL_RE.exec(token)[0];
+        const minorish = base === base.toLowerCase();
+        let options;
+        if (/maj7$/.test(token)) options = [base + 'maj9'];
+        else if (/7$/.test(token)) options = minorish ? [base + '9', base + '11'] : [base + '9', base + '13'];
+        else if (chord.type === 'dim' || chord.type === 'aug') options = [];
+        else if (minorish) options = [base + 'm(add9)', base + '7', base + 'sus2'];
+        else options = [base + 'add9', base + 'sus2', base + (degreeOf(chord) === 7 ? '7' : 'maj7')];
+        /* Colour, not a change of key: the note it adds has to be one the
+           key already has, so iii does not grow an F sharp in C. */
+        const inKey = (symbol) => {
+          const coloured = T.parseChord(symbol, key, { withSeventh: sevenths });
+          return coloured && coloured.pcs.every((pc) => chord.pcs.indexOf(pc) >= 0 || key.scalePcs.indexOf(pc) >= 0);
+        };
+        options = options.filter(inKey);
+        if (options.length) set(i, rng.pick(options));
+      }
+    }
+
+    /* Relative substitution: I for its vi, IV for its ii, away from the ends. */
+    if (major && wants('relative') && n >= 4) {
+      const i = pickIndex((j) => j > 0 && j < n - 1 && (out[j] === 'I' || out[j] === 'IV'));
+      if (i >= 0) set(i, out[i] === 'I' ? rng.pick(['vi', 'iii']) : 'ii');
+    }
+
+    /* A slash chord that turns the bass into a line: I/3 on the way to IV or
+       ii, V/3 stepping down to vi, i/5 leaning onto VI. */
+    if (wants('inversion')) {
+      const i = pickIndex((j) => {
+        if (!plain(out[j]) || j === n - 1) return false;
+        const here = degreeOf(parse(out[j]));
+        const there = degreeOf(parse(next(j)));
+        return (here === 0 && (there === 5 || there === 2)) || (here === 7 && there === 9) || (here === 0 && there === 8);
+      });
+      if (i >= 0) {
+        const here = degreeOf(parse(out[i]));
+        const there = degreeOf(parse(next(i)));
+        const base = NUMERAL_RE.exec(out[i])[0];
+        if (here === 7) set(i, base + '/3');
+        else if (there === 8) set(i, base + '|' + base + '/5');
+        else set(i, base + '|' + base + '/3');
+      }
+    }
+
+    /* IV, then iv, then home: the minor plagal. */
+    if (major && wants('minorIV')) {
+      const i = pickIndex((j) => out[j] === 'IV' && degreeOf(parse(next(j))) === 0);
+      if (i >= 0) set(i, 'IV|iv');
+    }
+
+    /* A suspension on the dominant, resolved in the same bar. */
+    if (wants('sus')) {
+      const i = pickIndex((j) => out[j] === 'V' || out[j] === 'V7');
+      if (i >= 0) set(i, out[i] === 'V' ? 'Vsus4|V' : 'V7sus4|V7');
+    }
+
+    /* A secondary dominant in the back half of the bar before its target. */
+    if (wants('secondary')) {
+      const i = pickIndex((j) => {
+        if (j === 0 || !plain(out[j]) || split(out[j - 1])) return false;
+        const target = parse(out[j]);
+        const degree = degreeOf(target);
+        if (degree === 0 || degree === null || target.type === 'dim' || target.type === 'm7b5') return false;
+        return NUMERAL_RE.test(out[j]);
+      });
+      if (i >= 0) set(i - 1, out[i - 1] + '|V7/' + NUMERAL_RE.exec(out[i])[0]);
+    }
+
+    /* The tritone substitute: a V7 that resolves home becomes bII7. */
+    if (wants('tritone')) {
+      const sub = numeral(1, 1, true);
+      const candidates = [];
+      out.forEach((token, i) => {
+        const parts = String(token).split('|');
+        parts.forEach((part, p) => {
+          const following = p + 1 < parts.length ? parts[p + 1] : String(next(i)).split('|')[0];
+          const chord = T.parseChord(part, key, { withSeventh: sevenths });
+          const target = T.parseChord(following, key, { withSeventh: sevenths });
+          if (isDominant(chord) && !chord.secondary && degreeOf(chord) === 7 && degreeOf(target) === 0) candidates.push([i, p]);
+        });
+      });
+      if (sub && candidates.length) {
+        const [i, p] = rng.pick(candidates);
+        const parts = String(out[i]).split('|');
+        parts[p] = sub + (rng.chance(0.5) ? '7' : '9');
+        set(i, parts.join('|'));
+      }
+    }
+
+    /* The backdoor: iv7 to bVII7 instead of the V7 that goes home. */
+    if (wants('backdoor')) {
+      const iv = numeral(3, 5, false);
+      const flatSeven = numeral(6, 10, true);
+      const i = pickIndex((j) => plain(out[j]) && degreeOf(parse(out[j])) === 7 && degreeOf(parse(next(j))) === 0);
+      if (i >= 0 && iv && flatSeven) set(i, iv + '7|' + flatSeven + '7');
+    }
+
+    /* A passing diminished: I to #i°7 to ii, or IV to #iv°7 to V. */
+    if (wants('passingDim')) {
+      const i = pickIndex((j) => {
+        if (!plain(out[j])) return false;
+        const here = degreeOf(parse(out[j]));
+        const there = degreeOf(parse(next(j)));
+        return (here === 0 && there === 2) || (here === 5 && there === 7);
+      });
+      if (i >= 0) {
+        const here = degreeOf(parse(out[i]));
+        const dim = here === 0 ? numeral(0, 1, false) : numeral(3, 6, false);
+        if (dim) set(i, out[i] + '|' + dim + '°7');
+      }
+    }
+
+    /* A turnaround in the last bar, pointing back at the top of the loop. */
+    if (wants('turnaround') && n >= 4 && plain(out[n - 1])) {
+      const last = lastOf(out[n - 1]);
+      const first = parse(out[0]);
+      const degree = degreeOf(last);
+      const two = sevenths ? (major ? 'ii7' : 'iiø7') : (major ? 'ii' : 'iv');
+      const five = sevenths ? 'V7' : 'V';
+      let options = [];
+      if (degree === 7) options = major ? [two + '|' + five, 'IV|' + five] : ['iv|' + five, two + '|' + five];
+      else if (degree === 0 && degreeOf(first) === 0) options = major ? [out[n - 1] + '|' + five, out[n - 1] + '|vi'] : [out[n - 1] + '|' + five];
+      else if (degree === 5 && degreeOf(first) === 0) options = [out[n - 1] + '|' + five];
+      if (options.length) set(n - 1, rng.pick(options));
+    }
+
+    return out;
+  }
+
+  /* A progression as this section will play it: perhaps at half the
+     harmonic speed — each chord held two bars where the form has room — and
+     then reharmonised. */
+  function develop(progression, o) {
+    const { genre, key, bars, rng } = o;
+    const more = moreOf(genre);
+    let chords = progression.chords.slice();
+    let stretched = false;
+    if (bars !== 'auto' && chords.length <= 4 && bars % (chords.length * 2) === 0
+      && rng.chance(more.stretch === undefined ? 0.3 : more.stretch)) {
+      chords = chords.reduce((acc, c) => acc.concat([c, c]), []);
+      stretched = true;
+    }
+    chords = reharmonise(chords, more.reharm || {}, key, genre, rng);
+    return { scale: progression.scale, chords, base: progression, stretched };
   }
 
   /* ---------------------------------------------------------------- rhythm */
@@ -129,7 +352,34 @@
     ]
   };
 
-  function chooseForm(totalBars, rng) {
+  /* Engine 2's phrase plans, added to the ones above. Between them they cover
+     the shapes tunes actually take: a motif stated and answered (A B A C),
+     one stated three times and capped (A A2 A3 C, the sentence), two ideas
+     traded (A B A2 B2), and a line that never repeats at all (A B C D) —
+     which is rare, and should be. */
+  const FORMS_2 = {
+    4: [
+      ['A', 'B', 'A', 'C'],
+      ['A', 'A', 'B', 'C'],
+      ['A', 'A2', 'A', 'C'],
+      ['A', 'B', 'B2', 'C'],
+      ['A', 'B', 'C', 'D']
+    ],
+    8: [
+      ['A', 'A2', 'A3', 'B', 'A', 'A2', 'A3', 'C'],
+      ['A', 'B', 'C', 'B2', 'A', 'B', 'C', 'D'],
+      ['A', 'A2', 'B', 'B2', 'C', 'C2', 'A', 'D'],
+      ['A', 'B', 'A2', 'B2', 'C', 'C2', 'B3', 'D'],
+      ['A', 'A', 'B', 'C', 'A', 'A', 'B', 'D']
+    ],
+    12: [
+      ['A', 'A2', 'B', 'C', 'A', 'A3', 'B', 'C2', 'D', 'D2', 'A', 'E'],
+      ['A', 'B', 'A2', 'C', 'A', 'B', 'A3', 'C2', 'D', 'B2', 'A', 'E']
+    ]
+  };
+
+  function chooseForm(totalBars, rng, v2) {
+    if (v2 && FORMS[totalBars]) return rng.pick(FORMS[totalBars].concat(FORMS_2[totalBars] || [])).slice();
     if (FORMS[totalBars]) return rng.pick(FORMS[totalBars]).slice();
     const form = [];
     const base = FORMS[4][0];
@@ -222,6 +472,26 @@
     return out;
   }
 
+  /* The motif an eighth late: the same figure, starting off the beat. Only
+     where the last value can give up the time, so the bar still adds up. */
+  function displace(cell) {
+    const last = cell[cell.length - 1];
+    if (Math.abs(last) < 4) return null;
+    const out = [-2].concat(cell.slice(0, -1), [Math.sign(last) * (Math.abs(last) - 2)]);
+    return cellNotes(out) ? out : null;
+  }
+
+  /* How engine 2 develops a motif it has stated before. Engine 1 only ever
+     changed the rhythm; these are the other things composers do with a bar
+     they want you to recognise: play it again exactly, move it up or down the
+     scale (a sequence), turn it upside down, play it backwards, or start it
+     late. Weighted toward the plain ones, because development that is all
+     cleverness stops sounding like the same idea. */
+  const DEVELOPMENTS = [
+    { op: 'rhythm', w: 3 }, { op: 'exact', w: 2 }, { op: 'sequence', w: 3 },
+    { op: 'invert', w: 1.2 }, { op: 'retro', w: 0.8 }, { op: 'displace', w: 1 }
+  ];
+
   /* ---------------------------------------------------------------- melody */
 
   function pentatonicPcs(key) {
@@ -241,13 +511,15 @@
        chorus, so a line with no character draws precisely the notes it always
        did, from precisely the same random draws. */
     const character = ctx.character || {};
+    const v2 = !!ctx.v2;
 
     const lo = character.range ? character.range[0] : spec.range[0];
     const hi = character.range ? character.range[1] : spec.range[1];
     const wantRest = clamp(spec.restiness + energyMod.restiness + (character.restiness || 0), 0, 0.6);
-    const leapiness = clamp((spec.leapiness || 0.25) + energyMod.leapiness + (character.leapiness || 0), 0.05, 0.7);
-    const pentBias = spec.pentatonicBias || 0;
+    const baseLeap = clamp((spec.leapiness || 0.25) + energyMod.leapiness + (character.leapiness || 0), 0.05, 0.7);
+    let pentBias = spec.pentatonicBias || 0;
     const chromatic = spec.chromaticApproach || 0;
+    const cells = v2 && moreOf(genre).cells ? spec.cells.concat(moreOf(genre).cells) : spec.cells;
 
     // Pitch pool: the scale, the chord tones of every chord in the
     // progression, and blue notes where the genre asks for them.
@@ -276,6 +548,19 @@
     if (pitches.length < 5) return [];
     const pentSet = pentatonicPcs(key);
 
+    /* Engine 2 gives every line a temperament of its own, inside the genre's:
+       how willing it is to repeat a note — which is most of what makes a hook
+       a hook — how far it will leap, how much it leans on the pentatonic and
+       how tightly it hugs its contour. Two lines in one genre used to share
+       one set of instincts and differ only in where the dice fell. */
+    /* One song, one singer: a verse takes the chorus's temperament rather
+       than rolling its own, so that the verse-and-chorus difference is the
+       one verseCharacter draws and not two strangers'. */
+    const rolled = v2 ? lineTemper(makeRng(Math.floor(rng.next() * 0x7fffffff))) : null;
+    const temper = v2 ? ctx.temper || rolled : null;
+    const leapiness = temper ? clamp(baseLeap * temper.leap, 0.05, 0.75) : baseLeap;
+    if (temper) pentBias *= temper.pent;
+
     const chordAt = (step) => {
       for (let i = spans.length - 1; i >= 0; i--) if (step >= spans[i].start) return spans[i].chord;
       return spans[0].chord;
@@ -291,8 +576,8 @@
     };
 
     const totalSteps = totalBars * STEPS_PER_BAR;
-    const climaxStep = Math.floor(totalSteps * rng.range(0.55, 0.76));
-    const shape = rng.pick(character.shapes || ['arch', 'arch', 'rise', 'fall', 'wave']);
+    const climaxStep = Math.floor(totalSteps * (v2 ? rng.range(0.4, 0.82) : rng.range(0.55, 0.76)));
+    const shape = rng.pick(character.shapes || (v2 ? SHAPES_2 : ['arch', 'arch', 'rise', 'fall', 'wave']));
 
     // Where the line should sit at a given moment, and how high it may go.
     // `seat` is the slice of the range the contour moves through: the upper
@@ -306,6 +591,10 @@
       if (shape === 'arch') f = Math.sin(Math.PI * t);
       else if (shape === 'rise') f = t;
       else if (shape === 'fall') f = 1 - t;
+      else if (shape === 'valley') f = 1 - Math.sin(Math.PI * t);
+      else if (shape === 'late') f = t < 0.8 ? Math.pow(t / 0.8, 2) : 1 - (t - 0.8) * 2;
+      else if (shape === 'early') f = t < 0.3 ? t / 0.3 : 1 - (t - 0.3);
+      else if (shape === 'stairs') f = Math.min(1, Math.floor(t * 4) / 3);
       else f = 0.5 + 0.5 * Math.sin(Math.PI * 2 * t - Math.PI / 2);
       return low + (high - low) * (seat[0] + (seat[1] - seat[0]) * f);
     }
@@ -313,11 +602,12 @@
       return Math.abs(step - climaxStep) < STEPS_PER_BAR ? hi : hi - 3;
     }
 
-    const form = ctx.form || chooseForm(totalBars, rng);
+    const form = ctx.form || chooseForm(totalBars, rng, v2);
     const halfBar = Math.ceil(totalBars / 2) - 1;
 
     const rhythms = {};   // base letter -> the motif's rhythm
     const contours = {};  // base letter -> relative motion, in scale-index deltas
+    const starts = {};    // base letter -> where its first statement began, as a scale index
     const notes = [];
     let prevPitch = null;
     let prevInterval = 0;
@@ -341,7 +631,8 @@
       const isHalfCadenceBar = bar === halfBar && totalBars > 4;
 
       if (!rhythms[base]) {
-        rhythms[base] = pickCell(spec.cells, rng, wantRest, energyMod.density + (character.density || 0), isCadenceBar);
+        rhythms[base] = pickCell(cells, rng, clamp(wantRest + (temper ? temper.rest : 0), 0, 0.6),
+          energyMod.density + (character.density || 0) + (temper ? temper.density : 0), isCadenceBar);
         /* A verse breathes: some of its motifs start after the downbeat or tie
            two notes into one, so it has fewer notes than the hook whatever the
            genre's cells offer — most banks carry no rests at all, and a taste
@@ -349,8 +640,27 @@
            with `breath` draws for this, so the chorus draws nothing. */
         if (character.breath && rng.chance(character.breath)) rhythms[base] = breathe(rhythms[base], rng);
       }
-      let rhythm = variation ? varyRhythm(rhythms[base], variation, rng) : rhythms[base].slice();
+      let rhythm;
+      let development = 'rhythm';
+      if (v2 && variation && contours[base]) {
+        development = weightedPick(rng, DEVELOPMENTS).op;
+        if (development === 'retro' && isCadenceBar) development = 'rhythm';
+      }
+      if (!variation) rhythm = rhythms[base].slice();
+      else if (development === 'rhythm') rhythm = varyRhythm(rhythms[base], variation, rng);
+      else if (development === 'retro') rhythm = rhythms[base].slice().reverse();
+      else if (development === 'displace') rhythm = displace(rhythms[base]) || varyRhythm(rhythms[base], 1, rng);
+      else rhythm = rhythms[base].slice();
+      if (!cellNotes(rhythm)) rhythm = rhythms[base].slice();
       if (isCadenceBar && rhythm[rhythm.length - 1] < 4) rhythm = varyRhythm(rhythm, 1, rng);
+      /* Engine 2: a pickup. When the next bar restates the opening idea, the
+         end of this one may give up an eighth to lead into it — the upbeat a
+         singer takes a breath before. */
+      if (v2 && !isCadenceBar && form[bar + 1] && form[bar + 1][0] === form[0][0]
+        && Math.abs(rhythm[rhythm.length - 1]) >= 4 && rng.chance(0.4)) {
+        const last = rhythm.pop();
+        rhythm.push(Math.sign(last) * (Math.abs(last) - 2), 2);
+      }
 
       // Lay the bar's rhythm out as absolute positions.
       const slots = [];
@@ -372,8 +682,15 @@
       // Restate the motif if this letter has been heard before, then fill in
       // any notes the stored contour did not cover (the first statement of a
       // letter, or a variation whose rhythm has more notes than the original).
-      let barPitches = contours[base] && contours[base].length
-        ? replayContour(contours[base], slots, { pitches, indexOfPitch, prevPitch, lo, hi })
+      let contour = contours[base];
+      let startIdx;
+      if (contour && development !== 'rhythm') {
+        if (development === 'invert') contour = contour.map((d, i) => (i ? -d : d));
+        else if (development === 'retro') contour = [0].concat(contour.slice(1).reverse().map((d) => -d));
+        else if (development === 'sequence') startIdx = starts[base] + rng.pick([-2, -1, 1, 2]);
+      }
+      let barPitches = contour && contour.length
+        ? replayContour(contour, slots, { pitches, indexOfPitch, prevPitch, lo, hi, startIdx })
         : [];
       barPitches = barPitches.slice(0, slots.length);
 
@@ -394,6 +711,8 @@
           pentBias,
           blueSet,
           outsideScale,
+          repeat: temper ? temper.repeat : undefined,
+          pull: temper ? temper.pull : undefined,
           target: targetAt(slots[i].start),
           ceiling: ceilingAt(slots[i].start),
           floor: lo
@@ -420,7 +739,10 @@
         barPitches[last] = openNote(barPitches[last], slots[last].chord, key, pitches, indexOfPitch);
       }
 
-      if (!contours[base]) contours[base] = toContour(barPitches, indexOfPitch);
+      if (!contours[base]) {
+        contours[base] = toContour(barPitches, indexOfPitch);
+        starts[base] = indexOfPitch(barPitches[0]);
+      }
 
       barPitches.forEach((midi, i) => {
         const slot = slots[i];
@@ -440,7 +762,18 @@
     }
 
     const repairOpts = { pitches, indexOfPitch, chordAt, lo, hi };
-    const settle = () => { for (let pass = 0; pass < 6 && repairMelody(notes, repairOpts); pass++); };
+    /* A developed motif — inverted, reversed, moved up the scale — can land
+       more than an octave from the note before it, which nobody sings. The
+       same pitch an octave nearer is the same note of the chord. */
+    const tame = () => {
+      if (!v2) return;
+      for (let i = 1; i < notes.length; i++) {
+        const before = notes[i - 1].midi;
+        while (notes[i].midi - before > 12 && notes[i].midi - 12 >= lo) notes[i].midi -= 12;
+        while (before - notes[i].midi > 12 && notes[i].midi + 12 <= hi) notes[i].midi += 12;
+      }
+    };
+    const settle = () => { tame(); for (let pass = 0; pass < 6 && repairMelody(notes, repairOpts); pass++); };
     settle();
     if (notes.length) {
       // The repair pass may have moved the last note; put the ending back.
@@ -467,7 +800,24 @@
        arrives at the same moment rather than each part having its own idea of
        where the song is going. */
     notes.climaxStep = climaxStep;
+    if (temper) notes.temper = temper;
     return notes;
+  }
+
+  /* Engine 2's contours, beside engine 1's: a line can dip and come back
+     (valley), save its peak for the end (late), peak almost at once and
+     spend the rest coming down (early), or climb a step each phrase. */
+  const SHAPES_2 = ['arch', 'arch', 'rise', 'fall', 'wave', 'valley', 'late', 'early', 'stairs'];
+
+  function lineTemper(rng) {
+    return {
+      repeat: rng.pick([0.3, 0.3, 0.55, 0.9]),
+      leap: rng.range(0.75, 1.35),
+      pent: rng.range(0.6, 1.4),
+      pull: rng.range(0.85, 1.25),
+      density: rng.range(-0.7, 0.7),
+      rest: rng.range(-0.06, 0.1)
+    };
   }
 
   /* Store a motif as relative motion through the scale, so repeating it at a
@@ -482,14 +832,18 @@
   }
 
   function replayContour(contour, slots, opts) {
-    const { pitches, indexOfPitch, prevPitch, lo, hi } = opts;
+    const { pitches, indexOfPitch, prevPitch, lo, hi, startIdx } = opts;
     const count = Math.min(contour.length, slots.length);
     if (!count) return [];
 
-    // Anchor the restatement on a chord tone near where the last bar left off.
+    // Anchor the restatement on a chord tone near where the last bar left off
+    // — or, for a sequence, a step or two from where the motif first began,
+    // so that it is heard as the same figure moved rather than a new one.
     const anchorChord = slots[0].chord;
     const from = prevPitch === null ? Math.round((lo + hi) / 2) : prevPitch;
-    let idx = nearestChordToneIndex(indexOfPitch(from), anchorChord, pitches, 4);
+    let idx = startIdx === undefined
+      ? nearestChordToneIndex(indexOfPitch(from), anchorChord, pitches, 4)
+      : clamp(startIdx, 0, pitches.length - 1);
 
     const out = [];
     for (let i = 0; i < count; i++) {
@@ -649,7 +1003,7 @@
       let w = 1;
 
       // Stepwise motion is the default; leaps are a seasoning.
-      if (stepDist === 0) w *= 0.3;
+      if (stepDist === 0) w *= o.repeat === undefined ? 0.3 : o.repeat;
       else if (stepDist === 1) w *= 3.4;
       else if (stepDist === 2) w *= 0.9 + leapiness;
       else if (stepDist === 3) w *= leapiness * 1.1;
@@ -666,7 +1020,7 @@
       if (outsideScale.has(mod(midi, 12)) && !chordTone) w *= 0.12;
 
       // Sit near the phrase's contour target.
-      w *= Math.exp(-Math.abs(midi - target) / 6.5);
+      w *= Math.exp(-Math.abs(midi - target) / (o.pull === undefined ? 6.5 : 6.5 * o.pull));
 
       // A leap must be answered by a step the other way.
       if (leaping) {
@@ -886,10 +1240,35 @@
       return null;
     };
 
+    /* Engine 2 writes the second line one of three ways. `fills` is engine
+       1's: it moves in the melody's gaps. `sustain` is a held line, a note or
+       two per chord, the way strings pad under a vocal. `echo` imitates — it
+       plays the tune's own rhythm and contour back a beat or two behind it,
+       an octave or a sixth below, which is the oldest way there is of
+       writing a second voice that sounds like it belongs to the first. */
+    const mode = ctx.v2 ? leanPick(rng, moreOf(genre).counter || ['fills']) : 'fills';
+    const preset = new Map();
+
     // Rhythm: favour the gaps. Silence first, then sustains, and stay off the
     // melody's own attacks so the two lines do not move as one block.
     const slots = [];
-    for (let bar = 0; bar < totalBars; bar++) {
+    if (mode === 'sustain') {
+      spans.forEach((span) => {
+        slots.push(span.start);
+        if (span.length >= 16 && rng.chance(0.45)) slots.push(span.start + 8);
+      });
+    } else if (mode === 'echo') {
+      const delay = rng.pick([4, 8, 8, 6]);
+      const below = rng.pick([12, 9, 8]);
+      melody.forEach((note) => {
+        const step = note.start + delay;
+        if (step >= totalSteps || preset.has(step)) return;
+        slots.push(step);
+        preset.set(step, note.midi - below);
+      });
+      if (!slots.length) slots.push(0);
+    }
+    for (let bar = 0; mode === 'fills' && bar < totalBars; bar++) {
       const base = bar * STEPS_PER_BAR;
       const chosen = [];
       let bestFallback = { step: base, weight: -1 };
@@ -938,7 +1317,8 @@
         chord: chordAt(step)
       };
       const partnerNow = melodyAt(step);
-      const midi = chooseNext({
+      const echoed = preset.get(step);
+      const midi = echoed !== undefined ? pitches[indexOfPitch(echoed)] : chooseNext({
         prevPitch,
         prevInterval,
         momentum: 0,
@@ -1021,7 +1401,7 @@
      offbeats, bossa plays a charleston, synthwave arpeggiates. */
   function buildChordTrack(ctx) {
     const { genre, spans, rng } = ctx;
-    const style = genre.chordRhythm || 'sustain';
+    const style = ctx.style || genre.chordRhythm || 'sustain';
     const energyMod = G.ENERGY[ctx.energy] || G.ENERGY.flow;
     const events = [];
 
@@ -1087,10 +1467,142 @@
           hit(6, 2, 0.56);
           if (len >= 16) hit(12, 4, 0.64);
           break;
+
+        /* Engine 2's patterns. None of these names is any genre's
+           chordRhythm, so engine 1 never reaches them. */
+        case 'halfNotes':
+          hit(0, 7.5, 0.64);
+          hit(8, 7.5, 0.54);
+          break;
+        case 'pushes':
+          // One, the and of two, the and of three: the pop piano's push.
+          hit(0, 5.5, 0.66);
+          hit(6, 3.5, 0.54);
+          hit(10, 5.5, 0.58);
+          break;
+        case 'tresillo':
+          hit(0, 5.5, 0.68);
+          hit(6, 5.5, 0.56);
+          hit(12, 3.5, 0.6);
+          break;
+        case 'syncoStabs':
+          [0, 3, 6, 8, 11, 14].forEach((offset) => hit(offset, 1.2, offset % 8 === 0 ? 0.7 : 0.54));
+          break;
+        case 'gallop':
+          for (let s = 0; s < len; s += 4) {
+            hit(s, 1.8, 0.66);
+            hit(s + 2, 0.9, 0.48);
+            hit(s + 3, 0.9, 0.5);
+          }
+          break;
+        case 'skank':
+          for (let s = 4; s < len; s += 8) hit(s, 1, 0.64);
+          break;
+        case 'chank':
+          [2, 6, 10, 14].forEach((offset) => hit(offset, 0.6, 0.6));
+          [7, 15].forEach((offset) => hit(offset, 0.4, 0.34));
+          break;
+        case 'backbeat':
+          hit(0, 1.5, 0.46);
+          for (let s = 4; s < len; s += 8) hit(s, 3, 0.64);
+          break;
+        case 'pulse8':
+          for (let s = 0; s < len; s += 2) hit(s, 0.9, 0.42 + 0.2 * ((s % 4) / 2));
+          break;
+        case 'rolled':
+          hit(0, len, 0.6, 0.35);
+          break;
+        case 'swells':
+          voicing.forEach((midi, i) => {
+            const offset = i * 2;
+            if (offset >= len) return;
+            events.push({ start: at + offset, dur: len - offset, midi, velocity: clamp((0.4 + i * 0.06) * energyMod.velocity, 0.2, 1) });
+          });
+          break;
+        case 'bossaPartido':
+          hit(0, 2.5, 0.68);
+          hit(3, 2.5, 0.52);
+          hit(6, 3.5, 0.58);
+          hit(10, 1.5, 0.5);
+          hit(12, 3.5, 0.56);
+          break;
+        case 'broken':
+        case 'travis':
+        case 'stride': {
+          /* One hand's worth of the chord at a time: the low note and the
+             rest of it in turn (broken), a thumb alternating between two low
+             strings under the top ones (travis), or bass on one and three
+             under the chord on two and four (stride). */
+          const low = voicing[0];
+          const upper = voicing.slice(1);
+          const one = (offset, notes, dur, velocity) => {
+            if (offset >= len) return;
+            notes.forEach((midi) => events.push({
+              start: at + offset, dur: Math.max(0.5, Math.min(dur, len - offset)), midi,
+              velocity: clamp(velocity * energyMod.velocity, 0.2, 1)
+            }));
+          };
+          for (let s = 0; s < len; s += style === 'stride' ? 4 : 2) {
+            if (style === 'broken') {
+              const phase = (s / 2) % 4;
+              one(s, phase === 0 ? [low] : phase === 2 ? [voicing[Math.min(1, voicing.length - 1)]] : upper,
+                1.9, phase === 0 ? 0.66 : 0.5);
+            } else if (style === 'travis') {
+              if (s % 4 === 0) one(s, [(s / 4) % 2 ? voicing[Math.min(1, voicing.length - 1)] : low], 3.8, 0.64);
+              else one(s, [upper[((s - 2) / 4) % 2 ? Math.max(0, upper.length - 2) : upper.length - 1] || low], 1.8, 0.5);
+            } else if (s % 8 === 0) one(s, [low], 3.6, 0.66);
+            else one(s, upper.length ? upper : [low], 3, 0.54);
+          }
+          break;
+        }
+        case 'arpDown':
+        case 'arpUpDown':
+        case 'arp16':
+        case 'dotted': {
+          const n = voicing.length;
+          const every = style === 'arp16' ? 1 : style === 'dotted' ? 3 : 2;
+          const cycle = n > 1 ? 2 * n - 2 : 1;
+          let k = 0;
+          for (let s = 0; s < len; s += every, k++) {
+            let idx;
+            if (style === 'arpDown') idx = n - 1 - (k % n);
+            else if (style === 'dotted') idx = k % n;
+            else { const c = k % cycle; idx = c < n ? c : cycle - c; }
+            events.push({
+              start: at + s, dur: every === 1 ? 0.95 : every === 3 ? 2.8 : 1.9, midi: voicing[idx],
+              velocity: clamp((s % 8 === 0 ? 0.66 : 0.5) * energyMod.velocity, 0.2, 1)
+            });
+          }
+          break;
+        }
         default:
           hit(0, len, 0.6);
       }
     });
+
+    /* A push: the next chord struck an eighth early, on the and of four, and
+       held over the bar line. It is the commonest thing a band does to make
+       a loop lean forward, and engine 1 never did it at all. Only on bar
+       lines, never into the top of the loop, and only for patterns that
+       strike the chord as a block. */
+    const push = ctx.push || 0;
+    const ARPS = ['arpUp', 'arpDown', 'arpUpDown', 'arp16', 'dotted', 'broken', 'travis', 'stride', 'swells'];
+    if (push > 0 && ARPS.indexOf(style) < 0) {
+      spans.forEach((span, index) => {
+        if (index === 0 || span.start % STEPS_PER_BAR !== 0 || !rng.chance(push)) return;
+        const early = span.start - 2;
+        const previous = spans[index - 1];
+        if (previous.start >= early) return;
+        for (let i = events.length - 1; i >= 0; i--) {
+          const e = events[i];
+          if (e.start >= early && e.start < span.start) events.splice(i, 1);
+          else if (e.start < early && e.start + e.dur > early) e.dur = Math.max(0.5, early - e.start);
+        }
+        events.forEach((e) => {
+          if (e.start === span.start) { e.start = early; e.dur += 2; e.velocity = clamp(e.velocity * 1.06, 0.2, 1); }
+        });
+      });
+    }
 
     return events.sort((a, b) => a.start - b.start);
   }
@@ -1110,7 +1622,19 @@
     sub808:     { label: '808 sub', how: 'A long sub root filling the bar, sometimes jumping an octave or a fifth at the end.' },
     bossa:      { label: 'Bossa', how: 'Root, then the fifth anticipated just before beat 3 \u2014 the push that gives bossa its lilt.' },
     syncopated: { label: 'Syncopated', how: 'Root on the downbeat, then off-beat pushes and a fifth landing between the beats.' },
-    funk16:     { label: 'Sixteenth funk', how: 'Root anchoring beat 1, then octave pops and fifths scattered across the sixteenths.' }
+    funk16:     { label: 'Sixteenth funk', how: 'Root anchoring beat 1, then octave pops and fifths scattered across the sixteenths.' },
+    kickLock:   { label: 'Locked to the kick', how: 'A note on every kick — the bass and the bass drum as one instrument, the root mostly, an octave or a fifth for lift.' },
+    arp:        { label: 'Arpeggio', how: 'Root, third, fifth and octave on the eighths, up and back down.' },
+    melodic:    { label: 'Melodic', how: 'Root on the one, chord tones through the bar, then a scale step into the next chord.' },
+    walking2:   { label: 'Two feel', how: 'Root and fifth on half notes, with the odd eighth-note skip into the next chord.' },
+    offbeat8:   { label: 'Offbeat eighths', how: 'Nothing on the beat, the root on every and — the pump under a four-to-the-floor kick.' },
+    gallop:     { label: 'Gallop', how: 'An eighth and two sixteenths on every beat, all on the root.' },
+    pulse16:    { label: 'Sixteenth pulse', how: 'The root on every sixteenth, accented on the beat — the motor under a synth track.' },
+    anticipate: { label: 'Anticipated', how: 'Root on the one, then the next chord\u2019s root an eighth early, tied across the bar line.' },
+    sparse:     { label: 'Sparse', how: 'The root on the one and one short note later in the bar. Most of it is space.' },
+    boogie:     { label: 'Boogie', how: 'Root, third, fifth, sixth, flat seven and back down, on the eighths.' },
+    shuffle56:  { label: 'Five–six shuffle', how: 'Root, then the fifth and sixth rocking on the eighths — the shuffle guitar figure, an octave down.' },
+    rootFifthWalk: { label: 'Boom-chick walk', how: 'Root on one, fifth on three, and two eighths walking up or down into each new chord.' }
   };
 
   /* What job a bass note is doing against its chord. Read off the chord's own
@@ -1132,7 +1656,7 @@
 
   function buildBass(ctx) {
     const { genre, spans, totalBars, rng, energy } = ctx;
-    const style = genre.bass || 'roots';
+    const style = ctx.style || genre.bass || 'roots';
     const energyMod = G.ENERGY[energy] || G.ENERGY.flow;
     const events = [];
     let current = null;
@@ -1245,12 +1769,193 @@
           break;
         }
 
+        /* Engine 2's lines. None of these names is any genre's `bass`, so
+           engine 1 never reaches them. */
+        case 'kickLock': {
+          const kick = ctx.beat && ctx.beat.kick;
+          const totalSteps = totalBars * STEPS_PER_BAR;
+          const loop = kick ? (totalSteps % kick.length === 0 ? kick.length : STEPS_PER_BAR) : 0;
+          const hits = [];
+          for (let s = 0; s < len; s++) {
+            const symbol = kick ? kick[(at + s) % loop] : null;
+            if (symbol === 'x' || symbol === 'o') hits.push(s);
+          }
+          if (hits[0] !== 0) hits.unshift(0);
+          hits.forEach((s, j) => {
+            const end = j + 1 < hits.length ? hits[j + 1] : len;
+            const lift = j > 0 && rng.chance(0.28);
+            push(at + s, Math.max(0.9, Math.min(end - s, 8) - 0.2),
+              lift ? (rng.chance(0.5) ? root + 12 : fifth) : root, j === 0 ? 0.95 : 0.8);
+          });
+          break;
+        }
+
+        case 'arp': {
+          const third = span.rootMidi + (span.chord.intervals[1] || 4);
+          const tones = [root, third, span.rootMidi + 7, root + 12].map((m) => {
+            let v = m;
+            while (v < root) v += 12;
+            while (v > root + 14) v -= 12;
+            return v;
+          });
+          const order = [0, 1, 2, 3, 2, 1, 2, 1];
+          for (let s = 0; s < len; s += 2) push(at + s, 1.8, tones[order[(s / 2) % order.length]], s % 8 === 0 ? 0.9 : 0.72);
+          break;
+        }
+
+        case 'melodic': {
+          const target = nearestOctave(next.bassMidi, root);
+          const third = span.rootMidi + (span.chord.intervals[1] || 4);
+          const beats = len / 4;
+          for (let b = 0; b < beats; b++) {
+            let midi;
+            let role = null;
+            if (b === 0) midi = root;
+            else if (b === beats - 1 && target !== root) {
+              midi = scaleNeighbour(ctx.key, target, root < target ? -1 : 1);
+              role = 'approach';
+            } else midi = rng.pick([third, root + 7, root + 7, root + 12]);
+            while (midi > root + 14) midi -= 12;
+            while (midi < root - 7) midi += 12;
+            if (b === 2 && rng.chance(0.3)) {
+              push(at + 8, 1.8, midi, 0.8, role);
+              push(at + 10, 1.8, scaleNeighbour(ctx.key, midi, 1), 0.7);
+            } else push(at + b * 4, 3.6, midi, b === 0 ? 0.92 : 0.78, role);
+          }
+          break;
+        }
+
+        case 'walking2': {
+          if (len < 16) { push(at, len - 0.4, root, 0.9); break; }
+          push(at, 7.6, root, 0.9);
+          const skip = next.bassMidi !== root && rng.chance(0.4);
+          push(at + 8, skip ? 5.6 : 7.6, fifth > root + 12 ? root - 5 : fifth, 0.78);
+          if (skip) push(at + 14, 1.8, next.bassMidi + (next.bassMidi >= root ? -1 : 1), 0.7, 'approach');
+          break;
+        }
+
+        case 'offbeat8':
+          for (let s = 2; s < len; s += 4) push(at + s, 1.6, s === 14 && rng.chance(0.3) ? root + 12 : root, 0.88);
+          break;
+
+        case 'gallop':
+          for (let s = 0; s < len; s += 4) {
+            const midi = s === 8 && rng.chance(0.3) ? fifth : root;
+            push(at + s, 1.8, midi, 0.92);
+            push(at + s + 2, 0.9, midi, 0.7);
+            push(at + s + 3, 0.9, midi, 0.74);
+          }
+          break;
+
+        case 'pulse16':
+          for (let s = 0; s < len; s++) push(at + s, 0.85, root, s % 4 === 0 ? 0.92 : 0.64);
+          break;
+
+        case 'anticipate': {
+          const nextRoot = nearestOctave(next.bassMidi, root);
+          if (len >= 16) {
+            push(at, 5.6, root, 0.92);
+            push(at + 6, 3.6, root, 0.72);
+            push(at + 10, 3.6, rng.chance(0.5) ? fifth : root, 0.74);
+            push(at + 14, 2, nextRoot, 0.84);
+          } else {
+            push(at, len - 2.4, root, 0.92);
+            push(at + len - 2, 2, nextRoot, 0.82);
+          }
+          break;
+        }
+
+        case 'sparse':
+          push(at, Math.min(len, 5.6), root, 0.9);
+          if (len >= 16) push(at + rng.pick([7, 10, 10]), 1.8, rng.pick([root, fifth, root + 12]), 0.72);
+          break;
+
+        case 'boogie':
+        case 'shuffle56': {
+          const third = span.chord.intervals[1] === 3 ? 3 : 4;
+          const figure = style === 'boogie' ? [0, third, 7, 9, 10, 9, 7, third] : [0, 0, 7, 7, 9, 9, 7, 7];
+          for (let s = 0; s < len; s += 2) push(at + s, 1.8, span.rootMidi + figure[(s / 2) % 8], s % 8 === 0 ? 0.92 : 0.74);
+          break;
+        }
+
+        case 'rootFifthWalk': {
+          const low = fifth > root + 12 ? root - 5 : fifth;
+          push(at, 3.6, root, 0.92);
+          const target = nearestOctave(next.bassMidi, root);
+          if (len >= 16 && target !== root) {
+            push(at + 8, 3.6, low, 0.8);
+            const dir = target > root ? -1 : 1;
+            const a = scaleNeighbour(ctx.key, target, dir);
+            push(at + 12, 1.8, scaleNeighbour(ctx.key, a, dir), 0.72);
+            push(at + 14, 1.8, a, 0.76);
+          } else if (len >= 8) push(at + len / 2, len / 2 - 0.4, low, 0.8);
+          break;
+        }
+
         default:
           push(at, len, root, 0.85);
       }
     });
 
-    return events.filter((e) => e.start < totalBars * STEPS_PER_BAR);
+    /* Engine 2: the bass walks into the top of the loop. The last beat of
+       the last bar is given over to a run — two eighths or four sixteenths
+       — stepping through the scale onto the first chord's root, which is
+       what a bass player does at the end of every phrase they want you to
+       notice the start of. Every time round, unlike a drum fill: it replaces
+       what the bass would have played there, and leaving it out on the
+       inner passes would leave the last beat empty rather than plain. */
+    const totalSteps = totalBars * STEPS_PER_BAR;
+    const lastSpan = spans[spans.length - 1];
+    const fillOdds = ctx.fill || 0;
+    if (fillOdds > 0 && lastSpan && totalBars >= 2 && rng.chance(fillOdds)) {
+      const from = totalSteps - 4;
+      current = spans.filter((sp) => sp.start <= from).pop() || lastSpan;
+      const target = nearestOctave(spans[0].bassMidi, current.bassMidi);
+      const count = rng.chance(0.5) ? 2 : 4;
+      const dir = target >= current.bassMidi ? -1 : 1;
+      const run = [];
+      let midi = target;
+      for (let i = 0; i < count; i++) { midi = scaleNeighbour(ctx.key, midi, dir); run.unshift(midi); }
+      for (let i = events.length - 1; i >= 0; i--) {
+        const e = events[i];
+        if (e.start >= from) events.splice(i, 1);
+        else if (e.start + e.dur > from) e.dur = Math.max(0.5, from - e.start);
+      }
+      const each = 4 / count;
+      run.forEach((m, i) => push(from + i * each, each * 0.9, m, 0.7 + i * 0.05));
+    }
+
+    const kept = events.filter((e) => e.start < totalSteps);
+    /* One string, one note at a time. A pattern written for a whole bar
+       overlaps itself once a substitution splits that bar in two, and a bass
+       that sounds two notes at once is a chord nobody wrote. Engine 2 cuts
+       each note at the next, and at the end of the loop. */
+    if (ctx.v2) {
+      kept.sort((a, b) => a.start - b.start);
+      kept.forEach((e, i) => {
+        const end = i + 1 < kept.length ? kept[i + 1].start : totalSteps;
+        if (e.start + e.dur > end) e.dur = Math.max(0.4, end - e.start - 0.1);
+      });
+      return kept.filter((e, i) => i === 0 || e.start > kept[i - 1].start);
+    }
+    return kept;
+  }
+
+  /* The octave of `pc`'s note nearest to `near`. */
+  function nearestOctave(midi, near) {
+    let m = midi;
+    while (m - near > 6) m -= 12;
+    while (near - m > 6) m += 12;
+    return m;
+  }
+
+  /* One step along the key's scale from a note, up (+1) or down (−1). A
+     note outside the scale steps to the nearest scale note that way. */
+  function scaleNeighbour(key, midi, dir) {
+    const scale = new Set(key.scalePcs);
+    let m = midi + dir;
+    while (!scale.has(mod(m, 12))) m += dir;
+    return m;
   }
 
   /* ----------------------------------------------------------------- drums */
@@ -1258,8 +1963,9 @@
   /* Which beat this song plays. A genre carries several and the draw is
      seeded, so the same recipe gives the same beat back — but two songs in the
      same genre no longer arrive with the identical drum part. */
-  function pickBeat(genre, rng) {
-    const list = Array.isArray(genre.drums) ? genre.drums : [genre.drums || {}];
+  function pickBeat(genre, rng, v2) {
+    let list = Array.isArray(genre.drums) ? genre.drums : [genre.drums || {}];
+    if (v2 && moreOf(genre).drums && moreOf(genre).drums.length) list = list.concat(moreOf(genre).drums);
     return (list.length ? rng.pick(list) : {}) || {};
   }
 
@@ -1360,13 +2066,33 @@
     ] }),
 
     /* Everything stops for the last beat. Nothing is added at all. */
-    drop: () => ({ clear: 12, add: [] })
+    drop: () => ({ clear: 12, add: [] }),
+
+    /* Engine 2's shapes. A snare roll over the last two beats, rising. */
+    snareBuild: (f) => ({ add: [8, 9, 10, 11, 12, 13, 14, 15]
+      .map((s, i) => ({ step: f.bar + s, instrument: 'snare', velocity: 0.32 + i * 0.085 })) }),
+
+    /* Kick and snare alternating on the sixteenths, the snare getting the last word. */
+    kickSnare: (f) => ({ clear: 12, add: [['kick', 12, 0.78], ['snare', 13, 0.6], ['kick', 14, 0.8],
+      ['snare', 15, 0.92]].map(([instrument, s, velocity]) => ({ step: f.bar + s, instrument, velocity })) }),
+
+    /* The band stops for half a bar and the kit says one thing into the hole. */
+    stop: (f) => ({ clear: 8, add: [
+      { step: f.bar + 8, instrument: 'kick', velocity: 0.86 },
+      { step: f.bar + 14, instrument: 'snare', velocity: 0.7 },
+      { step: f.bar + 15, instrument: 'snare', velocity: 0.9 }
+    ] }),
+
+    /* Round the kit over two beats. */
+    halfBarTom: (f) => ({ clear: 8, add: [['snare', 8, 0.6], ['tomHigh', 9, 0.55], ['tomHigh', 10, 0.62],
+      ['tomMid', 11, 0.66], ['tomMid', 12, 0.72], ['tomLow', 13, 0.78], ['tomLow', 14, 0.86], ['kick', 15, 0.8]]
+      .map(([instrument, s, velocity]) => ({ step: f.bar + s, instrument, velocity })) })
   };
   const DEFAULT_FILLS = ['snareRun', 'tomFall', 'trade'];
 
   function buildDrums(ctx) {
     const { genre, totalBars, rng, energy } = ctx;
-    const patterns = ctx.beat || pickBeat(genre, rng);
+    const patterns = ctx.beat || pickBeat(genre, rng, ctx.v2);
     const energyMod = G.ENERGY[energy] || G.ENERGY.flow;
     const totalSteps = totalBars * STEPS_PER_BAR;
     const events = [];
@@ -1441,6 +2167,14 @@
         });
       }
     });
+
+    /* Engine 2: the drummer does not play the same bar four times. On the
+       second bar of each pair it may push a kick into the and of four, slip a
+       ghost note in front of the backbeat, open the hat going into the next
+       bar, or leave a kick out — one small thing, so the bar is still
+       recognisably the beat. Only on one-bar patterns: a beat written two or
+       four bars long already says what its second bar does. */
+    if (ctx.v2 && totalBars >= 2) varyGroove(events, patterns, totalBars, makeRng(Math.floor(rng.next() * 0x7fffffff)), energyMod, nudgeFor);
 
     /* ------------------------------------------------- hearing the band
 
@@ -1520,12 +2254,13 @@
        the odds move with the energy — so a settings change does not shift
        which fills land, only whether they do. */
     const fillOdds = 0.55 * (energyMod.fill === undefined ? 1 : energyMod.fill);
-    const shapes = (G.FILLS && G.FILLS[genre.id]) || DEFAULT_FILLS;
+    let shapes = (G.FILLS && G.FILLS[genre.id]) || DEFAULT_FILLS;
+    if (ctx.v2 && moreOf(genre).fills && shapes.length) shapes = shapes.concat(moreOf(genre).fills);
     if (shapes.length && totalBars > 2 && rng.chance(fillOdds)) {
       const bar = (totalBars - 1) * STEPS_PER_BAR;
       /* Weighted toward the front of the list: the first shape is what this
          genre usually does, the rest are what it does for a change. */
-      const shape = shapes[Math.min(shapes.length - 1, Math.floor(-Math.log(1 - rng.next()) * 0.9))];
+      const shape = shapes[Math.min(shapes.length - 1, Math.floor(-Math.log(1 - rng.next()) * (ctx.v2 ? 1.8 : 0.9)))];
       const fill = FILL_SHAPES[shape];
       if (fill) {
         const made = fill({ bar, rng, nudgeFor, patterns });
@@ -1555,6 +2290,44 @@
     }
 
     return events.sort((a, b) => a.step - b.step);
+  }
+
+  function varyGroove(events, patterns, totalBars, rng, energyMod, nudgeFor) {
+    const oneBar = (voice) => patterns[voice] && patterns[voice].length === STEPS_PER_BAR;
+    const at = (instrument, step) => events.findIndex((e) => e.instrument === instrument && e.step === step);
+    const near = (instrument, step) => events.some((e) => e.instrument === instrument && Math.abs(e.step - step) <= 1);
+    const add = (instrument, step, velocity, ghost) => events.push({
+      step, instrument, ghost: !!ghost, nudge: nudgeFor(instrument),
+      velocity: clamp(velocity * energyMod.velocity, 0.14, 1)
+    });
+    for (let bar = 1; bar < totalBars; bar += 2) {
+      if (!rng.chance(0.55)) continue;
+      const b = bar * STEPS_PER_BAR;
+      const ops = [];
+      if (oneBar('kick')) {
+        if (!near('kick', b + 14) && !patterns.kick.startsWith('x...x...x...x')) ops.push('kickPush');
+        const offs = events.filter((e) => e.instrument === 'kick' && e.step >= b && e.step < b + 16 && (e.step - b) % 4 !== 0);
+        if (offs.length) ops.push('dropKick');
+      }
+      if (oneBar('snare') && energyMod.ghosts !== false) {
+        const spot = [b + 7, b + 15, b + 9].find((s) => !near('snare', s) && !near('clap', s));
+        if (spot !== undefined) ops.push('ghost');
+      }
+      if (oneBar('hat') && (at('hat', b + 14) >= 0 || at('hat', b + 6) >= 0)) ops.push('openHat');
+      if (!ops.length) continue;
+      const op = rng.pick(ops);
+      if (op === 'kickPush') add('kick', b + rng.pick([14, 10, 7].filter((s) => !near('kick', b + s))), 0.74);
+      else if (op === 'dropKick') {
+        const offs = events.filter((e) => e.instrument === 'kick' && e.step >= b && e.step < b + 16 && (e.step - b) % 4 !== 0);
+        events.splice(events.indexOf(rng.pick(offs)), 1);
+      } else if (op === 'ghost') {
+        add('snare', [b + 7, b + 15, b + 9].find((s) => !near('snare', s) && !near('clap', s)), 0.3, true);
+      } else {
+        const i = at('hat', b + 14) >= 0 ? at('hat', b + 14) : at('hat', b + 6);
+        events[i].instrument = 'openHat';
+        events[i].velocity = clamp(0.86 * energyMod.velocity, 0.14, 1);
+      }
+    }
   }
 
   /* Which voices the kit uses, and on which beats, read off the patterns —
@@ -1603,7 +2376,7 @@
   /* One section, as a clause: "over I – V – vi – IV, closes with a perfect
      cadence; brings the opening bar's idea back twice". The song's own note
      puts a subject in front of it. */
-  function describe(section, key, genre) {
+  function describe(section, key, genre, v2) {
     const { spans, melody, form } = section;
     const parts = [];
     const romans = spans.map((s) => s.chord.roman);
@@ -1622,7 +2395,19 @@
       else parts.push(`turns around on ${last.roman}`);
     }
 
-    const borrowed = spans.filter((s) => s.chord.borrowed);
+    /* Engine 2 writes secondary dominants and tritone substitutes on purpose,
+       so it names them for what they are rather than lumping them in with
+       chords borrowed from the parallel mode. */
+    const unique = (list) => list.filter((roman, i) => list.indexOf(roman) === i);
+    const tritone = (s) => s.chord.rootPc === mod(key.rootPc + 1, 12) && /^dom/.test(s.chord.type);
+    if (v2) {
+      const secondaries = unique(spans.filter((s) => s.chord.secondary).map((s) => s.chord.roman));
+      if (secondaries.length) parts.push(`leans into ${secondaries.join(' and ')} — ${secondaries.length > 1 ? 'secondary dominants' : 'a secondary dominant'}`);
+      const subs = unique(spans.filter(tritone).map((s) => s.chord.roman));
+      if (subs.length) parts.push(`swaps the V7 for its tritone substitute, ${subs.join(' and ')}`);
+      if (section.progression && section.progression.stretched) parts.push('holds each chord for two bars');
+    }
+    const borrowed = spans.filter((s) => s.chord.borrowed && !(v2 && (s.chord.secondary || tritone(s))));
     if (borrowed.length) {
       const names = [];
       borrowed.forEach((s) => { if (names.indexOf(s.chord.roman) < 0) names.push(s.chord.roman); });
@@ -1700,7 +2485,7 @@
      verse read as spoken and a chorus as sung; its contour is likelier to
      wander or fall than to arch; and it leaves its last note hanging so the
      chorus has something to resolve. */
-  function verseCharacter(spec) {
+  function verseCharacter(spec, v2) {
     const lo = spec.range[0];
     const hi = spec.range[1];
     return {
@@ -1710,7 +2495,7 @@
       leapiness: -0.06,
       density: -0.6,
       breath: 0.6,
-      shapes: ['wave', 'fall', 'wave', 'arch'],
+      shapes: v2 ? ['wave', 'fall', 'wave', 'arch', 'valley', 'stairs'] : ['wave', 'fall', 'wave', 'arch'],
       open: true
     };
   }
@@ -1727,9 +2512,10 @@
      oldest verse-and-chorus trick there is. Only for a short loop, though: a
      twelve-bar blues turned round is not a blues any more, so a form that
      long keeps its changes and lets the tune do the work. */
-  function pickVerseProgression(genre, scaleName, key, chorus, bars, rng) {
-    const inScale = genre.progressions.filter((p) => p.scale === scaleName);
-    const pool = inScale.length ? inScale : genre.progressions;
+  function pickVerseProgression(genre, scaleName, key, chorus, bars, rng, extra) {
+    const all = extra && extra.length ? genre.progressions.concat(extra) : genre.progressions;
+    const inScale = all.filter((p) => p.scale === scaleName);
+    const pool = inScale.length ? inScale : all;
     const spelled = (p) => p.chords.join(' ');
     const fits = (p) => p.chords.length === bars || bars % p.chords.length === 0;
     const degreeOf = (entry) => {
@@ -1771,20 +2557,40 @@
      both. */
   function writeSection(ctx) {
     const { id, label, key, genre, energy, bars, progression, seeds, character } = ctx;
-    const { spans, totalBars } = buildChords(progression, key, genre, bars);
-    const form = chooseForm(totalBars, makeRng(seeds.melody ^ 0x9e3779b9));
-    const melody = buildMelody({ key, genre, spans, totalBars, rng: makeRng(seeds.melody), energy, form, character });
-    const chordTrack = buildChordTrack({ genre, spans, rng: makeRng(seeds.harmony ^ 0x27d4eb2f), energy });
-    const bass = buildBass({ genre, spans, totalBars, rng: makeRng(seeds.harmony ^ 0x85ebca6b), energy });
+    const v2 = !!ctx.v2;
+    const more = moreOf(genre);
+    /* How this section is played, for engine 2: its voicing, its comping and
+       its bass line, each drawn from the genre's own list on a stream of its
+       own. Engine 1 plays every section the genre's one way. */
+    const choose = v2 ? makeRng((seeds.harmony ^ 0x5bd1e995) >>> 0) : null;
+    const voicingStyle = v2 ? leanPick(choose, more.voicings) : null;
+    const comping = (v2 && (ctx.comping || leanPick(choose, more.comping))) || genre.chordRhythm || 'sustain';
+    const bassStyle = (v2 && (ctx.bassStyle || leanPick(choose, more.bass))) || genre.bass || 'roots';
+    const voicing = voicingStyle ? Object.assign({}, genre.voicing, { style: voicingStyle }) : null;
+
+    const { spans, totalBars } = buildChords(progression, key, genre, bars, voicing);
+    const form = chooseForm(totalBars, makeRng(seeds.melody ^ 0x9e3779b9), v2);
+    const melody = buildMelody({ key, genre, spans, totalBars, rng: makeRng(seeds.melody), energy, form, character, v2, temper: ctx.temper });
+    const chordTrack = buildChordTrack({
+      genre, spans, rng: makeRng(seeds.harmony ^ 0x27d4eb2f), energy,
+      style: v2 ? comping : null, push: v2 ? more.push || 0 : 0
+    });
     /* The beat is drawn before the events are built so the choice can be kept
        on the song: the run of pads, the set-up notes and the arrangement all
        have to describe the beat that is actually playing, not the genre's
        first one. Both sections draw it from the same seed, so they are the
-       same drummer playing the same beat; what differs is what it hears. */
+       same drummer playing the same beat; what differs is what it hears.
+
+       It is drawn before the bass, too, because engine 2's bass can lock to
+       the kick — but from its own stream, so the order changes nothing. */
     const drumRng = makeRng(seeds.drum);
-    const beat = pickBeat(genre, drumRng);
+    const beat = pickBeat(genre, drumRng, v2);
+    const bass = buildBass({
+      genre, spans, totalBars, rng: makeRng(seeds.harmony ^ 0x85ebca6b), energy, key, beat,
+      style: v2 ? bassStyle : null, fill: v2 ? more.bassFill || 0 : 0, v2
+    });
     const drums = buildDrums({
-      genre, totalBars, rng: drumRng, energy, beat,
+      genre, totalBars, rng: drumRng, energy, beat, v2,
       /* What the rest of the band is doing. The bass is built above this
          line for exactly that reason. */
       spans, bass,
@@ -1794,13 +2600,15 @@
         ? 0.66 : melody.climaxStep / Math.max(1, totalBars * STEPS_PER_BAR - 1)
     });
     const counter = ctx.counter
-      ? buildCounter({ key, genre, spans, totalBars, rng: makeRng(seeds.melody ^ 0x165667b1), energy }, melody)
+      ? buildCounter({ key, genre, spans, totalBars, rng: makeRng(seeds.melody ^ 0x165667b1), energy, v2 }, melody)
       : [];
     const section = {
       id, label, bars: totalBars, totalSteps: totalBars * STEPS_PER_BAR,
-      progression, spans, melody, counter, chordTrack, bass, drums, form, beat
+      progression, spans, melody, counter, chordTrack, bass, drums, form, beat,
+      comping, bassStyle,
+      bassPlan: BASS_STYLES[bassStyle] || BASS_STYLES.roots
     };
-    section.theory = describe(section, key, genre);
+    section.theory = describe(section, key, genre, v2);
     return section;
   }
 
@@ -1831,8 +2639,17 @@
        asked for. Three independent things you can reroll one at a time. */
     const drumSeed = opts.drumSeed === undefined ? Math.floor(Math.random() * 1e9) : opts.drumSeed;
     const harmonyRng = makeRng(harmonySeed);
+    let engine = opts.engine === undefined || opts.engine === null ? ENGINE : Number(opts.engine);
+    /* A scale only the current engine writes in, asked for by name of a song
+       from an older one: the older engine would quietly pick a scale of its
+       own instead, so the request moves the song onto the engine that can
+       honour it. */
+    if (engine < ENGINE && opts.scale && G.scalesFor(genreId, engine).indexOf(opts.scale) < 0
+      && G.scalesFor(genreId, ENGINE).indexOf(opts.scale) >= 0) engine = ENGINE;
+    const v2 = engine >= 2;
+    const extra = v2 ? moreOf(genre).progressions : null;
 
-    const available = G.scalesFor(genreId);
+    const available = G.scalesFor(genreId, engine);
     const scaleName = available.indexOf(opts.scale) >= 0 ? opts.scale : harmonyRng.pick(available);
     const keyPc = opts.keyPc === undefined ? 0 : mod(opts.keyPc, 12);
     const key = T.makeKey(keyPc, scaleName);
@@ -1843,26 +2660,49 @@
        same progression from the same stream, the same tune from the same
        seed. Every sketch anyone has saved or shared comes back note for note,
        as the chorus of a song that now has a verse as well. */
-    const progression = pickProgression(genre, scaleName, bars, harmonyRng);
+    const progression = pickProgression(genre, scaleName, bars, harmonyRng, extra);
+    /* Engine 2 plays the progression the way the genre would — perhaps at
+       half speed, and reharmonised — on a stream of its own, so that what it
+       does to the chorus never moves what the verse is drawn from. */
+    const chorusChanges = v2
+      ? develop(progression, { genre, key, bars, rng: makeRng((harmonySeed ^ 0x61c88647) >>> 0) })
+      : progression;
     const chorus = writeSection({
-      id: 'chorus', label: 'Chorus', key, genre, energy, bars, progression,
+      id: 'chorus', label: 'Chorus', key, genre, energy, bars, progression: chorusChanges,
       seeds: { harmony: harmonySeed, melody: melodySeed, drum: drumSeed },
-      counter: opts.counter
+      counter: opts.counter, v2
     });
     /* The verse draws after it: its changes from the same harmony stream, so
        they can be chosen against the chorus's, and everything else from seeds
        of its own, so the two tunes are two tunes. The drum seed is shared —
        one drummer, one beat, the whole song. */
+    const verseBase = pickVerseProgression(genre, scaleName, key, progression,
+      v2 && chorusChanges.stretched ? progression.chords.length : chorus.bars, harmonyRng, extra);
+    /* A verse at half speed under a chorus at full speed is a real
+       arrangement, and so is the other way round, so the verse decides for
+       itself — but it has to come out the chorus's length, so a chorus held
+       at half speed holds the verse too. */
+    const verseChanges = v2
+      ? develop(chorusChanges.stretched ? { scale: verseBase.scale, chords: verseBase.chords.reduce((acc, c) => acc.concat([c, c]), []) } : verseBase,
+        { genre, key, bars: chorusChanges.stretched ? 'auto' : chorus.bars, rng: makeRng((harmonySeed ^ 0x2545f491) >>> 0) })
+      : verseBase;
+    /* Same comping and bass as the chorus about half the time — the same
+       player in both — and otherwise the verse's own. */
+    const sameBand = v2 && makeRng((harmonySeed ^ 0x1b873593) >>> 0).chance(0.5);
     const verse = writeSection({
       id: 'verse', label: 'Verse', key, genre, energy, bars: chorus.bars,
-      progression: pickVerseProgression(genre, scaleName, key, progression, chorus.bars, harmonyRng),
+      progression: verseChanges,
       seeds: {
         harmony: (harmonySeed ^ 0x7f4a7c15) >>> 0,
         melody: (melodySeed ^ 0x3c6ef372) >>> 0,
         drum: drumSeed
       },
       counter: opts.counter,
-      character: verseCharacter(genre.melody)
+      character: verseCharacter(genre.melody, v2),
+      comping: sameBand ? chorus.comping : null,
+      temper: chorus.melody.temper,
+      bassStyle: sameBand ? chorus.bassStyle : null,
+      v2
     });
 
     const bpm = opts.bpm !== undefined && opts.bpm !== null
@@ -1880,9 +2720,9 @@
       swingUnit: genre.swingUnit || 8,
       progression, spans: chorus.spans, melody: chorus.melody, counter: chorus.counter,
       chordTrack: chorus.chordTrack, bass: chorus.bass, drums: chorus.drums, form: chorus.form,
-      harmonySeed, melodySeed, drumSeed, energy,
+      harmonySeed, melodySeed, drumSeed, energy, engine,
       beat: chorus.beat, beatName: chorus.beat.name || '',
-      bassPlan: BASS_STYLES[genre.bass] || BASS_STYLES.roots,
+      bassPlan: chorus.bassPlan,
       drumPlan: describeDrums(chorus.beat, energyMod),
       /* In song order: the verse comes first. */
       sections: [verse, chorus]
@@ -1894,6 +2734,6 @@
   global.Compose = {
     compose, section, makeRng, STEPS_PER_BAR, chooseForm,
     buildMelody, buildCounter, buildChordTrack, buildBass, buildDrums, pickBeat,
-    BASS_STYLES, describeDrums
+    BASS_STYLES, describeDrums, reharmonise, ENGINE
   };
 })(window);

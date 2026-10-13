@@ -156,6 +156,54 @@ out on vi so the chorus can come home to I; the verse leaves off on V, which
 leans into the chorus; the chorus tune sits about a fourth above the verse;
 the verse rests more.* Only claims true of this song are made.
 
+**No two songs share a band.** The first engine had one answer per genre for
+everything but the tune and the beat: every pop song had the same left hand,
+the same bass player and the same voicings, and only about sixteen sets of
+changes turned up in a hundred and twenty sections. The second engine makes
+the choices a player would:
+
+- **Comping** — each genre names several ways to play its chords and draws
+  one per section, leaning toward its usual one: half notes, pushes on the
+  and of two, a tresillo, sixteenth-note stabs, a reggae-style skank, broken
+  chords, Travis picking, stride, rolled chords, swells, and arpeggios up,
+  down, up-and-down, in sixteenths or in dotted eighths
+- **Bass** — likewise: locked to the kick (the 808 that follows the bass
+  drum, which is the trap bass line), arpeggiated, melodic with a scale step
+  into each chord, a two feel, offbeat eighths, a gallop, a sixteenth pulse,
+  anticipations tied over the bar line, boogie, a five–six shuffle, a
+  boom-chick walk. Often it walks up or down into the top of the loop
+- **Voicings** — close, open, drop-2, shell or power chords, from the genre's own list
+- **Pushes** — a chord struck an eighth early and held over the bar line
+- **Reharmonisation** — the progression is played the way the genre would
+  play it: a secondary dominant into the next chord, a tritone substitute for
+  a V7 that goes home, a sus4 resolving inside the bar, a turnaround in the
+  last bar, a passing diminished, IV to iv, the backdoor ii–V, a slash chord
+  that walks the bass, an added ninth. Each genre has its own appetite —
+  gospel and jazz reach for most of them, trap for almost none
+- **Harmonic rhythm** — an eight-bar section may hold each chord for two bars
+- **Many more progressions** — roughly doubled per genre, including scales a
+  genre did not use before: Dorian and Mixolydian pop, Lydian synthwave
+- **More beats and fills** — two to five new beats per genre, and fills that
+  build a snare roll, trade kick and snare, stop the band dead, or go round
+  the kit over two beats. And the drummer no longer plays one bar four times:
+  every other bar may push a kick, slip in a ghost note or open the hat
+- **The tune** — more phrase plans (the sentence, call and answer, two ideas
+  traded), more contours (a valley, a late or early peak, a stair climb),
+  pickups into each restatement, new rhythm cells (dotted, tresillo, call,
+  response, hooks of repeated notes), and motif development beyond rhythm: a
+  motif comes back exactly, moved up or down the scale as a sequence,
+  inverted, reversed or displaced off the beat. Each song's singer has a
+  temperament of its own — how readily it repeats a note, how far it leaps,
+  how busy it is — which the verse and the chorus share
+- **The second line** — moves in the gaps as before, or holds a sustained
+  pad under the tune, or echoes it a beat or two behind, an octave or a sixth
+  below
+
+Measured over the same 1,680 sections, distinct progressions went from 239 to
+1,145, bass lines from 248 to about 1,100, comping patterns from 35 to about
+500, drum parts from 116 to about 550, voicings from 168 to 805 and one-bar
+melody rhythms by 40 per cent.
+
 **Melodies built the way melodies work.** Rhythm comes first, from per-genre
 cells that carry rests and syncopation. A one-bar motif is stated, then
 developed across a phrase plan — repeated, sequenced, augmented — and
@@ -301,11 +349,15 @@ request, so it doubles as the way out, and the two states can never both be on
 screen claiming to be true.
 
 **Saving and sharing.** A sketch is stored as the recipe that produced it —
-genre, key, scale choice, energy, length, tempo and the three seeds — rather
-than as a dump of notes. Reloading one replays exactly the same decisions, so
+genre, key, scale choice, energy, length, tempo, the three seeds and the
+engine that wrote it — rather than as a dump of notes. Reloading one replays exactly the same decisions, so
 it comes back note for note, and the recipe is small enough to live in a URL.
 A sketch saved before there was a verse comes back as the chorus of a song
-that has grown one, every note where it was:
+that has grown one, every note where it was. A sketch from before the second
+engine names no engine, so it is still composed on the first, note for note,
+and its link is byte-for-byte unchanged; rerolling one part of it keeps it on
+that engine, and only a new song (or a scale only the new engine writes in)
+moves it to the current one.
 Share hands the link to the system share sheet, which can put it in Messages,
 in a note or on the clipboard. Saves live in the browser's local storage, and
 swipe left on one to delete it. The sketch you are working on is kept as a
