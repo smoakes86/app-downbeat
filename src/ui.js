@@ -338,6 +338,10 @@
      hand you a different drummer as well. */
   function regenerate(keep) {
     const opts = optionsFromDraft();
+    /* Keeping a seed means keeping what it was rolled against. A sketch from
+       engine 1 rerolled for a new melody keeps its engine-1 chords; only a
+       song written from nothing is written on the current engine. */
+    if (keep && song && song.engine) opts.engine = song.engine;
     if (keep === 'harmony') { opts.harmonySeed = song.harmonySeed; opts.drumSeed = song.drumSeed; }
     if (keep === 'melody') { opts.melodySeed = song.melodySeed; opts.drumSeed = song.drumSeed; }
     if (keep === 'both') {

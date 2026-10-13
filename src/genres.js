@@ -799,20 +799,593 @@
     ambient:   []
   };
 
+  /* ------------------------------------------------------------ engine 2
+
+     Everything above this line is what the first engine drew from, and it
+     stays exactly as it is: a saved sketch is a recipe of seeds, and the
+     seeds only replay if the lists they were rolled against are the same.
+     So the second engine's vocabulary lives here, beside it rather than in
+     it, and is only reached by a song written on engine 2.
+
+     What it adds is choice at every level a player would make one. The
+     first engine wrote a genre with one comping pattern, one bass line and
+     one voicing, so two pop songs shared their left hand, their bass player
+     and their keyboard part note for note and differed only in the tune.
+     Here each genre names several of each — the first is still its usual
+     answer, and the draw leans that way — plus more progressions, more
+     beats, more fills, more rhythm cells for the tune, and its own taste for
+     reharmonisation: how often it reaches for a secondary dominant, a
+     tritone substitute, a suspension, a turnaround.
+
+       progressions  added to the genre's own pool
+       comping       how the chords are played; the first is the usual one
+       bass          how the bass plays; likewise
+       voicings      close, open, drop-2, shell or power
+       push          odds of a chord being struck an eighth early, ahead of its bar
+       bassFill      odds of the bass walking into the top of the loop
+       reharm        how readily each substitution is made (see Compose.reharmonise)
+       cells         extra rhythm cells for the tune
+       drums         extra beats
+       fills         extra fill shapes, after the genre's own
+       counter       the ways a second line may be written */
+  const MORE_CELLS = {
+    dotted:   [[6, 2, 6, 2], [3, 1, 4, 3, 1, 4], [6, 2, 8], [4, 3, 1, 8]],
+    tresillo: [[3, 3, 2, 3, 3, 2], [6, 6, 4], [3, 3, 4, 6], [3, 3, 2, 8]],
+    call:     [[2, 2, 4, -8], [4, 4, -8], [2, 2, 2, 2, -8], [4, 2, 2, -8]],
+    response: [[-8, 2, 2, 4], [-8, 4, 4], [-6, 2, 4, 4], [-4, 2, 2, 8]],
+    pickup:   [[12, 2, 2], [8, 4, 2, 2], [10, 2, 2, 2], [-10, 2, 4]],
+    offbeat:  [[-2, 2, -2, 2, -2, 6], [-2, 4, 2, 4, 4], [-2, 2, 2, 2, -2, 6]],
+    rolling:  [[1, 1, 2, 1, 1, 2, 4, 4], [2, 1, 1, 2, 1, 1, 8], [1, 1, 1, 1, 2, 2, 8]],
+    held:     [[12, 4], [4, 12], [2, 14], [-2, 14]],
+    hook:     [[3, 3, 3, 3, 2, 2], [2, 2, 2, 2, 2, 2, 4], [3, 3, 2, 2, 2, 4]]
+  };
+  const moreCells = function () {
+    const out = [];
+    for (let i = 0; i < arguments.length; i++) out.push.apply(out, MORE_CELLS[arguments[i]]);
+    return out;
+  };
+
+  const MORE = {
+    pop: {
+      progressions: [
+        { scale: 'Major (Ionian)', chords: ['I', 'IV', 'vi', 'V'] },
+        { scale: 'Major (Ionian)', chords: ['I', 'iii', 'IV', 'V'] },
+        { scale: 'Major (Ionian)', chords: ['vi', 'V', 'IV', 'V'] },
+        { scale: 'Major (Ionian)', chords: ['IV', 'V', 'iii', 'vi'] },
+        { scale: 'Major (Ionian)', chords: ['I', 'IV', 'ii', 'V'] },
+        { scale: 'Major (Ionian)', chords: ['IV', 'vi', 'I', 'V'] },
+        { scale: 'Major (Ionian)', chords: ['ii', 'IV', 'I', 'V'] },
+        { scale: 'Major (Ionian)', chords: ['I', 'V', 'IV', 'IV', 'vi', 'V', 'IV', 'V'] },
+        { scale: 'Natural Minor', chords: ['i', 'VI', 'VII', 'i'] },
+        { scale: 'Natural Minor', chords: ['VI', 'VII', 'i', 'i'] },
+        { scale: 'Natural Minor', chords: ['i', 'v', 'VI', 'VII'] },
+        { scale: 'Natural Minor', chords: ['i', 'III', 'VII', 'iv'] },
+        { scale: 'Mixolydian', chords: ['I', 'VII', 'IV', 'I'] },
+        { scale: 'Mixolydian', chords: ['I', 'v', 'IV', 'VII'] },
+        { scale: 'Dorian', chords: ['i', 'IV', 'VII', 'i'] },
+        { scale: 'Dorian', chords: ['i', 'IV', 'i', 'IV'] }
+      ],
+      comping: ['eighths', 'pushes', 'broken', 'halfNotes', 'offbeats', 'pulse8', 'tresillo'],
+      bass: ['rootFifth', 'anticipate', 'kickLock', 'arp', 'melodic', 'driving8'],
+      voicings: ['close', 'open'],
+      push: 0.35,
+      bassFill: 0.4,
+      reharm: { turnaround: 0.35, secondary: 0.3, sus: 0.3, colour: 0.35, minorIV: 0.2, inversion: 0.25, relative: 0.15 },
+      cells: moreCells('hook', 'dotted', 'tresillo', 'pickup', 'call'),
+      drums: [
+        { name: 'Tight sixteenths',
+          kick:  'x.....x.x.......',
+          snare: '....x.......x...',
+          hat:   'x.xxx.xxx.xxx.xx' },
+        { name: 'Dance pop',
+          kick:    'x...x...x...x...',
+          clap:    '....x.......x...',
+          hat:     'x...x...x...x...',
+          openHat: '..o...o...o...o.' },
+        { name: 'Ballad',
+          kick:  'x.......x.......' + 'x.......x.....x.',
+          snare: '....x.......x...',
+          hat:   'x.x.x.x.x.x.x.x.',
+          rim:   '..........g.....' },
+        { name: 'Floor-tom groove',
+          kick:   'x.......x.......',
+          tomLow: '..x...x...x...x.',
+          clap:   '....x.......x...',
+          shaker: 'x.x.x.x.x.x.x.x.' },
+        { name: 'Clap and snap',
+          kick: 'x..x....x.x.....',
+          clap: '....x.......x...',
+          hat:  '..x...x...x...x.',
+          rim:  '.......g.......g' }
+      ],
+      fills: ['snareBuild', 'stop', 'kickSnare'],
+      counter: ['fills', 'fills', 'echo', 'sustain']
+    },
+
+    lofi: {
+      progressions: [
+        { scale: 'Major (Ionian)', chords: ['IVmaj7', 'V7', 'iii7', 'vi7'] },
+        { scale: 'Major (Ionian)', chords: ['ii7', 'V7', 'iii7', 'vi7'] },
+        { scale: 'Major (Ionian)', chords: ['Imaj7', 'IVmaj7', 'iii7', 'vi7'] },
+        { scale: 'Major (Ionian)', chords: ['vi7', 'ii7', 'V7', 'Imaj7'] },
+        { scale: 'Major (Ionian)', chords: ['IVmaj7', 'iii7', 'ii7', 'Imaj7'] },
+        { scale: 'Natural Minor', chords: ['i7', 'iv7', 'v7', 'i7'] },
+        { scale: 'Natural Minor', chords: ['i7', 'VImaj7', 'iv7', 'v7'] },
+        { scale: 'Natural Minor', chords: ['VImaj7', 'v7', 'i7', 'i7'] },
+        { scale: 'Dorian', chords: ['i9', 'IV9', 'VII', 'III'] },
+        { scale: 'Dorian', chords: ['i7', 'ii7', 'i7', 'IV9'] }
+      ],
+      comping: ['laidback', 'rolled', 'broken', 'sustain', 'pushes', 'halfNotes'],
+      bass: ['roots', 'sparse', 'melodic', 'anticipate', 'kickLock'],
+      voicings: ['drop2', 'close'],
+      push: 0.2,
+      bassFill: 0.3,
+      reharm: { colour: 0.5, secondary: 0.25, tritone: 0.15, turnaround: 0.25, backdoor: 0.15 },
+      cells: moreCells('response', 'offbeat', 'held', 'dotted'),
+      drums: [
+        { name: 'Lazy kick',
+          kick:   'x.........x.....' + 'x.......x.x.....',
+          snare:  '....x.......x...',
+          hat:    'x.x.x.x.x.x.x.x.',
+          shaker: '..x...x...x...x.' },
+        { name: 'Rimshot',
+          kick: 'x.....x...x.....',
+          rim:  '....x.......x...',
+          hat:  'x..xx..xx..xx..x' },
+        { name: 'Swing dust',
+          kick:  'x......x..x.....',
+          snare: '....x.......x...',
+          hat:   'x.xxx.xxx.xxx.xx' }
+      ],
+      fills: ['stop', 'kickSnare'],
+      counter: ['fills', 'sustain', 'echo']
+    },
+
+    rock: {
+      progressions: [
+        { scale: 'Major (Ionian)', chords: ['I', 'IV', 'V', 'IV'] },
+        { scale: 'Major (Ionian)', chords: ['I', 'V', 'IV', 'I'] },
+        { scale: 'Major (Ionian)', chords: ['I', 'bVII', 'IV', 'I'] },
+        { scale: 'Major (Ionian)', chords: ['I', 'iii', 'IV', 'V'] },
+        { scale: 'Major (Ionian)', chords: ['I', 'bIII', 'IV', 'I'] },
+        { scale: 'Natural Minor', chords: ['i', 'VII', 'i', 'VI'] },
+        { scale: 'Natural Minor', chords: ['i', 'III', 'VII', 'VI'] },
+        { scale: 'Natural Minor', chords: ['i', 'VI', 'III', 'VII'] },
+        { scale: 'Mixolydian', chords: ['I', 'VII', 'I', 'IV'] },
+        { scale: 'Mixolydian', chords: ['I', 'v', 'IV', 'I'] },
+        { scale: 'Dorian', chords: ['i', 'IV', 'i', 'VII'] },
+        { scale: 'Dorian', chords: ['i', 'VII', 'IV', 'i'] }
+      ],
+      comping: ['eighths', 'pushes', 'halfNotes', 'gallop', 'quarters', 'syncoStabs'],
+      bass: ['driving8', 'gallop', 'rootFifth', 'kickLock', 'melodic'],
+      voicings: ['open', 'power', 'close'],
+      push: 0.3,
+      bassFill: 0.35,
+      reharm: { turnaround: 0.3, sus: 0.25, secondary: 0.15, colour: 0.1, minorIV: 0.15 },
+      cells: moreCells('hook', 'dotted', 'pickup', 'call'),
+      drums: [
+        { name: 'Four on the floor',
+          kick:  'x...x...x...x...',
+          snare: '....x.......x...',
+          hat:   'x.x.x.x.x.x.x.x.' },
+        { name: 'Ride rock',
+          ride:  'x.x.x.x.x.x.x.x.',
+          kick:  'x.....x.x.......',
+          snare: '....x.......x...',
+          crash: 'x...............' },
+        { name: 'Punk eights',
+          kick:  'x.x...x.x.x...x.',
+          snare: '....x.......x...',
+          hat:   'x.x.x.x.x.x.x.x.' },
+        { name: 'Tribal toms',
+          kick:   'x.......x.......',
+          tomLow: 'x..x..x.x..x..x.',
+          snare:  '....x.......x...' }
+      ],
+      fills: ['snareBuild', 'stop', 'kickSnare', 'halfBarTom'],
+      counter: ['fills', 'sustain', 'echo']
+    },
+
+    rnb: {
+      progressions: [
+        { scale: 'Major (Ionian)', chords: ['IVmaj7', 'iii7', 'ii7', 'Imaj7'] },
+        { scale: 'Major (Ionian)', chords: ['Imaj7', 'vi7', 'IVmaj7', 'V7sus4'] },
+        { scale: 'Major (Ionian)', chords: ['ii9', 'iii7', 'IVmaj7', 'V7'] },
+        { scale: 'Major (Ionian)', chords: ['IVmaj7', 'V7', 'iii7', 'vi7'] },
+        { scale: 'Natural Minor', chords: ['i9', 'iv9', 'VII', 'III'] },
+        { scale: 'Natural Minor', chords: ['VImaj7', 'v7', 'iv7', 'i9'] },
+        { scale: 'Natural Minor', chords: ['i7', 'VImaj7', 'iiø7', 'V7'] },
+        { scale: 'Dorian', chords: ['i9', 'IV9', 'VII', 'III'] },
+        { scale: 'Dorian', chords: ['i7', 'ii7', 'III', 'IV9'] }
+      ],
+      comping: ['laidback', 'rolled', 'pushes', 'broken', 'halfNotes', 'syncoStabs'],
+      bass: ['syncopated', 'sparse', 'anticipate', 'melodic', 'kickLock'],
+      voicings: ['drop2', 'close', 'open'],
+      push: 0.25,
+      bassFill: 0.35,
+      reharm: { colour: 0.5, secondary: 0.3, tritone: 0.25, backdoor: 0.25, turnaround: 0.3, sus: 0.2 },
+      cells: moreCells('rolling', 'offbeat', 'response', 'hook'),
+      drums: [
+        { name: 'Dilla swing',
+          kick:  'x......x..x.....',
+          snare: '....x.......x...',
+          hat:   'x.x.x.x.x.x.x.x.' },
+        { name: 'Rim and shaker',
+          kick:   'x.......x.x.....',
+          rim:    '....x.......x...',
+          shaker: 'x.x.x.x.x.x.x.x.' },
+        { name: 'Nineties',
+          kick:  'x.....xx..x.....',
+          snare: '....x.......x...',
+          hat:   'x.xxx.xxx.xxx.xx',
+          rim:   '..............g.' }
+      ],
+      fills: ['stop', 'kickSnare', 'snareBuild'],
+      counter: ['fills', 'sustain', 'echo']
+    },
+
+    jazz: {
+      progressions: [
+        { scale: 'Major (Ionian)', chords: ['Imaj7', '#i°7', 'ii7', 'V7'] },
+        { scale: 'Major (Ionian)', chords: ['ii7', 'V7', 'iii7', 'VI7'] },
+        { scale: 'Major (Ionian)', chords: ['IVmaj7', 'iv7|VII7', 'iii7|VI7', 'ii7|V7'] },
+        { scale: 'Major (Ionian)', chords: ['ii7', 'V7', 'Imaj7', 'IVmaj7', 'viiø7', 'III7', 'vi7', 'vi7'] },
+        { scale: 'Natural Minor', chords: ['iiø7|V7', 'i7', 'iiø7|V7', 'i7'] },
+        { scale: 'Natural Minor', chords: ['i7', 'iv7', 'VII7', 'IIImaj7'] },
+        { scale: 'Dorian', chords: ['i7', 'i7', 'ii7', 'i7'] },
+        { scale: 'Dorian', chords: ['i7', 'IV7', 'i7', 'IV7'] }
+      ],
+      comping: ['comp', 'charleston', 'halfNotes', 'pushes', 'rolled'],
+      bass: ['walking', 'walking2', 'melodic'],
+      voicings: ['shell', 'drop2', 'close'],
+      push: 0.15,
+      bassFill: 0,
+      reharm: { tritone: 0.4, secondary: 0.35, backdoor: 0.25, colour: 0.4, passingDim: 0.2, turnaround: 0.3 },
+      cells: moreCells('dotted', 'offbeat', 'rolling', 'response'),
+      drums: [
+        { name: 'Brushes',
+          snare: 'g.ggg.ggg.ggg.gg',
+          hat:   '....x.......x...',
+          kick:  'x.......x.......' },
+        { name: 'Latin jazz',
+          ride: 'x.x.x.x.x.x.x.x.',
+          rim:  'x..x..x...x.x...',
+          kick: '...x..x....x..x.',
+          hat:  '....x.......x...' },
+        { name: 'Up-tempo',
+          ride:  'x.xxx.xxx.xxx.xx',
+          hat:   '....x.......x...',
+          snare: '...g.....g....g.' + '......g.....g.gx',
+          kick:  '..............x.' + '..........x.....' }
+      ],
+      fills: ['kickSnare', 'stop'],
+      counter: ['fills', 'echo', 'sustain']
+    },
+
+    blues: {
+      progressions: [
+        { scale: 'Mixolydian', chords: ['I7', 'I7', 'I7', 'I7', 'IV7', 'IV7', 'I7', 'I7', 'V7', 'V7', 'I7', 'I7'] },
+        { scale: 'Mixolydian', chords: ['I7', 'IV7', 'I7', 'I7', 'IV7', '#iv°7', 'I7', 'VI7', 'ii7', 'V7', 'I7|VI7', 'ii7|V7'] },
+        { scale: 'Mixolydian', chords: ['I7', 'V7', 'IV7', 'IV7', 'I7', 'V7', 'I7', 'V7'] },
+        { scale: 'Mixolydian', chords: ['I7', 'I7', 'IV7', 'IV7', 'I7', 'V7', 'I7', 'V7'] },
+        { scale: 'Natural Minor', chords: ['i7', 'iv7', 'i7', 'i7', 'iv7', 'iv7', 'i7', 'i7', 'VI7', 'V7', 'i7', 'i7'] },
+        { scale: 'Natural Minor', chords: ['i7', 'iv7', 'i7', 'V7'] }
+      ],
+      comping: ['quarters', 'backbeat', 'pushes', 'charleston', 'halfNotes'],
+      bass: ['walking', 'boogie', 'shuffle56', 'rootFifth'],
+      voicings: ['close', 'shell'],
+      push: 0.15,
+      bassFill: 0,
+      reharm: { colour: 0.3, passingDim: 0.1 },
+      cells: moreCells('call', 'response', 'dotted', 'pickup'),
+      drums: [
+        { name: 'Train beat',
+          snare: 'g.g.x.g.g.g.x.g.',
+          kick:  'x.......x.......',
+          hat:   '....x.......x...' },
+        { name: 'Backbeat blues',
+          kick:  'x.....x.x.....x.',
+          snare: '....x.......x...',
+          ride:  'x.x.x.x.x.x.x.x.' }
+      ],
+      fills: ['tomFall', 'stop'],
+      counter: ['fills', 'echo']
+    },
+
+    house: {
+      progressions: [
+        { scale: 'Natural Minor', chords: ['i9', 'i9', 'VImaj7', 'VII'] },
+        { scale: 'Natural Minor', chords: ['VImaj7', 'VII', 'i7', 'i7'] },
+        { scale: 'Natural Minor', chords: ['i7', 'v7', 'VImaj7', 'VII'] },
+        { scale: 'Dorian', chords: ['i9', 'VII', 'IV9', 'i9'] },
+        { scale: 'Dorian', chords: ['i7', 'IV7', 'VII', 'IV7'] },
+        { scale: 'Major (Ionian)', chords: ['IVmaj7', 'V7', 'iii7', 'vi7'] },
+        { scale: 'Major (Ionian)', chords: ['Imaj9', 'IVmaj9', 'Imaj9', 'IVmaj9'] },
+        { scale: 'Major (Ionian)', chords: ['Imaj7', 'vi7', 'IVmaj7', 'V7sus4'] }
+      ],
+      comping: ['offbeats', 'stabs16', 'pulse8', 'syncoStabs', 'pushes', 'sustain'],
+      bass: ['octaves', 'offbeat8', 'kickLock', 'syncopated', 'melodic'],
+      voicings: ['close', 'drop2'],
+      push: 0.2,
+      bassFill: 0.25,
+      reharm: { colour: 0.45, sus: 0.2, turnaround: 0.1 },
+      cells: moreCells('tresillo', 'offbeat', 'hook', 'call'),
+      drums: [
+        { name: 'Garage',
+          kick: 'x.........x.....' + 'x......x..x.....',
+          clap: '....x.......x...',
+          hat:  '..x...x...x...x.',
+          rim:  '...x.....x......' },
+        { name: 'Tech house',
+          kick: 'x...x...x...x...',
+          clap: '....x.......x...',
+          hat:  'xxxxxxxxxxxxxxxx',
+          rim:  '..g...g..g..g...' },
+        { name: 'Disco',
+          kick:    'x...x...x...x...',
+          snare:   '....x.......x...',
+          hat:     'x...x...x...x...',
+          openHat: '..o...o...o...o.',
+          tamb:    'x.x.x.x.x.x.x.x.' }
+      ],
+      fills: ['snareBuild', 'stop'],
+      counter: ['fills', 'echo', 'sustain']
+    },
+
+    synthwave: {
+      progressions: [
+        { scale: 'Natural Minor', chords: ['i', 'VI', 'VII', 'VII'] },
+        { scale: 'Natural Minor', chords: ['VI', 'VII', 'i', 'i'] },
+        { scale: 'Natural Minor', chords: ['i', 'iv', 'VI', 'VII'] },
+        { scale: 'Natural Minor', chords: ['iv', 'VI', 'VII', 'i'] },
+        { scale: 'Major (Ionian)', chords: ['I', 'V', 'vi', 'IV'] },
+        { scale: 'Major (Ionian)', chords: ['IV', 'V', 'vi', 'vi'] },
+        { scale: 'Lydian', chords: ['I', 'II', 'vii', 'I'] },
+        { scale: 'Lydian', chords: ['I', 'II', 'I', 'II'] },
+        { scale: 'Dorian', chords: ['i', 'VII', 'IV', 'IV'] }
+      ],
+      comping: ['arpUp', 'arpUpDown', 'arp16', 'dotted', 'pulse8', 'sustain', 'arpDown'],
+      bass: ['octaves', 'gallop', 'driving8', 'pulse16'],
+      voicings: ['close', 'open'],
+      push: 0.15,
+      bassFill: 0.25,
+      reharm: { sus: 0.2, colour: 0.25, turnaround: 0.2 },
+      cells: moreCells('held', 'dotted', 'hook', 'pickup'),
+      drums: [
+        { name: 'Half-time drive',
+          kick:   'x.......x.x.....',
+          snare:  '........x.......',
+          hat:    'x.x.x.x.x.x.x.x.',
+          tomLow: '..............xx' },
+        { name: 'Linn',
+          kick:  'x.....x...x.....',
+          snare: '....x.......x...',
+          hat:   'x.xxx.xxx.xxx.xx',
+          clap:  '....x.......x...' }
+      ],
+      fills: ['snareBuild', 'halfBarTom', 'stop'],
+      counter: ['fills', 'sustain', 'echo']
+    },
+
+    ambient: {
+      progressions: [
+        { scale: 'Lydian', chords: ['Imaj7', 'II', 'iii7', 'II'] },
+        { scale: 'Lydian', chords: ['Imaj7', 'II', 'vii', 'Imaj7'] },
+        { scale: 'Major (Ionian)', chords: ['IVmaj7', 'Imaj7', 'IVmaj7', 'Imaj7'] },
+        { scale: 'Major (Ionian)', chords: ['Imaj7', 'iii7', 'IVmaj7', 'iv'] },
+        { scale: 'Major (Ionian)', chords: ['Isus2', 'IVmaj7', 'vi7', 'IVmaj7'] },
+        { scale: 'Natural Minor', chords: ['i7', 'VII', 'VImaj7', 'VImaj7'] },
+        { scale: 'Natural Minor', chords: ['iv7', 'i7', 'VImaj7', 'III'] },
+        { scale: 'Dorian', chords: ['i7', 'ii7', 'i7', 'IV'] },
+        { scale: 'Mixolydian', chords: ['I', 'VII', 'I', 'IV'] }
+      ],
+      comping: ['sustain', 'swells', 'rolled'],
+      bass: ['pedal', 'roots', 'sparse'],
+      voicings: ['open', 'close'],
+      push: 0,
+      bassFill: 0,
+      reharm: { colour: 0.6, sus: 0.3 },
+      cells: moreCells('held', 'response'),
+      drums: [],
+      fills: [],
+      counter: ['sustain', 'sustain', 'echo', 'fills']
+    },
+
+    folk: {
+      progressions: [
+        { scale: 'Major (Ionian)', chords: ['I', 'vi', 'IV', 'V'] },
+        { scale: 'Major (Ionian)', chords: ['I', 'IV', 'vi', 'V'] },
+        { scale: 'Major (Ionian)', chords: ['vi', 'IV', 'I', 'V'] },
+        { scale: 'Major (Ionian)', chords: ['I', 'V/3', 'vi', 'IV'] },
+        { scale: 'Major (Ionian)', chords: ['I', 'iii', 'IV', 'I'] },
+        { scale: 'Major (Ionian)', chords: ['IV', 'I', 'V', 'I'] },
+        { scale: 'Mixolydian', chords: ['I', 'IV', 'VII', 'I'] },
+        { scale: 'Natural Minor', chords: ['i', 'III', 'VII', 'i'] },
+        { scale: 'Natural Minor', chords: ['i', 'VI', 'III', 'VII'] },
+        { scale: 'Dorian', chords: ['i', 'IV', 'i', 'VII'] }
+      ],
+      comping: ['strum', 'travis', 'broken', 'halfNotes', 'quarters', 'pushes'],
+      bass: ['rootFifth', 'rootFifthWalk', 'roots', 'melodic'],
+      voicings: ['open', 'close'],
+      push: 0.2,
+      bassFill: 0.35,
+      reharm: { turnaround: 0.3, sus: 0.3, colour: 0.3, inversion: 0.3, secondary: 0.15, minorIV: 0.1 },
+      cells: moreCells('dotted', 'pickup', 'call', 'response'),
+      drums: [
+        { name: 'Train',
+          snare: 'g.g.x.g.g.g.x.g.',
+          kick:  'x.......x.......' },
+        { name: 'Shaker and kick',
+          kick:   'x.......x.......',
+          shaker: 'xxxxxxxxxxxxxxxx',
+          tamb:   '....x.......x...' },
+        { name: 'Heartbeat',
+          kick: 'x..x....x..x....',
+          rim:  '....x.......x...' }
+      ],
+      fills: ['halfBarTom', 'stop'],
+      counter: ['fills', 'sustain', 'echo']
+    },
+
+    trap: {
+      progressions: [
+        { scale: 'Natural Minor', chords: ['i', 'i', 'VI', 'VII'] },
+        { scale: 'Natural Minor', chords: ['i', 'v', 'VI', 'iv'] },
+        { scale: 'Natural Minor', chords: ['VI', 'VII', 'i', 'i'] },
+        { scale: 'Natural Minor', chords: ['i', 'iv', 'v', 'i'] },
+        { scale: 'Harmonic Minor', chords: ['i', 'iv', 'V', 'i'] },
+        { scale: 'Harmonic Minor', chords: ['i', 'VI', 'iv', 'V'] },
+        { scale: 'Phrygian', chords: ['i', 'II', 'iv', 'i'] },
+        { scale: 'Phrygian', chords: ['i', 'II', 'VII', 'i'] }
+      ],
+      comping: ['sustain', 'halfNotes', 'arpUp', 'dotted', 'pulse8'],
+      /* The 808 following the kick is THE trap bass line, so it is drawn as
+         often as the held sub. */
+      bass: ['sub808', 'kickLock', 'kickLock', 'sparse'],
+      voicings: ['close', 'open'],
+      push: 0,
+      bassFill: 0,
+      reharm: { colour: 0.1 },
+      cells: moreCells('hook', 'rolling', 'call', 'offbeat'),
+      drums: [
+        { name: 'Bounce',
+          kick:  'x..x......x.....' + 'x..x....x.x.....',
+          snare: '........x.......',
+          hat:   'x.x.x.x.x.x.x.x.' },
+        { name: 'Dotted hats',
+          kick:  'x.....x...x..x..',
+          snare: '........x.......',
+          hat:   'x..x..x.x..x..x.' }
+      ],
+      fills: ['snareBuild', 'stop'],
+      counter: ['fills', 'echo', 'sustain']
+    },
+
+    bossa: {
+      progressions: [
+        { scale: 'Major (Ionian)', chords: ['Imaj7', 'vi7', 'ii7', 'V7'] },
+        { scale: 'Major (Ionian)', chords: ['Imaj7', 'IVmaj7', 'iii7', 'VI7'] },
+        { scale: 'Major (Ionian)', chords: ['ii7', 'bII7', 'Imaj7', 'Imaj7'] },
+        { scale: 'Major (Ionian)', chords: ['Imaj7', '#i°7', 'ii7', 'V7'] },
+        { scale: 'Major (Ionian)', chords: ['Imaj7', 'II7', 'ii7', 'bII7'] },
+        { scale: 'Natural Minor', chords: ['i7', 'iv7', 'VII7', 'IIImaj7'] },
+        { scale: 'Natural Minor', chords: ['i7', 'iv7', 'iiø7', 'V7b9'] },
+        { scale: 'Dorian', chords: ['i7', 'ii7', 'i7', 'ii7'] }
+      ],
+      comping: ['charleston', 'bossaPartido', 'comp', 'pushes', 'broken'],
+      bass: ['bossa', 'rootFifth', 'melodic'],
+      voicings: ['drop2', 'shell', 'close'],
+      push: 0.15,
+      bassFill: 0.2,
+      reharm: { tritone: 0.3, secondary: 0.3, colour: 0.4, passingDim: 0.15, backdoor: 0.1 },
+      cells: moreCells('tresillo', 'dotted', 'offbeat', 'response'),
+      drums: [
+        { name: 'Partido alto',
+          rim:    'x..x..x...x.x...',
+          kick:   'x.....x.x.....x.',
+          shaker: 'x.xxx.xxx.xxx.xx' },
+        { name: 'Ride bossa',
+          ride: 'x.x.x.x.x.x.x.x.',
+          rim:  '..x..x...x..x...',
+          kick: 'x..x....x..x....' }
+      ],
+      fills: ['stop'],
+      counter: ['fills', 'echo', 'sustain']
+    },
+
+    funk: {
+      progressions: [
+        { scale: 'Dorian', chords: ['i7', 'IV7', 'i7', 'IV7'] },
+        { scale: 'Dorian', chords: ['i9', 'i9', 'i9', 'IV9'] },
+        { scale: 'Mixolydian', chords: ['I9', 'I9', 'I9', 'I9'] },
+        { scale: 'Mixolydian', chords: ['I7', 'IV7', 'I7', 'IV7'] },
+        { scale: 'Mixolydian', chords: ['I9', 'VII', 'IV9', 'I9'] },
+        { scale: 'Natural Minor', chords: ['i7', 'VI7', 'i7', 'VI7'] },
+        { scale: 'Natural Minor', chords: ['i7', 'i7', 'iv7', 'VII'] }
+      ],
+      comping: ['stabs16', 'syncoStabs', 'chank', 'skank', 'offbeats', 'pushes'],
+      bass: ['funk16', 'kickLock', 'syncopated', 'octaves', 'melodic'],
+      voicings: ['shell', 'close'],
+      push: 0.2,
+      bassFill: 0.4,
+      reharm: { colour: 0.4, secondary: 0.1, turnaround: 0.2 },
+      cells: moreCells('rolling', 'offbeat', 'hook', 'call', 'response'),
+      drums: [
+        { name: 'Linear',
+          kick:  'x..x....x.x.....',
+          snare: '....x..g....x.g.',
+          hat:   '.xx..xx..x.x.x.x' },
+        { name: 'Four on the one',
+          kick:    'x...x...x...x...',
+          snare:   '....x.......x...',
+          hat:     'x...x...x...x...',
+          openHat: '..o...o...o...o.' },
+        { name: 'Cold groove',
+          kick:  'x.........x.x...' + 'x.x.......x.....',
+          snare: '....x..g.g..x...',
+          hat:   'x.x.x.x.x.x.x.x.' }
+      ],
+      fills: ['snareBuild', 'kickSnare', 'stop'],
+      counter: ['fills', 'echo']
+    },
+
+    gospel: {
+      progressions: [
+        { scale: 'Major (Ionian)', chords: ['I', 'iii7', 'IV', 'V'] },
+        { scale: 'Major (Ionian)', chords: ['I', 'vi7', 'IV', 'V7sus4'] },
+        { scale: 'Major (Ionian)', chords: ['ii7', 'V7', 'iii7', 'vi7'] },
+        { scale: 'Major (Ionian)', chords: ['IV', 'iii7', 'ii7', 'I'] },
+        { scale: 'Major (Ionian)', chords: ['Imaj7', 'I7', 'IVmaj7', 'iv7'] },
+        { scale: 'Natural Minor', chords: ['i7', 'iv7', 'VII7', 'IIImaj7'] },
+        { scale: 'Natural Minor', chords: ['i7', 'VI', 'iv7', 'V7'] }
+      ],
+      comping: ['gospel', 'pushes', 'rolled', 'quarters', 'broken', 'stride'],
+      bass: ['gospelWalk', 'melodic', 'walking', 'anticipate'],
+      voicings: ['close', 'drop2'],
+      push: 0.3,
+      bassFill: 0.4,
+      reharm: { secondary: 0.4, passingDim: 0.3, minorIV: 0.3, tritone: 0.2, backdoor: 0.2, colour: 0.4, turnaround: 0.3, inversion: 0.3, sus: 0.2 },
+      cells: moreCells('pickup', 'dotted', 'call', 'response', 'rolling'),
+      drums: [
+        { name: 'Praise shuffle',
+          kick:  'x..x..x.x..x..x.',
+          snare: '....x.......x...',
+          hat:   'x.xxx.xxx.xxx.xx',
+          tamb:  '....x.......x...' },
+        { name: 'Ballad',
+          kick:  'x.......x.....x.',
+          snare: '........x.......',
+          hat:   'x.x.x.x.x.x.x.x.',
+          rim:   '....g.......g...' }
+      ],
+      fills: ['snareBuild', 'kickSnare', 'stop', 'halfBarTom'],
+      counter: ['fills', 'echo', 'sustain']
+    }
+  };
+
+  Object.keys(GENRES).forEach((id) => { GENRES[id].more = MORE[id] || {}; });
+
   global.Genres = {
     GENRES,
     ENERGY,
     CELLS,
+    MORE_CELLS,
     DRUM_VOICES,
     FEEL,
     KIT,
     FILLS,
     order: ['pop', 'lofi', 'rock', 'rnb', 'jazz', 'blues', 'house', 'synthwave', 'trap', 'funk', 'gospel', 'bossa', 'folk', 'ambient'],
-    scalesFor: function (id) {
+    /* The scales a genre is written in. Engine 1 knew only the genre's own
+       pool, and "Pick for me" drew from that exact list, so a song written on
+       it has to be asked against the same list or it picks a different
+       scale. Anything else — the picker, a new song — gets the whole range. */
+    scalesFor: function (id, engine) {
       const genre = GENRES[id];
       if (!genre) return [];
       const seen = [];
-      genre.progressions.forEach((p) => { if (!seen.includes(p.scale)) seen.push(p.scale); });
+      const pool = engine === 1 ? genre.progressions
+        : genre.progressions.concat((genre.more && genre.more.progressions) || []);
+      pool.forEach((p) => { if (!seen.includes(p.scale)) seen.push(p.scale); });
       return seen;
     }
   };
