@@ -386,6 +386,291 @@
   .drum-cell.ghost { background:var(--part); opacity:.3; }
   .drum-cell.accent { background:var(--part); opacity:1; box-shadow:0 0 0 1px var(--part-ink); }
 
+  /* ========================================================= the highway
+
+     One part as a road of notes running down onto the EP-133's twelve pads.
+     The road is a flat drawing leaned back in 3D about its own bottom edge,
+     which therefore stays exactly where layout put it: level with the row of
+     pads underneath, at their width, so a lane and the pad it lands on line up
+     without anything being measured. src/highway.js sets the lean, the length
+     and the perspective from the height it is given.
+
+     Every lane, gem and pad is placed with the same two numbers — where the
+     lane starts and how wide it is, as fractions of the width left once the
+     three gaps between the keypad's rows are taken out — and the same calc,
+     so the road and the pads cannot drift apart. */
+  .screen[data-screen=highway] { padding-bottom:0; }
+  .hw-inner {
+    min-height:100%;
+    gap:var(--sp-4);
+    padding-bottom:var(--sp-3);
+  }
+  .hw-row { display:flex; gap:var(--sp-2); }
+  .hw-row > .seg-ctl { flex:2 1 0; min-width:0; }
+  .hw-row > #hwHear { flex:3 1 0; }
+  .hw-row .seg-ctl button { font-size:var(--fs-caption); }
+
+  .hw-block {
+    flex:1 1 auto;
+    min-height:0;
+    width:100%;
+    max-width:560px;
+    margin:0 auto;
+    gap:var(--sp-2);
+  }
+  .hw {
+    --hw-gap:6px;
+    flex:1 1 auto;
+    min-height:0;
+    display:flex;
+    flex-direction:column;
+    padding:0 var(--gutter);
+  }
+
+  .hw-stage {
+    position:relative;
+    flex:1 1 auto;
+    min-height:200px;
+    overflow:hidden;
+    /* The eye sits at the top of the opening, so the road closes on its own
+       centre line and its far end lands on the stage's top edge. */
+    perspective-origin:50% 0;
+  }
+  .hw-road {
+    position:absolute;
+    left:0; right:0; bottom:0;
+    height:100%;
+    transform-origin:50% 100%;
+    overflow:hidden;
+    border-radius:var(--r-sm) var(--r-sm) 0 0;
+    background:var(--grouped-cell);
+  }
+  /* The far end fades into the road rather than cutting off, so a gem
+     arrives out of the distance instead of out of an edge. */
+  .hw-road::after {
+    content:'';
+    position:absolute;
+    left:0; right:0; top:0;
+    height:26%;
+    z-index:4;
+    background:linear-gradient(var(--grouped-cell), transparent);
+    pointer-events:none;
+  }
+  .hw-lanes, .hw-beats, .hw-marks, .hw-notes { position:absolute; inset:0; }
+
+  .hw-lane, .hw-gem, .hw-pad {
+    position:absolute;
+    left:calc(var(--l) * (100% - 3 * var(--hw-gap)) + var(--c) * var(--hw-gap));
+    width:calc(var(--w) * (100% - 3 * var(--hw-gap)));
+  }
+  .hw-lane { top:0; bottom:0; }
+  /* A lane the part plays is a groove; one it never touches is just road.
+     The keypad's four rows alternate a step, so a group of three reads as a
+     row of the pad grid. */
+  .hw-lane[data-used=true] { background:var(--fill-4); box-shadow:inset 1px 0 0 var(--fill-4), inset -1px 0 0 var(--fill-4); }
+  .hw-lane[data-used=true][data-row=odd] { background:var(--fill-3); }
+
+  .hw-beat {
+    position:absolute;
+    left:0; right:0; bottom:0;
+    height:1px;
+    background:var(--separator);
+  }
+  .hw-beat.is-bar { height:2px; background:var(--label-3); }
+
+  /* Where the loop turns into the other section, or a section of the form
+     begins: a rule across the road with the name above it. */
+  .hw-mark {
+    position:absolute;
+    left:0; right:0; bottom:0;
+    z-index:2;
+    padding:0 var(--sp-2) 3px;
+    border-bottom:2px solid var(--tint);
+    font-size:var(--fs-caption2);
+    font-weight:600;
+    line-height:1.2;
+    color:var(--tint);
+    white-space:nowrap;
+    overflow:hidden;
+    text-overflow:ellipsis;
+  }
+
+  /* A gem sits ON the line it is placed at: its bottom edge is the moment
+     the note sounds, the head is centred on it and the tail runs up from it
+     for as long as the note is held. src/highway.js moves the whole gem with
+     a transform and never touches layout while it travels. */
+  .hw-gem { bottom:0; height:0; z-index:3; pointer-events:none; }
+  .hw-head {
+    position:absolute;
+    left:2px; right:2px; bottom:0;
+    height:var(--hw-head, 14px);
+    transform:translateY(50%);
+    display:grid;
+    place-items:center;
+    border-radius:5px;
+    background:var(--part);
+    box-shadow:0 0 10px color-mix(in srgb, var(--part) 45%, transparent);
+    font-family:var(--mono);
+    font-size:10px;
+    font-variation-settings:'wght' 720;
+    line-height:1;
+    letter-spacing:-.02em;
+    color:var(--on-part);
+    white-space:nowrap;
+    overflow:hidden;
+  }
+  .hw-tail {
+    position:absolute;
+    top:0; bottom:0;
+    left:50%;
+    width:30%;
+    transform:translateX(-50%);
+    border-radius:3px 3px 0 0;
+    background:color-mix(in srgb, var(--part) 55%, transparent);
+  }
+  /* Off the twelve: the colour of the shift that reaches it, as on the
+     faceplate, and an arrow beside the pad name. */
+  .hw-gem[data-oct=up] .hw-head { background:var(--oct-up); box-shadow:0 0 10px color-mix(in srgb, var(--oct-up) 45%, transparent); }
+  .hw-gem[data-oct=dn] .hw-head { background:var(--oct-dn); box-shadow:0 0 10px color-mix(in srgb, var(--oct-dn) 45%, transparent); }
+  .hw-gem[data-oct=up] .hw-tail { background:color-mix(in srgb, var(--oct-up) 55%, transparent); }
+  .hw-gem[data-oct=dn] .hw-tail { background:color-mix(in srgb, var(--oct-dn) 55%, transparent); }
+
+  .hw-line {
+    position:absolute;
+    left:0; right:0; bottom:0;
+    z-index:5;
+    height:3px;
+    background:var(--lamp);
+    box-shadow:0 0 12px color-mix(in srgb, var(--lamp) 60%, transparent);
+  }
+
+  .hw-empty {
+    position:absolute;
+    left:var(--sp-4); right:var(--sp-4); top:38%;
+    z-index:6;
+    font-size:var(--fs-subhead);
+    line-height:1.35;
+    color:var(--label-2);
+    text-align:center;
+  }
+
+  /* The pads the road runs onto: EP-133 caps in the unit's own colours in
+     both appearances, printed with the pad's legend and what it holds for
+     this part, lighting as their notes reach the line. */
+  .hw-pads {
+    position:relative;
+    flex:none;
+    height:46px;
+    margin-top:var(--sp-1);
+  }
+  .hw-pad {
+    top:0; bottom:0;
+    display:flex;
+    flex-direction:column;
+    align-items:center;
+    justify-content:space-between;
+    padding:5px 1px 4px;
+    border-radius:6px;
+    /* The flat cap colour under the gradient: what the legend is actually
+       read against, and what is left where a gradient is not drawn. */
+    background:linear-gradient(var(--ep-cap-hi), var(--ep-cap-lo)) var(--ep-cap);
+    box-shadow:inset 0 -2px 0 var(--ep-edge);
+    overflow:hidden;
+    font-family:var(--mono);
+    line-height:1;
+    transition:background var(--t-decay) var(--e-ios), box-shadow var(--t-decay) var(--e-ios);
+  }
+  .hw-pad-id {
+    font-size:10px;
+    font-variation-settings:'wght' 700;
+    color:var(--ep-label);
+    white-space:nowrap;
+  }
+  .hw-pad-note {
+    max-width:100%;
+    font-size:8px;
+    font-variation-settings:'wght' 560;
+    color:var(--ep-label);
+    white-space:nowrap;
+    overflow:hidden;
+  }
+  /* A pad this part never plays is drawn narrow, and its legend with it. */
+  .hw-pad:not([data-used]) .hw-pad-id { font-size:8px; letter-spacing:-.04em; }
+  .hw-pad.is-on {
+    background:var(--part);
+    box-shadow:0 0 14px color-mix(in srgb, var(--part) 70%, transparent);
+    transition-duration:var(--t-lamp);
+  }
+  .hw-pad.is-on[data-oct=up] { background:var(--oct-up); box-shadow:0 0 14px color-mix(in srgb, var(--oct-up) 70%, transparent); }
+  .hw-pad.is-on[data-oct=dn] { background:var(--oct-dn); box-shadow:0 0 14px color-mix(in srgb, var(--oct-dn) 70%, transparent); }
+  .hw-pad.is-on .hw-pad-id, .hw-pad.is-on .hw-pad-note { color:var(--on-part); }
+
+  /* What is coming next, in words: one line, so it never takes a second
+     one from the road. */
+  .hw-read {
+    min-height:20px;
+    padding:0 var(--gutter);
+    font-size:var(--fs-footnote);
+    line-height:1.4;
+    color:var(--label-2);
+    white-space:nowrap;
+    overflow:hidden;
+    text-overflow:ellipsis;
+  }
+  .hw-next b {
+    font-family:var(--mono);
+    font-size:var(--fd-sm);
+    font-variation-settings:'wght' 650;
+    letter-spacing:var(--tr-data);
+    color:var(--part-ink);
+  }
+  .hw-next-k { font-weight:600; color:var(--label); }
+  .hw-next-shift { font-weight:600; color:var(--label); }
+  .hw-grid {
+    min-width:0;
+    font-family:var(--mono);
+    font-size:var(--fd-xs);
+    font-variation-settings:'wght' 550;
+    letter-spacing:var(--tr-data);
+    white-space:nowrap;
+    overflow:hidden;
+    text-overflow:ellipsis;
+  }
+
+  /* On the highway the count-in is the road's lead-in: the notes are already
+     falling toward the line as it counts, so it cannot cover the road. It
+     becomes a card over the controls instead — which are inert while it
+     counts, and the one part of the screen you are not reading. */
+  .countin.on-road {
+    top:calc(var(--safe-t) + var(--nav-h) + var(--sp-2));
+    left:var(--gutter); right:var(--gutter);
+    height:auto !important;
+    min-height:132px;
+    flex-direction:row;
+    gap:var(--sp-4);
+    padding:var(--sp-3) var(--sp-4);
+    border-radius:var(--r-lg);
+    background:var(--grouped-cell);
+    box-shadow:var(--shadow-2);
+    backdrop-filter:none;
+    -webkit-backdrop-filter:none;
+  }
+  .countin.on-road b { font-size:72px; }
+
+  /* A short phone — an SE, or anything in Display Zoom — has a road's worth
+     of height only if the controls above it give some back. The part
+     switcher drops to the platform's own segment height and reaches 44
+     points with its pseudo, as every other segmented control here does. */
+  @media (max-height:760px) {
+    .hw-inner { padding-top:var(--sp-2); gap:var(--sp-3); }
+    .hw-controls { gap:6px; }
+    .hw-controls .seg-parts button { min-height:36px; line-height:36px; }
+    .hw-stage { min-height:160px; }
+    .countin.on-road { min-height:108px; }
+    .countin.on-road b { font-size:60px; }
+  }
+
+
   /* ======================================================== song screen */
 
   /* The genre is the one decision that changes everything downstream, so it is

@@ -58,10 +58,16 @@
     <svg class="sprite" aria-hidden="true" focusable="false" xmlns="http://www.w3.org/2000/svg">
       <symbol id="i-play" viewBox="0 0 24 24"><path d="M7.6 4.9 19.4 12 7.6 19.1Z"/></symbol>
       <symbol id="i-stop" viewBox="0 0 24 24"><rect x="6" y="6" width="12" height="12" rx="2.4"/></symbol>
-      <!-- The tab bar. Four glyphs that name a place rather than an action. -->
+      <!-- The tab bar. Five glyphs that name a place rather than an action. -->
       <symbol id="i-pads" viewBox="0 0 24 24">
         <rect x="3.2" y="3.2" width="7.6" height="7.6" rx="2.1"/><rect x="13.2" y="3.2" width="7.6" height="7.6" rx="2.1"/>
         <rect x="3.2" y="13.2" width="7.6" height="7.6" rx="2.1"/><rect x="13.2" y="13.2" width="7.6" height="7.6" rx="2.1"/>
+      </symbol>
+      <!-- Two rails closing on the far end of a road, a gem arriving on the
+           near end and another one far behind it. -->
+      <symbol id="i-highway" viewBox="0 0 24 24">
+        <path d="M2.4 21.4h2.3l5.2-18.8H8.8Z" opacity=".55"/><path d="M19.3 21.4h2.3L15.2 2.6h-1.1Z" opacity=".55"/>
+        <rect x="7.4" y="14.2" width="9.2" height="4.4" rx="1.6"/><rect x="10.5" y="6.4" width="3" height="2" rx=".8"/>
       </symbol>
       <symbol id="i-sliders" viewBox="0 0 24 24">
         <rect x="2.6" y="5.4" width="18.8" height="1.7" rx=".85" opacity=".55"/><rect x="6.6" y="3.2" width="3.3" height="6.1" rx="1.65"/>
@@ -207,6 +213,50 @@
               <div class="lane-scroll" id="laneScroll">
                 <div class="lane" id="lane" role="img"></div>
               </div>
+            </section>
+          </div>
+        </section>
+
+        <!-- ---------------------------------------------------- highway -->
+        <!-- One part of the song as a road of notes running down onto the
+             EP-133's twelve pads. The part and the section are the same two
+             questions the Play screen asks, and the third — what you hear —
+             is the one you answer before you press record on the unit. -->
+        <section class="screen" data-screen="highway" id="screenHighway" role="tabpanel" aria-label="Highway" inert>
+          <div class="screen-inner hw-inner">
+            <section class="block hw-controls">
+              <!-- The grid the unit has to be on sits in the header, where it
+                   is read once before you start, rather than under the road
+                   where it would take a line from the road on a small phone. -->
+              <div class="block-head">
+                <h3 class="group-title">On the EP-133</h3>
+                <span class="block-note hw-grid" id="hwGrid"></span>
+                <button class="block-action" id="hwSetup">Set-up</button>
+              </div>
+              <div class="seg-ctl-wrap parts-wrap">
+                <div class="seg-ctl seg-parts" id="hwParts" role="radiogroup" aria-label="Which part runs down the highway"></div>
+              </div>
+              <div class="seg-ctl-wrap hw-row">
+                <div class="seg-ctl" id="hwSections" role="radiogroup" aria-label="Which section of the song"></div>
+                <div class="seg-ctl" id="hwHear" role="radiogroup" aria-label="What you hear"></div>
+              </div>
+            </section>
+
+            <section class="block hw-block">
+              <div class="hw" id="hw">
+                <div class="hw-stage" id="hwStage">
+                  <div class="hw-road" id="hwRoad" role="img" aria-label="Highway">
+                    <div class="hw-lanes" id="hwLanes"></div>
+                    <div class="hw-beats" id="hwBeats"></div>
+                    <div class="hw-marks" id="hwMarks"></div>
+                    <div class="hw-notes" id="hwNotes"></div>
+                    <i class="hw-line"></i>
+                  </div>
+                  <p class="hw-empty" id="hwEmpty" hidden></p>
+                </div>
+                <div class="hw-pads" id="hwPads" aria-hidden="true"></div>
+              </div>
+              <p class="hw-read"><span class="hw-next" id="hwNext"></span></p>
             </section>
           </div>
         </section>
@@ -365,6 +415,9 @@
         <button class="tab" role="tab" data-tab="play" aria-selected="true" aria-controls="screenPlay">
           <svg class="i" aria-hidden="true" focusable="false"><use href="#i-pads"></use></svg><span>Play</span>
         </button>
+        <button class="tab" role="tab" data-tab="highway" aria-selected="false" aria-controls="screenHighway" tabindex="-1">
+          <svg class="i" aria-hidden="true" focusable="false"><use href="#i-highway"></use></svg><span>Highway</span>
+        </button>
         <button class="tab" role="tab" data-tab="song" aria-selected="false" aria-controls="screenSong" tabindex="-1">
           <svg class="i" aria-hidden="true" focusable="false"><use href="#i-sliders"></use></svg><span>Song</span>
         </button>
@@ -446,6 +499,7 @@
     <script src="src/mark.js"></script>
     <script src="src/motion.js"></script>
     <script src="src/devices.js"></script>
+    <script src="src/highway.js"></script>
     <script src="src/arrange.js"></script>
     <script src="src/library.js"></script>
     <script src="src/ios.js"></script>

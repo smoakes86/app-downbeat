@@ -111,7 +111,7 @@ const overflow = (page, tag) => page.evaluate(() => {
 /* ---- 3. 320px: the narrowest phone anyone still uses ---- */
 {
   const { ctx, page } = await open(320, 568);
-  for (const tab of ['play', 'song', 'arrange', 'library']) {
+  for (const tab of ['play', 'highway', 'song', 'arrange', 'library']) {
     await page.locator(`.tab[data-tab="${tab}"]`).tap();
     await page.waitForTimeout(450);
     await page.screenshot({ path: path.join(OUT, `320-${tab}.png`) });
@@ -123,7 +123,7 @@ const overflow = (page, tag) => page.evaluate(() => {
 /* ---- 4. Light appearance, every tab ---- */
 {
   const { ctx, page } = await open(393, 852, 'light');
-  for (const tab of ['play', 'song', 'arrange', 'library']) {
+  for (const tab of ['play', 'highway', 'song', 'arrange', 'library']) {
     await page.locator(`.tab[data-tab="${tab}"]`).tap();
     await page.waitForTimeout(450);
     await page.screenshot({ path: path.join(OUT, `light-${tab}.png`) });

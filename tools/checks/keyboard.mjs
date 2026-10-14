@@ -23,14 +23,14 @@ check(!(await active()).includes('BODY'), 'Tab escaped the onboarding to <body>'
 await p.keyboard.press('Escape'); await p.waitForTimeout(500);
 check(await p.locator('#intro').isHidden(), 'Escape did not close the onboarding');
 
-// Tab bar: arrows must reach all four screens.
+// Tab bar: arrows must reach all five screens.
 await p.locator('.tab[data-tab="play"]').focus();
 const seen = [];
-for (let i=0;i<4;i++) {
+for (let i=0;i<5;i++) {
   await p.keyboard.press('ArrowRight'); await p.waitForTimeout(350);
   seen.push(await p.evaluate(()=>document.querySelector('.screen.is-active').dataset.screen));
 }
-check(new Set(seen).size === 4, `arrow keys reached ${new Set(seen).size} of 4 tabs: ${seen.join(',')}`);
+check(new Set(seen).size === 5, `arrow keys reached ${new Set(seen).size} of 5 tabs: ${seen.join(',')}`);
 
 // Genre rail: arrows must change the genre.
 await p.locator('.tab[data-tab="song"]').focus(); await p.keyboard.press('Enter'); await p.waitForTimeout(400);

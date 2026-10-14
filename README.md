@@ -3,7 +3,9 @@
 Play your hardware. Downbeat writes you a verse and a chorus — a progression,
 a bass line, drums and a melody for each — then shows you how to perform every
 part on a Teenage Engineering EP-133 K.O. II or an M-VAVE FM-1: the exact pads
-and keys, in order, lighting up in time with playback.
+and keys, in order, lighting up in time with playback — or, on the EP-133, as a
+Guitar Hero-style highway of notes falling onto its twelve pads, with just the
+part you are learning playing so you can record it.
 
 An iPhone app, built as a zero-dependency PWA. No build step, no dependencies.
 Open `index.html` in a browser, or serve the directory with anything static.
@@ -25,7 +27,7 @@ with grabbers, action sheets, alerts. People already know how all of those
 behave, and that is most of what "feels native" means.
 
 **The document never scrolls.** `<body>` is locked to the viewport and the only
-things that move are the four screen scrollers, each keeping its own offset the
+things that move are the five screen scrollers, each keeping its own offset the
 way a tab controller's children do. No rubber-banding, no pull-to-refresh, no
 bounce at the top of a fixed bar.
 
@@ -38,11 +40,12 @@ not close: a phone lying down is about 390 points tall, the fixed chrome takes
 with three-pixel legends. A tablet on its side has the height, and gets the
 two-column desk instead.
 
-**Four tabs, and a transport that never leaves.**
+**Five tabs, and a transport that never leaves.**
 
 | | |
 |---|---|
 | **Play** | The section and the part you are playing: the faceplate, the run of pads, the shape |
+| **Highway** | The same part as a road of notes onto the EP-133's pads, and what you hear while you play or record it |
 | **Song** | Genre, key, scale, feel, length, tempo, second melody, count-in |
 | **Arrange** | The form, the map, section by section, the theory note |
 | **Library** | Saved sketches, sharing, export, and how it works |
@@ -94,6 +97,57 @@ has just lit into view, so the run runs ahead of your hands.
 **The shape is drawn against the bars.** Bars are never narrower than 96 points,
 so a twelve-bar sketch scrolls rather than collapsing into slivers — and the
 lane follows the playhead while it runs, unless your finger is on it.
+
+**The highway is the part as a road of notes.** Guitar Hero runs a chart down
+onto five frets; this runs one part of the song down onto the EP-133's twelve
+pads. Every note is a gem in the lane of the pad that plays it, printed with
+what is silkscreened on that pad, and it reaches the line at the bottom of the
+road at the moment you hear it — swing and each drum's feel included, because
+a gem drawn on the straight grid would land a swung sixteenth early. A note
+that is held trails a tail as long as it is held; a stab does not, so eight
+comped chords read as eight hits rather than one long one.
+
+The lanes are the pads in the order KEYS mode climbs them — `.` `0` `ENTER`,
+then `1` to `9` — gathered into the keypad's four rows of three, so where a gem
+sits inside its group is which column of the pad grid to reach for, and which
+group is which row. The road always has all twelve; the pads this part never
+touches are drawn narrow rather than left out, because the unit has twelve
+pads whatever the part does and a lane that moved between songs would teach
+nothing. Under the road sits a row of EP-133 caps in the unit's own colours,
+each printed with what it holds for this part, lighting as its notes arrive.
+Everything is the faceplate's own mapping read from the other end — the same
+pad for the same note in the verse and the chorus, the same `KEYS +`/`−` shift
+in the same amber and periwinkle, the same kit on the same pads — so the two
+views can never disagree about where a note lives. A line under the road says
+what is next in words (`Next pad 5↑ · E5 · keys +`), and the header names the
+codes the unit has to be on: `C maj · 311 + 320`, or `310` for 12T.
+
+The road leans back in perspective and shows about two and a half seconds of
+music, whatever the tempo, with a floor on the spacing so two sixteenths on one
+pad never smear into one gem on a small phone. It draws from the transport's
+clock unfolded rather than from the folded position the faceplate reads: the
+faceplate is a picture of one pass, but a road shows what is *coming*, and at
+the end of a pass that is the next pass — or the chorus you asked for, which
+arrives on the road with its name across it before you hear it. With the form
+armed the road is the whole arrangement laid out by the engine itself, so a
+section that drops the part is a stretch of empty road, marked `Intro · melody
+rests`.
+
+**What you hear is the question you answer before pressing record.** Three
+answers, on the highway's own control: *Solo* plays just this part, to sample
+it into the unit or learn it by ear; *Band* plays everything; *Backing* plays
+everything but this part, so the part is yours to play on the pads — and it
+follows you as you pick another part. They are not a second mix: Solo is the
+transport's own solo, Band and Backing write the same five mutes the Play
+screen's mix row shows, and a mix made there that is none of the three selects
+none of them. The part and the section are the Play screen's too, so the
+highway and the faceplate are always on the same thing.
+
+The count-in is the road's lead-in. On the highway it becomes a card over the
+controls instead of a scrim over the road, and the first notes are already
+falling toward the line as it counts, so the first one lands on the downbeat
+instead of appearing on it. The clicks have a bus of their own, so soloing a
+part no longer silences the count that brings you in on it.
 
 ## The look
 
@@ -428,6 +482,9 @@ scale and section to assert it never shows.
 | New melody / New chords / New beat | Three seeds, rerolled one at a time |
 | Write a new song | Rerolls both seeds |
 | Section switcher | Verse or chorus. Immediate when stopped; at the top of the next pass while the loop plays; while the form plays it follows the form, and tapping it leaves the form |
+| Highway: part and section | The Play screen's own two switchers, on the highway |
+| Highway: Solo, Band, Backing | Hear just this part, everything, or everything but this part. Backing follows the part you pick |
+| Highway: Set-up | The EP-133 set-up for this part — scale and key codes, root pad, kit group |
 | Part switcher | Which part you are playing — the faceplate, the run and the shape all follow |
 | Mix | Five toggles under the switcher: any combination of the parts, on or off |
 | Every part on | Appears beside *Parts* whenever something is off, and puts the whole song back |
@@ -441,7 +498,7 @@ scale and section to assert it never shows.
 
 With a hardware keyboard: `Space` plays and stops, `G` writes a new song,
 `1`–`5` pick a part, `⇧1`–`⇧5` switch that part off and on again, `⌘Z` undoes,
-`Esc` closes whatever is open.
+`Esc` closes whatever is open. On the highway, `1`–`5` keep you on the highway.
 
 ## Accessibility
 
@@ -501,6 +558,14 @@ found:
   checked exhaustively: every one of the 2ⁿ combinations of the parts a song
   has, driven a tap at a time and asserted against what the engine is
   actually playing.
+  The highway is checked from both ends: in every genre and part, every note
+  is exactly one gem, on the pad the faceplate names, reaching the line at the
+  swung time the engine plays it; the form's road is empty exactly where the
+  arrangement drops the part; Solo, Band and Backing are asserted against the
+  engine's mutes; a lit pad always has its gem on the line; the clock runs
+  straight through a wrap without stepping back or holding still; a queued
+  section is on the road before it sounds; and the count-in moves the road
+  and is heard over a solo.
 - **layout** — every tab at every size, with the safe-area insets an iPhone
   actually reports forced in, asserting no horizontal overflow, no page offset,
   no control under the notch or the home indicator, and nothing below 44pt —
@@ -517,11 +582,11 @@ songs, a 320px screen and a sketch renamed to a hundred characters of markup.
 ## Layout
 
 ```
-index.html          the shell: nav bar, four screens, transport, tab bar
+index.html          the shell: nav bar, five screens, transport, tab bar
 css/tokens.css      colour, type, motion and the two hardware palettes
 css/base.css        reset, fonts, the type ramp, the fixed app shell
 css/components.css  the iOS control set
-css/screens.css     the four screens
+css/screens.css     the five screens
 css/device.css      everything src/devices.js draws
 css/a11y.css        reduced motion, increased contrast, focus
 src/theory.js       note spelling, scales, roman numerals, chords, voice leading
@@ -530,10 +595,11 @@ src/compose.js      a verse and a chorus: melody, countermelody, bass, drums, ch
 src/audio.js        synth voices, drum synthesis, effects, scheduler
 src/midi.js         Standard MIDI File export
 src/devices.js      hardware faceplates, note-to-pad/key mapping, lighting
+src/highway.js      one part as a road of notes onto the EP-133's twelve pads
 src/arrange.js      section plans per genre family, each section naming which of the two it plays
 src/library.js      sketch recipes, local storage, shareable links
 src/ios.js          modal presentation, action sheets, alerts, swipe, segments
-src/ui.js           the app: state, transport, the four screens, platform glue
+src/ui.js           the app: state, transport, the five screens, platform glue
 ```
 
 Adding a genre means adding one object to `src/genres.js`.

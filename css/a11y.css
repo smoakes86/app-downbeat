@@ -33,7 +33,7 @@
     /* The one thing that must keep moving is the thing that tracks the music.
        A playhead that jumps between bars is not a playhead. */
     .lane-head, .seq-chip, .seq-chord, .dev-pad, .dev-wkey, .dev-bkey,
-    .pad-glow, .wkey-glow, .bkey-glow, .pad-glow-b, .key-glow-b {
+    .pad-glow, .wkey-glow, .bkey-glow, .pad-glow-b, .key-glow-b, .hw-pad {
       transition-duration:revert-layer;
     }
   }

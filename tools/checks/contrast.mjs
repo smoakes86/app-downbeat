@@ -23,7 +23,7 @@ for (const scheme of ['dark', 'light']) {
 
   // Every text node in the app, with its computed colour composited onto the
   // nearest painted background.
-  const samples = await p.evaluate(() => {
+  const sampleText = () => p.evaluate(() => {
     const parse = (c) => (c.match(/[\d.]+/g) || []).map(Number);
     const over = (fg, bg) => {
       const a = fg.length > 3 ? fg[3] : 1;
@@ -61,6 +61,14 @@ for (const scheme of ['dark', 'light']) {
     });
     return out;
   });
+  const samples = await sampleText();
+  /* The highway is a screen of its own — gems in the part colour, EP-133
+     caps under the road — so it is sampled on its own, at rest. */
+  await p.locator('.tab[data-tab="highway"]').click();
+  await p.waitForTimeout(500);
+  samples.push(...await sampleText());
+  await p.locator('.tab[data-tab="play"]').click();
+  await p.waitForTimeout(400);
 
   const fails = [];
   const seen = new Set();
@@ -138,6 +146,34 @@ for (const scheme of ['dark', 'light']) {
       const r = ratio(s3[key][0], s3[key][1]);
       if (r < 4.5) console.log(`  ${scheme}: ${part} playing-${key} label ${r.toFixed(2)}:1`);
     });
+
+    /* A pad under the highway, lit: the legend on the part colour, and on
+       the two shift colours a note off the twelve lights it in. Lit is a
+       state the transport sets for a frame or two, so it is set here. */
+    const s4 = await p.evaluate(() => {
+      const parse = (c) => (c.match(/[\d.]+/g) || []).map(Number);
+      const pad = document.querySelector('#hwPads .hw-pad');
+      if (!pad) return null;
+      const out = {};
+      pad.style.transition = 'none';
+      [['home', null], ['up', 'up'], ['dn', 'dn']].forEach(([key, oct]) => {
+        pad.classList.add('is-on');
+        if (oct) pad.dataset.oct = oct; else delete pad.dataset.oct;
+        void pad.offsetWidth;
+        out[key] = [parse(getComputedStyle(pad.querySelector('.hw-pad-id')).color).slice(0, 3),
+          parse(getComputedStyle(pad).backgroundColor).slice(0, 3)];
+      });
+      pad.classList.remove('is-on');
+      delete pad.dataset.oct;
+      pad.style.transition = '';
+      return out;
+    });
+    if (s4) {
+      Object.keys(s4).forEach((key) => {
+        const r = ratio(s4[key][0], s4[key][1]);
+        if (r < 4.5) console.log(`  ${scheme}: ${part} lit highway pad (${key}) ${r.toFixed(2)}:1`);
+      });
+    }
   }
   await ctx.close();
 }

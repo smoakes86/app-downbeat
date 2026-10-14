@@ -119,6 +119,12 @@
       buses[track] = { out, send };
       applyMute(track);
     });
+    /* The count-in has a bus of its own, outside the five tracks, because it
+       is not one of them: it played through the drum bus, so soloing the
+       melody silenced the four clicks that are there to bring you in on it. */
+    buses.click = { out: ctx.createGain(), send: ctx.createGain() };
+    buses.click.out.connect(dryBus);
+    buses.click.send.connect(wetBus);
 
     noiseBuffer = makeNoise(2);
     wake();
@@ -384,9 +390,9 @@
 
   const K = (name, fallback) => (kit[name] === undefined ? fallback : kit[name]);
 
-  function playDrum(instrument, when, velocity) {
+  function playDrum(instrument, when, velocity, bus) {
     ensure();
-    const target = buses.drums;
+    const target = (bus && buses[bus]) || buses.drums;
     const level = clamp(velocity === undefined ? 0.9 : velocity, 0.05, 1);
     if (!(when > ctx.currentTime)) when = ctx.currentTime + 0.005;
 
@@ -503,6 +509,14 @@
      form is playing, because then the form decides. */
   let sounding = null;
   let pending = null;
+  /* The audio-clock time of step zero, and which section each pass of the
+     bare loop has been scheduled to play, from where. `loopStart` cannot
+     answer either: the scheduler moves it to the next pass a lookahead window
+     before that pass is heard, which is right for scheduling and is why
+     position() reads zero for a moment before every wrap. Anything that draws
+     the music running ahead of the playhead needs the clock unfolded. */
+  let origin = 0;
+  let passes = [];
 
   /* Which of a song's sections to lay out. A song from before there were two
      has none, and is its own loop; so is a song asked for no section in
@@ -675,9 +689,14 @@
       const loopEnd = loopStart + totalSteps * stepDuration;
       if (looping) {
         if (loopEnd < horizon) {
+          const from = passes.length ? passes[passes.length - 1].start + totalSteps : 0;
           loopStart = loopEnd;
           cursor = 0;
           if (pending) swapSection();
+          passes.push({ start: from, section: sounding });
+          /* Only the last few are ever asked about — the road looks a pass
+             behind at most — and an hour of a four-bar loop is 450 of them. */
+          if (passes.length > 8) passes.shift();
           if (onLoop) onLoop();
         }
       } else if (ctx.currentTime > loopEnd + 0.6) {
@@ -746,6 +765,8 @@
     }
     stepDuration = 60 / song.bpm / 4;
     loopStart = ctx.currentTime + 0.14;
+    origin = loopStart;
+    passes = [{ start: 0, section: sounding }];
     cursor = 0;
     timer = global.setInterval(tick, LOOKAHEAD_MS);
     tick();
@@ -785,6 +806,7 @@
     sections = null;
     sounding = null;
     pending = null;
+    passes = [];
     if (wasPlaying) silence();
     if (!silent && onStop) onStop();
     if (!silent) onStop = null;
@@ -840,6 +862,36 @@
     return { section: span.plays, start: span.start + pass * span.loopSteps, steps: span.loopSteps, span };
   }
 
+  /* Where the playhead is in steps since the transport started: what you
+     are hearing, never folded back into the pass and never held at zero
+     while the scheduler has already moved on to the next one. The run and
+     the lane draw one pass and can afford position(); a road of notes
+     arriving from the future cannot. */
+  function elapsed() {
+    if (!currentSong || !ctx) return 0;
+    return Math.max(0, (ctx.currentTime - outputDelay() - origin) / stepDuration);
+  }
+
+  /* Which section of the bare loop sounds at an unfolded step, and where
+     that pass starts. Passes already scheduled are history; the ones after
+     them are whatever is waiting for the wrap, or else more of what is
+     sounding — and nothing at all past the end of a loop played once. Null
+     while the form plays, which lays itself out and needs no help. */
+  function passOf(step) {
+    if (!currentSong || sections || !passes.length) return null;
+    let found = passes[0];
+    for (let i = passes.length - 1; i >= 0; i--) {
+      if (step >= passes[i].start) { found = passes[i]; break; }
+    }
+    const last = passes[passes.length - 1];
+    if (found === last && step >= last.start + spanSteps) {
+      if (!looping) return null;
+      const ahead = Math.floor((step - last.start) / spanSteps);
+      return { section: pending || sounding, start: last.start + ahead * spanSteps, steps: spanSteps };
+    }
+    return { section: found.section, start: found.start, steps: spanSteps };
+  }
+
   function currentSection() {
     if (!currentSong) return null;
     return sections ? passAt(position()).section : sounding;
@@ -866,7 +918,7 @@
   // Deliberately not called `Audio` — that name is already taken in a browser.
   global.Engine = {
     ensure, start, stop, isPlaying, position, span, sectionAt,
-    passAt, setSection, currentSection, pendingSection,
+    passAt, setSection, currentSection, pendingSection, elapsed, passOf,
     setLoop, setMute, isMuted, setKit, currentKit,
     /* Pure, and exported because the claim the arrangement makes — this
        section plays these parts and no others — is a property of the laid-out
