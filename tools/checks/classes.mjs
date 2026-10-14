@@ -60,6 +60,30 @@ if (!sawShift || !sawOff) console.log(`note: crawl never reached ${sawShift ? ''
 await tap('#playButton'); await page.waitForTimeout(2800); await collect();
 await tap('#soloButton'); await tap('#loopButton'); await collect();
 await tap('#playButton');
+/* The highway. Its road, gems and pads exist only on that tab, and the lit,
+   shifted and on-road states only while it plays — so it is found a part
+   whose road has a shifted gem on it, then played through the count-in and
+   sampled as it runs. */
+await tap('.tab[data-tab="highway"]');
+let sawGemShift = false;
+for (let i = 0; i < 12 && !sawGemShift; i++) {
+  for (const part of ['melody', 'bass', 'chords']) {
+    await tap(`#hwParts button[data-value="${part}"]`);
+    if (await page.locator('.hw-gem[data-oct]').count()) { sawGemShift = true; break; }
+  }
+  if (sawGemShift) break;
+  await page.keyboard.press('g'); await page.waitForTimeout(400);
+}
+if (!sawGemShift) console.log('note: crawl never reached a shifted gem on the highway');
+await tap('#hwHear button[data-value="solo"]');
+await tap('#playButton'); await page.waitForTimeout(500); await collect();     // .on-road
+await page.waitForFunction(() => window.Engine.isPlaying(), null, { timeout: 8000 }).catch(() => {});
+for (let i = 0; i < 16; i++) { await page.waitForTimeout(250); await collect(); }   // lit pads, shifts ahead
+await tap('#playButton');
+await tap('#hwParts button[data-value="drums"]');
+await tap('#hwHear button[data-value="band"]');
+await tap('.tab[data-tab="play"]');
+await tap('#parts button[data-value="melody"]');
 // Set-up sheet.
 await tap('#setupButton'); await collect(); await tap('.sheet .nav-btn');
 // Share action sheet.
