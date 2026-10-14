@@ -35,7 +35,7 @@ for (const scheme of ['dark', 'light']) {
 
   await run('onboarding');
   await tap('#introSkip');
-  for (const tab of ['play', 'song', 'arrange', 'library']) {
+  for (const tab of ['play', 'highway', 'song', 'arrange', 'library']) {
     await tap(`.tab[data-tab="${tab}"]`);
     await run(tab);
   }

@@ -1854,5 +1854,8 @@
     return { update };
   }
 
-  global.Devices = { TRACKS, DEVICES, DEFAULT_DEVICE, build, mount };
+  /* The silkscreen and the kit names go out with the mapping, so anything
+     else that draws the twelve pads — the highway does — prints what is on
+     the unit rather than a second copy of it. */
+  global.Devices = { TRACKS, DEVICES, DEFAULT_DEVICE, PAD_LABELS: EP_PAD_LABELS, DRUM_LABEL, build, mount };
 })(window);

@@ -16,7 +16,7 @@ const PROFILES = [
   { name: 'ipad', width: 820, height: 1180 },
   { name: 'ipad-landscape', width: 1180, height: 820 },
 ];
-const TABS = ['play', 'song', 'arrange', 'library'];
+const TABS = ['play', 'highway', 'song', 'arrange', 'library'];
 
 const UA = 'Mozilla/5.0 (iPhone; CPU iPhone OS 17_5 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.5 Mobile/15E148 Safari/604.1';
 

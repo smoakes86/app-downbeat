@@ -1517,6 +1517,312 @@ await check('the Play screen follows the form from section to section', async ()
   await page.waitForTimeout(400);
 });
 
+/* ------------------------------------------------------------ the highway
+
+   One part as a road of notes onto the EP-133's twelve pads. The claims are
+   the faceplate's own, made again from the other end: every note is a gem in
+   the lane of the pad the faceplate names for it, it reaches the line when the
+   engine plays it — swing included — and the form's road is empty exactly
+   where the form drops the part. Then the controls: the part and the section
+   are the Play screen's, what you hear is read back off the one set of mutes,
+   and the road keeps moving through a wrap rather than stalling on it. */
+await check('every note on the highway is a gem on the pad the faceplate names', async () => {
+  const bad = await page.evaluate(() => {
+    const wrong = [];
+    let notes = 0;
+    let held = 0;
+    let shifted = 0;
+    const swing = (song, step) => (!song.swing ? 0
+      : song.swingUnit === 16 ? (step % 2 === 1 ? song.swing * 0.5 : 0)
+        : (step % 4 === 2 ? song.swing * 0.66 : 0));
+    window.Genres.order.forEach((g) => {
+      const song = window.Compose.compose({ genre: g, keyPc: 7, counter: true });
+      ['melody', 'counter', 'chords', 'bass', 'drums'].forEach((part) => {
+        const m = window.Highway.model(song, part, null);
+        const map = window.Devices.build(song, part, 'ep133').mapping;
+        if (m.lanes.map((l) => l.label).join(' ') !== window.Devices.PAD_LABELS.join(' ')) {
+          wrong.push(`${g}/${part}: lanes are not the twelve pads in order`);
+        }
+        const stepSec = 60 / song.bpm / 4;
+        song.sections.forEach((sec) => {
+          const got = m.bySection[sec.id];
+          const field = { melody: 'melody', counter: 'counter', chords: 'chordTrack', bass: 'bass', drums: 'drums' }[part];
+          const want = {};
+          (sec[field] || []).forEach((e) => {
+            const step = part === 'drums' ? e.step : e.start;
+            const lane = part === 'drums'
+              ? Number(map.idsByVoice[e.instrument].slice(1)) - 1
+              : map.idFor(e.midi).index;
+            /* Two hits on one pad on one step — a fill landing on the beat's
+               own stroke — are one strike, drawn once, at either's time. */
+            const key = lane + '@' + step;
+            (want[key] = want[key] || []).push(e);
+          });
+          if (got.length !== Object.keys(want).length) {
+            wrong.push(`${g}/${part}/${sec.id}: ${got.length} gems for ${Object.keys(want).length} pad-strikes`);
+          }
+          got.forEach((n) => {
+            notes++;
+            const w = want[n.lane + '@' + n.step];
+            if (!w) { wrong.push(`${g}/${part}/${sec.id}: a gem on pad ${n.lane} at ${n.step} plays nothing`); return; }
+            const times = w.map((e) => n.step + swing(song, n.step) + (e.nudge || 0) / stepSec);
+            if (!times.some((at) => Math.abs(at - n.at) < 1e-6)) wrong.push(`${g}/${part}: gem at ${n.at}, note sounds at ${times[0]}`);
+            if (n.dur) held++;
+            if (n.oct) shifted++;
+            if (part !== 'drums' && n.dur && n.dur < 3) wrong.push(`${g}/${part}: a ${n.dur}-step stab trails a tail`);
+          });
+        });
+      });
+    });
+    return { wrong: wrong.slice(0, 4), total: wrong.length, notes, held, shifted };
+  });
+  if (bad.total) throw new Error(`${bad.total} problems, e.g. ${bad.wrong.join(' | ')}`);
+  if (!bad.notes || !bad.held || !bad.shifted) throw new Error(`the sweep never saw every kind of gem (${JSON.stringify(bad)})`);
+});
+
+await check('the form on the highway drops a part exactly where the arrangement does', async () => {
+  const bad = await page.evaluate(() => {
+    const wrong = [];
+    let rests = 0;
+    ['pop', 'house', 'jazz', 'lofi'].forEach((g) => {
+      const song = window.Compose.compose({ genre: g, counter: true });
+      const plan = window.Arrange.plan(song);
+      ['melody', 'bass', 'drums'].forEach((part) => {
+        const m = window.Highway.model(song, part, plan);
+        const laid = window.Engine.arrange(song, plan);
+        if (m.form.total !== laid.totalSteps) wrong.push(`${g}: form is ${m.form.total} steps, engine lays out ${laid.totalSteps}`);
+        laid.spans.forEach((span, i) => {
+          const plays = plan.sections[i].tracks.indexOf(part) >= 0;
+          const inside = m.form.notes.filter((n) => n.step >= span.start && n.step < span.start + span.steps).length;
+          if (!plays && inside) wrong.push(`${g}/${part}: ${inside} gems in ${span.name}, which drops it`);
+          if (!plays) rests++;
+          const mark = m.form.marks[i];
+          if (mark.at !== span.start || mark.rests === plays) wrong.push(`${g}/${part}: the ${span.name} mark is wrong`);
+        });
+      });
+    });
+    return { wrong: wrong.slice(0, 4), total: wrong.length, rests };
+  });
+  if (bad.total) throw new Error(`${bad.total} problems, e.g. ${bad.wrong.join(' | ')}`);
+  if (!bad.rests) throw new Error('no form ever dropped a part, so nothing was checked');
+});
+
+await page.evaluate(() => {
+  window.__mutes = () => ['melody', 'counter', 'chords', 'bass', 'drums']
+    .filter((t) => !window.Engine.isMuted(t)).join(',');
+  window.__hear = () => (document.querySelector('#hwHear [aria-checked=true]') || {}).dataset?.value || '';
+  window.__gems = () => Array.from(document.querySelectorAll('#hwNotes .hw-gem'))
+    .filter((g) => g.style.display !== 'none')
+    .map((g) => ({ lane: Number(g.style.getPropertyValue('--l')), y: -Number((g.style.transform.match(/,\s*(-?[\d.]+)px/) || [0, 0])[1]) }));
+});
+
+await check('the highway opens on the twelve pads, and its switchers are the Play screen\'s', async () => {
+  await tap('.tab[data-tab="highway"]');
+  await page.waitForTimeout(400);
+  const first = await page.evaluate(() => ({
+    pads: Array.from(document.querySelectorAll('#hwPads .hw-pad-id')).map((n) => n.textContent).join(' '),
+    lanes: document.querySelectorAll('#hwLanes .hw-lane').length,
+    gems: window.__gems().length,
+    next: document.querySelector('#hwNext').textContent,
+    grid: document.querySelector('#hwGrid').textContent,
+    label: document.querySelector('#hwRoad').getAttribute('aria-label')
+  }));
+  if (first.pads !== '. 0 ENT 1 2 3 4 5 6 7 8 9') throw new Error(`the pads read "${first.pads}"`);
+  if (first.lanes !== 12) throw new Error(`${first.lanes} lanes`);
+  if (!first.gems) throw new Error('nothing on the road at rest');
+  if (!/^Next pads? /.test(first.next)) throw new Error(`the next-note line reads "${first.next}"`);
+  if (!/\b31\d\b|310/.test(first.grid)) throw new Error(`no scale code in "${first.grid}"`);
+  if (!/EP-133/.test(first.label)) throw new Error(`the road is labelled "${first.label}"`);
+  await shot('highway-melody');
+
+  await tap('#hwParts button[data-value="bass"]');
+  const bass = await page.evaluate(() => ({
+    part: document.querySelector('#app').dataset.part,
+    play: document.querySelector('#parts [aria-checked=true]').dataset.value
+  }));
+  if (bass.part !== 'bass' || bass.play !== 'bass') throw new Error(`picked bass, app on ${bass.part}, Play switcher on ${bass.play}`);
+  await tap('#hwSections button[data-value="chorus"]');
+  const sec = await page.evaluate(() => document.querySelector('#sections [aria-checked=true]').dataset.value);
+  if (sec !== 'chorus') throw new Error(`picked the chorus on the highway, Play shows ${sec}`);
+  await tap('#hwSections button[data-value="verse"]');
+  await tap('#hwParts button[data-value="drums"]');
+  await shot('highway-drums');
+  await tap('#hwParts button[data-value="melody"]');
+});
+
+await check('what you hear on the highway is the engine\'s mix', async () => {
+  const has = await page.evaluate(() => window.__mutes());
+  await tap('#hwHear button[data-value="solo"]');
+  let now = await page.evaluate(() => ({ on: window.__mutes(), hear: window.__hear(), dock: document.querySelector('#dockPart').textContent }));
+  if (now.on !== 'melody' || now.hear !== 'solo') throw new Error(`solo: hearing ${now.on}, control on ${now.hear}`);
+  if (!/solo/.test(now.dock)) throw new Error(`the transport does not say solo: "${now.dock}"`);
+  await tap('#hwHear button[data-value="backing"]');
+  now = await page.evaluate(() => ({ on: window.__mutes(), hear: window.__hear() }));
+  if (now.on !== has.split(',').filter((t) => t !== 'melody').join(',') || now.hear !== 'backing') {
+    throw new Error(`backing: hearing ${now.on}, control on ${now.hear}`);
+  }
+  /* Backing is "the band without the part I am playing", so it follows the
+     part picked on the highway. */
+  await tap('#hwParts button[data-value="bass"]');
+  now = await page.evaluate(() => ({ on: window.__mutes(), hear: window.__hear() }));
+  if (now.on.indexOf('bass') >= 0 || now.on.indexOf('melody') < 0 || now.hear !== 'backing') {
+    throw new Error(`backing did not follow the part: hearing ${now.on}`);
+  }
+  await tap('#hwHear button[data-value="band"]');
+  now = await page.evaluate(() => ({ on: window.__mutes(), hear: window.__hear() }));
+  if (now.on !== has || now.hear !== 'band') throw new Error(`band: hearing ${now.on}, control on ${now.hear}`);
+  /* A mix made on the Play screen that is none of the three selects none. */
+  await tap('.tab[data-tab="play"]');
+  await tap('.mix-chip[data-part="chords"]');
+  await tap('.mix-chip[data-part="drums"]');
+  await tap('.tab[data-tab="highway"]');
+  now = await page.evaluate(() => ({ hear: window.__hear(), stops: document.querySelectorAll('#hwHear button[tabindex="0"]').length }));
+  if (now.hear) throw new Error(`a custom mix shows as ${now.hear}`);
+  if (now.stops !== 1) throw new Error(`the hearing control has ${now.stops} tab stops with nothing checked`);
+  await tap('#hwHear button[data-value="band"]');
+  await tap('#hwParts button[data-value="melody"]');
+});
+
+await check('the count-in runs the road and is heard over a solo', async () => {
+  await tap('.tab[data-tab="song"]');
+  await page.selectOption('#countInSelect', '1');
+  await page.waitForTimeout(300);
+  await tap('.tab[data-tab="highway"]');
+  await tap('#hwHear button[data-value="solo"]');
+  await page.evaluate(() => {
+    window.__buses = [];
+    const real = window.Engine.playDrum;
+    window.Engine.playDrum = function (inst, when, vel, bus) { window.__buses.push(bus || 'drums'); return real.apply(this, arguments); };
+    window.__realPlayDrum = real;
+  });
+  await tap('#playButton');
+  const early = await page.evaluate(() => window.__gems().map((g) => g.y));
+  await page.waitForTimeout(500);
+  const during = await page.evaluate(() => ({
+    onRoad: document.querySelector('#countIn').classList.contains('on-road'),
+    shown: !document.querySelector('#countIn').hidden,
+    ys: window.__gems().map((g) => g.y),
+    buses: window.__buses.slice()
+  }));
+  if (!during.shown) throw new Error('no count-in');
+  if (!during.onRoad) throw new Error('the count-in covers the road');
+  if (!during.buses.length || during.buses.some((b) => b !== 'click')) throw new Error(`count-in clicks went to [${during.buses}]`);
+  if (!during.ys.length || !early.length || Math.min(...during.ys) >= Math.min(...early)) {
+    throw new Error('the road did not move toward the line during the count-in');
+  }
+  await page.evaluate(() => { window.Engine.playDrum = window.__realPlayDrum; });
+  const live = await page.evaluate(() => new Promise((done) => {
+    const started = Date.now();
+    const poll = setInterval(() => {
+      if (window.Engine.isPlaying()) { clearInterval(poll); done(true); }
+      else if (Date.now() - started > 6000) { clearInterval(poll); done(false); }
+    }, 50);
+  }));
+  if (!live) throw new Error('playback never started after the count-in');
+  await shot('highway-playing');
+});
+
+await check('gems reach the line as their pads light', async () => {
+  const seen = await page.evaluate(() => new Promise((done) => {
+    let lit = 0;
+    let orphans = 0;
+    let frames = 0;
+    let moved = false;
+    let last = null;
+    const tick = () => {
+      frames++;
+      const gems = window.__gems();
+      const lanes = Array.from(document.querySelectorAll('#hwLanes .hw-lane')).map((l) => Number(l.style.getPropertyValue('--l')));
+      document.querySelectorAll('#hwPads .hw-pad.is-on').forEach((pad) => {
+        lit++;
+        const l = lanes[Number(pad.dataset.lane)];
+        /* A gem in that lane at the line or just past it. */
+        if (!gems.some((g) => Math.abs(g.lane - l) < 1e-6 && g.y <= 2)) orphans++;
+      });
+      const ys = gems.map((g) => g.y).join(',');
+      if (last !== null && ys !== last) moved = true;
+      last = ys;
+      if (frames < 150) requestAnimationFrame(tick);
+      else done({ lit, orphans, moved, frames });
+    };
+    requestAnimationFrame(tick);
+  }));
+  if (!seen.moved) throw new Error('the road did not move while playing');
+  if (!seen.lit) throw new Error('no pad lit in 150 frames of the melody');
+  if (seen.orphans) throw new Error(`${seen.orphans} of ${seen.lit} lit pads had no gem on the line`);
+});
+
+await check('the road\'s clock runs straight through a wrap, and the next section is on it', async () => {
+  const wrap = await page.evaluate(() => new Promise((done) => {
+    const L = window.Engine.span();
+    let prev = window.Engine.elapsed();
+    let back = 0;
+    let stall = 0;
+    let since = performance.now();
+    let crossed = false;
+    const started = performance.now();
+    const poll = setInterval(() => {
+      const now = window.Engine.elapsed();
+      if (now < prev - 1e-6) back++;
+      if (now === prev) { if (performance.now() - since > 90) stall++; } else since = performance.now();
+      if (Math.floor(now / L) > Math.floor(prev / L)) crossed = true;
+      prev = now;
+      if ((crossed && now % L > 4) || performance.now() - started > 20000) { clearInterval(poll); done({ back, stall, crossed }); }
+    }, 16);
+  }));
+  if (!wrap.crossed) throw new Error('never saw a wrap');
+  if (wrap.back) throw new Error(`the clock went backwards ${wrap.back} times`);
+  if (wrap.stall) throw new Error('the clock held still across the wrap');
+  await tap('#hwSections button[data-value="chorus"]');
+  const queued = await page.evaluate(() => {
+    const L = window.Engine.span();
+    const at = window.Engine.elapsed();
+    const here = window.Engine.passOf(at);
+    /* The next pass, or the one after if the scheduler had already laid the
+       next one out when the switch was asked for. */
+    const next = window.Engine.passOf(Math.floor(at / L) * L + L + 1);
+    const after = window.Engine.passOf(Math.floor(at / L) * L + 2 * L + 1);
+    return { here: here && here.section, next: next && next.section, after: after && after.section };
+  });
+  if (queued.here !== 'verse') throw new Error(`the loop is on the ${queued.here}`);
+  if (queued.next !== 'chorus' && queued.after !== 'chorus') {
+    throw new Error(`the passes ahead read ${queued.next}, ${queued.after} — not the chorus asked for`);
+  }
+  /* And the road says so before it arrives. */
+  const marked = await page.evaluate(() => new Promise((done) => {
+    const started = Date.now();
+    const poll = setInterval(() => {
+      const marks = Array.from(document.querySelectorAll('#hwMarks .hw-mark')).filter((m) => m.style.display !== 'none').map((m) => m.textContent);
+      if (marks.indexOf('Chorus') >= 0) { clearInterval(poll); done(true); }
+      else if (Date.now() - started > 20000) { clearInterval(poll); done(false); }
+    }, 50);
+  }));
+  if (!marked) throw new Error('the chorus never appeared on the road ahead of the switch');
+  await shot('highway-chorus-ahead');
+  await tap('#playButton');
+  await page.waitForTimeout(400);
+  await tap('#hwHear button[data-value="band"]');
+});
+
+await check('the highway draws the form when the form is armed', async () => {
+  await tap('.tab[data-tab="arrange"]');
+  const first = await page.evaluate(() => document.querySelector('#arrangeMap .map-sec .map-sec-name').textContent);
+  /* Arm it and cancel the count-in it starts: armed and stopped, the road
+     rests on the top of the form. */
+  await tap('#arrangeButton');
+  await tap('#countInCancel');
+  await tap('.tab[data-tab="highway"]');
+  await page.waitForTimeout(300);
+  const marks = await page.evaluate(() => Array.from(document.querySelectorAll('#hwMarks .hw-mark'))
+    .filter((m) => m.style.display !== 'none').map((m) => m.textContent));
+  if (!marks.length || marks[0].indexOf(first) !== 0) throw new Error(`the road opens on [${marks}], the form on ${first}`);
+  await shot('highway-form');
+});
+/* Back to a plain loop on a fresh page, so nothing armed here leaks into the
+   library checks below. */
+await page.reload({ waitUntil: 'networkidle' });
+await page.waitForTimeout(900);
+
 /* ----------------------------------------------------------- library */
 await check('library tab', async () => {
   await tap('.tab[data-tab="library"]');

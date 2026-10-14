@@ -22,6 +22,7 @@
   const Motion = global.Motion;
   const Mark = global.Mark;
   const UI = global.IOS;
+  const Highway = global.Highway;
 
   const PARTS = [
     { id: 'melody',  label: 'Melody',  short: 'Melody' },
@@ -123,6 +124,7 @@
   let sectionId = 'verse';
   let shownSection = 'verse';
   let sectionsControl = null;
+  let hwSectionsControl = null;
   let arrangement = null;
   let activeSection = null;
   /* Two different things called a section. `activeSection` is the one you are
@@ -154,6 +156,18 @@
   const runBox = $('#run');
   const lane = $('#lane');
   const laneScroll = $('#laneScroll');
+  /* The highway draws one part of the song as a road of notes onto the
+     EP-133's pads. Its picture is rebuilt only when what it draws changes —
+     the song, the part, or loop against form — and only once it is on screen
+     to be seen. */
+  const highway = Highway ? Highway.mount({
+    stage: $('#hwStage'), road: $('#hwRoad'), lanes: $('#hwLanes'), beats: $('#hwBeats'),
+    marks: $('#hwMarks'), notes: $('#hwNotes'), pads: $('#hwPads'), next: $('#hwNext')
+  }) : null;
+  let highwayKey = '';
+  let songSerial = 0;
+  let hwPartsControl = null;
+  let hwHearControl = null;
   let laneHead = null;
   let laneHeld = false;
   let laneReleased = 0;
@@ -235,6 +249,7 @@
     const previous = song;
     song = C.compose(opts);
     song.title = opts.title || TITLES[Math.floor(Math.random() * TITLES.length)];
+    songSerial++;
     /* The recipe Library saves is read off song.opts, so the options that made
        a song travel with it rather than living in a variable that the next
        generate would overwrite. */
@@ -316,6 +331,7 @@
       renderCurrentActions();
       renderDockBars();
       syncTransportReadout();
+      syncHighway();
     });
   }
 
@@ -420,16 +436,28 @@
      switcher: two things you can be on, and the parts under it are the parts
      of that one. */
   function renderSections() {
-    const box = $('#sections');
-    if (!box) return;
     const list = song.sections || [];
-    box.hidden = list.length < 2;
-    box.innerHTML = list.map((s) =>
+    const markup = list.map((s) =>
       `<button type="button" role="radio" data-value="${s.id}" ` +
       `aria-checked="${s.id === sectionId ? 'true' : 'false'}" tabindex="${s.id === sectionId ? 0 : -1}">` +
       `${escapeHtml(s.label)}</button>`).join('') + '<i class="seg-thumb" aria-hidden="true"></i>';
-    sectionsControl = UI.segmented(box, (value) => setSection(value));
-    sectionsControl.select(sectionId);
+    /* The same two sections on the Play screen and the highway, answering
+       the same question, so one setSection behind both. */
+    const build = (box) => {
+      if (!box) return null;
+      box.hidden = list.length < 2;
+      box.innerHTML = markup;
+      const control = UI.segmented(box, (value) => setSection(value));
+      control.select(sectionId);
+      return control;
+    };
+    sectionsControl = build($('#sections'));
+    hwSectionsControl = build($('#hwSections'));
+  }
+
+  function selectSection(id) {
+    if (sectionsControl) sectionsControl.select(id);
+    if (hwSectionsControl) hwSectionsControl.select(id);
   }
 
   /* Which section you are on. Stopped, it is immediate. While the loop plays,
@@ -443,7 +471,7 @@
     if (!(song.sections || []).some((s) => s.id === id)) return;
     const quiet = !!(opts && opts.silent);
     sectionId = id;
-    if (sectionsControl) sectionsControl.select(id);
+    selectSection(id);
     if (Engine.isPlaying()) {
       if (arrangedOn) {
         shownSection = id;
@@ -461,7 +489,7 @@
         return;
       }
     }
-    if (shownSection !== id) { shownSection = id; renderPart(); }
+    if (shownSection !== id) { shownSection = id; renderPart(); drawHighway(); }
     lastBar = -1;
     syncTransportReadout();
     if (!quiet) announce(`${sectionLabel(id)} selected`);
@@ -473,9 +501,8 @@
   let devicesControl = null;
 
   function renderParts() {
-    const box = $('#parts');
     const hasCounter = !!(song && hasTrack('counter'));
-    box.innerHTML = PARTS.map((p) => {
+    const markup = PARTS.map((p) => {
       /* Counter is dimmed when the song has no second line, but it is NOT
          disabled: a dead segment can only tell you that you cannot have the
          thing, where a live one can go and get it. Tapping it writes the
@@ -491,17 +518,33 @@
         `${off ? ' data-off="true"' : ''}>${p.short}</button>`;
     }).join('') + '<i class="seg-thumb" aria-hidden="true"></i>';
 
-    partsControl = UI.segmented(box, (value, button) => {
-      if (value === 'counter' && !hasTrack('counter')) {
-        draft.counter = true;
-        regenerate('both');
-        setPart('counter');
-        toast('Second melody added');
-        return;
-      }
-      setPart(value);
-    });
+    $('#parts').innerHTML = markup;
+    partsControl = UI.segmented($('#parts'), (value) => choosePart(value, false));
     partsControl.select(part);
+
+    /* The highway asks the same question with the same five answers. */
+    const hw = $('#hwParts');
+    if (hw) {
+      hw.innerHTML = markup;
+      hwPartsControl = UI.segmented(hw, (value) => choosePart(value, true));
+      hwPartsControl.select(part);
+    }
+  }
+
+  /* A part picked from either switcher. On the highway, backing means "the
+     band without the part I am playing", so a new part takes the silence with
+     it — the mix on the Play screen is a setting per part and stays put. */
+  function choosePart(value, fromHighway) {
+    const backing = fromHighway && hearing() === 'backing';
+    if (value === 'counter' && !hasTrack('counter')) {
+      draft.counter = true;
+      regenerate('both');
+      setPart('counter');
+      toast('Second melody added');
+    } else {
+      setPart(value);
+    }
+    if (backing) setHearing('backing', true);
   }
 
   function setPart(id) {
@@ -512,9 +555,12 @@
     part = id;
     app.dataset.part = id;
     if (partsControl) partsControl.select(id);
+    if (hwPartsControl) hwPartsControl.select(id);
     renderPart();
     if (soloOn) applyMutes();
+    else syncHearing();
     syncTransportReadout();
+    syncHighway();
     announce(`${PARTS.find((p) => p.id === id).label} selected`);
   }
 
@@ -785,13 +831,13 @@
 
   let setupSteps = [];
 
-  function openSetup() {
+  function openSetup(steps, deviceId) {
     const list = doc.createElement('ol');
     list.className = 'recipe-steps';
     list.style.padding = '0 16px';
-    list.innerHTML = setupSteps.map((s, i) =>
+    list.innerHTML = (steps || setupSteps).map((s, i) =>
       `<li><span class="step-n">${i + 1}</span><div><b>${s[0]}</b><p>${s[1]}</p></div></li>`).join('');
-    UI.sheet({ title: 'Set up ' + Devices.DEVICES[device].label, body: list });
+    UI.sheet({ title: 'Set up ' + Devices.DEVICES[deviceId || device].label, body: list });
   }
 
   /* --------------------------------------------------------------- lane */
@@ -1026,6 +1072,7 @@
     arrangedOn = !!on && !!arrangement;
     syncArrangeButton();
     syncTransportReadout();
+    syncHighway();
     if (!andPlay) {
       /* Changing the length of what is playing means restarting it — there is
          no honest way to splice a four-bar loop into bar 30 of a form. */
@@ -1094,6 +1141,8 @@
          stopped first, or was playing once — is taken now. */
       if (shownSection !== sectionId) { shownSection = sectionId; renderPart(); }
       if (mounted) mounted.update(null);
+      if (highway) highway.clear();
+      drawHighway();
       markLaneStep(-1);
       markSection(null);
       if (laneHead) laneHead.style.setProperty('--head', 0);
@@ -1129,7 +1178,7 @@
          stopping leaves you on the section you were hearing. On the bare
          loop this is the switch you asked for, arriving at the wrap. */
       sectionId = pass.section;
-      if (sectionsControl) sectionsControl.select(pass.section);
+      selectSection(pass.section);
       renderPart();
       lastStep = -1;
       lastBar = -1;
@@ -1143,6 +1192,9 @@
     if (mounted && step !== lastStep) { mounted.update(step); markLaneStep(step); lastStep = step; }
     if (laneHead) laneHead.style.setProperty('--head', (inLoop / passSteps).toFixed(4));
     followLane(inLoop);
+    /* Every frame, not every step: the road is a thing in motion, and a road
+       that moves a sixteenth at a time is a slideshow. */
+    drawHighway();
 
     const bar = Math.floor(inLoop / 16);
     if (bar !== lastBar) {
@@ -1215,6 +1267,13 @@
        lateness forward, and four beats of that is the difference between
        coming in on the downbeat and coming in behind it. */
     const started = global.performance.now();
+    /* On the highway the count-in is the road's lead-in, and the road has to
+       be seen to be read: the number sits over it instead of a scrim. Step
+       zero arrives when the last beat is over plus the moment Engine.start
+       waits before its first note. */
+    countInZero = started + beats * interval + 140;
+    box.classList.toggle('on-road', tab === 'highway');
+    if (tab === 'highway' && !leadRaf) leadRaf = global.requestAnimationFrame(leadFrame);
     box.hidden = false;
     UI.setInert(true);
     beat.textContent = String(beats);
@@ -1232,7 +1291,7 @@
       /* A real click rather than a silent countdown: the whole point of a
          count-in is that you can start playing on the downbeat without looking
          at the screen. */
-      Engine.playDrum(n % 4 === 0 ? 'rim' : 'hat', 0, n % 4 === 0 ? 0.9 : 0.5);
+      Engine.playDrum(n % 4 === 0 ? 'rim' : 'hat', 0, n % 4 === 0 ? 0.9 : 0.5, 'click');
       n++;
       const due = started + n * interval;
       countInTimer = global.setTimeout(tick, Math.max(0, due - global.performance.now()));
@@ -1242,6 +1301,8 @@
 
   function cancelCountIn() {
     if (countInTimer) { global.clearTimeout(countInTimer); countInTimer = 0; }
+    if (leadRaf) { global.cancelAnimationFrame(leadRaf); leadRaf = 0; }
+    countInZero = 0;
     if (!$('#countIn').hidden) {
       $('#countIn').hidden = true;
       UI.setInert(false);
@@ -1264,11 +1325,150 @@
       Engine.setMute(t.id, soloOn ? t.id !== part : (mutes[t.id] || sectionMuted(t.id)));
     });
     renderMix();
+    syncHearing();
     syncTransportReadout();
   }
 
   function sectionMuted(id) {
     return !!(activeSection && activeSection.muted.indexOf(id) >= 0);
+  }
+
+  /* ========================================================== the highway
+
+     The highway is a second way of looking at the part you are playing — a
+     road of notes onto the EP-133's pads — and its controls are the Play
+     screen's own: the same part, the same section, the same mix. What you
+     hear is the one question it asks differently, because it is the one you
+     answer before pressing record on the unit: just this part, so you can
+     sample it; the whole band; or the band without it, so the part is yours
+     to play. */
+  const HEARING = [
+    { id: 'solo', label: 'Solo' },
+    { id: 'band', label: 'Band' },
+    { id: 'backing', label: 'Backing' }
+  ];
+
+  /* What you are hearing, read back off the one set of mutes rather than kept
+     as a second copy of them. A mix made on the Play screen that is none of
+     the three selects none of them, which is the truth. */
+  function hearing() {
+    if (soloOn) return 'solo';
+    const has = (id) => (id === 'counter' || id === 'drums' ? hasTrack(id) : true);
+    const off = PARTS.filter((p) => has(p.id) && (mutes[p.id] || sectionMuted(p.id)));
+    if (!off.length) return 'band';
+    if (off.length === 1 && off[0].id === part && !activeSection) return 'backing';
+    return '';
+  }
+
+  /* Solo is the transport's own solo, so it hands your mix back when it is
+     released. Band and backing are mixes, and replace whatever was there —
+     an auditioned section included, since it silences parts as well. */
+  function setHearing(mode, quiet) {
+    soloOn = mode === 'solo';
+    if (!soloOn) PARTS.forEach((p) => { mutes[p.id] = mode === 'backing' && p.id === part; });
+    $('#soloButton').setAttribute('aria-pressed', soloOn ? 'true' : 'false');
+    if (!soloOn && activeSection) clearAudition(); else applyMutes();
+    if (quiet) return;
+    UI.haptic(6);
+    const label = PARTS.find((p) => p.id === part).label;
+    toast(mode === 'solo' ? `Solo — ${label} only`
+      : mode === 'backing' ? `Backing — everything but the ${label.toLowerCase()}`
+        : 'Full band');
+  }
+
+  function renderHearing() {
+    const box = $('#hwHear');
+    if (!box) return;
+    if (box.childElementCount !== HEARING.length + 1) {
+      box.innerHTML = HEARING.map((h) =>
+        `<button type="button" role="radio" data-value="${h.id}" aria-checked="false" tabindex="-1">${h.label}</button>`)
+        .join('') + '<i class="seg-thumb" aria-hidden="true"></i>';
+      hwHearControl = UI.segmented(box, (value) => setHearing(value));
+    }
+    syncHearing();
+  }
+
+  function syncHearing() {
+    if (!hwHearControl) return;
+    const now = hearing();
+    hwHearControl.select(now);
+    /* Nothing checked still has to leave the group reachable. */
+    if (!now) { const first = $('#hwHear button'); if (first) first.tabIndex = 0; }
+  }
+
+  /* Rebuild the road's picture if what it draws has changed, then draw it.
+     Only while it is the screen you are on: everything here is invisible
+     work otherwise, and setTab calls back in when it becomes visible. */
+  function syncHighway() {
+    if (!highway || !song || tab !== 'highway') return;
+    const key = `${songSerial}|${part}|${arrangedOn ? 'form' : 'loop'}`;
+    if (key !== highwayKey) {
+      highwayKey = key;
+      highway.load(Highway.model(song, part, arrangedOn ? arrangement : null));
+      describeHighway();
+    }
+    drawHighway();
+  }
+
+  function describeHighway() {
+    const m = highway.model();
+    if (!m) return;
+    const label = PARTS.find((p) => p.id === part).label;
+    const pads = m.lanes.filter((l) => l.used).length;
+    const empty = $('#hwEmpty');
+    empty.hidden = m.count > 0;
+    if (!m.count) {
+      empty.textContent = part === 'drums'
+        ? `${song.genre.label} has no kit — this one is played without drums.`
+        : part === 'counter' ? 'There is no second line in this sketch.' : 'Nothing on this part.';
+    }
+    $('#hwGrid').textContent = m.grid;
+    $('#hwRoad').setAttribute('aria-label', m.count
+      ? `${label} on the EP-133 as a highway of notes onto ${pads} of its twelve pads. ` +
+        (m.isDrums ? 'Kit in group A.' : `KEYS ${m.grid}.`)
+      : `${label}: nothing to play.`);
+  }
+
+  /* Where the road rests while nothing plays: as far back as the count-in
+     will start it from, so pressing play only sets it moving — but never so
+     far back that the first note is off the top of the road. */
+  function highwayRest() {
+    const lead = countInBars * 16;
+    const room = Math.max(0, Math.floor(highway.ahead() - 3 - highway.firstAt(shownSection)));
+    return -Math.min(lead, room);
+  }
+
+  /* The bare loop as it will play, for a road drawn while nothing does. */
+  function restPass(step) {
+    const steps = song.totalSteps;
+    if (step < 0 || (!loopOn && step >= steps)) return null;
+    return { section: shownSection, start: Math.floor(step / steps) * steps, steps };
+  }
+
+  let countInZero = 0;
+  let leadRaf = 0;
+
+  function drawHighway() {
+    if (!highway || !song || tab !== 'highway') return;
+    if (Engine.isPlaying()) {
+      highway.draw(Engine.elapsed(), Engine.passOf, loopOn);
+    } else if (countInTimer && countInZero) {
+      /* The count-in runs the road toward the first note on its own clock,
+         aimed at the moment the transport will put step zero in your ears.
+         It holds at zero if the audio is a few milliseconds late arriving,
+         rather than stepping backwards when it does. */
+      const step = 60000 / song.bpm / 4;
+      highway.draw(Math.min(0, (global.performance.now() - countInZero) / step), restPass, loopOn);
+    } else {
+      highway.draw(highwayRest(), restPass, loopOn);
+    }
+  }
+
+  function leadFrame() {
+    leadRaf = 0;
+    if (!countInTimer || Engine.isPlaying()) return;
+    drawHighway();
+    leadRaf = global.requestAnimationFrame(leadFrame);
   }
 
   /* ====================================================== the song screen */
@@ -1874,6 +2074,12 @@
     if (id === 'song') renderGenres();
     if (id === 'arrange') syncArrangeButton();
     if (id === 'play') global.requestAnimationFrame(fitFace);
+    /* The road is measured once it can be: an inert screen still has a box,
+       but the first frame of a tab change is where its size settles. */
+    if (id === 'highway') {
+      syncHighway();
+      global.requestAnimationFrame(() => { if (highway && highway.fit()) drawHighway(); });
+    }
     syncScrolled();
     announce(id.charAt(0).toUpperCase() + id.slice(1));
   }
@@ -2027,12 +2233,13 @@
   /* =============================================================== wiring */
 
   $('#playButton').addEventListener('click', togglePlayback);
-  $('#countInCancel').addEventListener('click', () => { cancelCountIn(); announce('Count-in cancelled'); });
+  $('#countInCancel').addEventListener('click', () => { cancelCountIn(); drawHighway(); announce('Count-in cancelled'); });
 
   $('#loopButton').addEventListener('click', function () {
     loopOn = !loopOn;
     this.setAttribute('aria-pressed', loopOn ? 'true' : 'false');
     Engine.setLoop(loopOn);
+    drawHighway();
     UI.haptic(6);
     toast(loopOn ? 'Looping' : 'Playing once');
   });
@@ -2054,7 +2261,12 @@
 
   $('#shareButton').addEventListener('click', openShare);
   $('#undoButton').addEventListener('click', undo);
-  $('#setupButton').addEventListener('click', openSetup);
+  $('#setupButton').addEventListener('click', () => openSetup());
+  /* The highway is drawn for the EP-133 whichever unit the Play screen is
+     set to, so its set-up is the EP-133's for this part. */
+  $('#hwSetup').addEventListener('click', () => {
+    openSetup(Devices.build(shownSong(), part, 'ep133').setup, 'ep133');
+  });
 
   $('#mix').addEventListener('click', (event) => {
     const chip = event.target.closest('.mix-chip');
@@ -2244,7 +2456,14 @@
       if (countInTimer) cancelCountIn();
       else if (!$('#intro').hidden) finishIntro();
       else UI.close();
-    } else if (event.key >= '1' && event.key <= '5') { setTab('play'); setPart(PARTS[Number(event.key) - 1].id); }
+    } else if (event.key >= '1' && event.key <= '5') {
+      /* The highway is a view of the part too, so picking one there keeps
+         you there. Everywhere else it takes you to the Play screen. */
+      const backing = tab === 'highway' && hearing() === 'backing';
+      if (tab !== 'highway') setTab('play');
+      setPart(PARTS[Number(event.key) - 1].id);
+      if (backing) setHearing('backing', true);
+    }
     else if (event.code && /^Digit[1-5]$/.test(event.code) && event.shiftKey) {
       /* Shift and the same digit: the part you would have selected, silenced.
          event.code rather than event.key, because shifting a digit gives you
@@ -2254,7 +2473,7 @@
       const target = PARTS[Number(event.code.slice(5)) - 1];
       const chip = $(`.mix-chip[data-part="${target.id}"]`);
       if (!chip || chip.dataset.empty) return;
-      setTab('play');
+      if (tab !== 'highway') setTab('play');
       toggleMute(target.id);
     }
     else if (event.key === 'g' || event.key === 'G') { regenerate(); toast('New song'); }
@@ -2300,11 +2519,15 @@
   });
 
   let resizeTimer = 0;
+  const refit = () => {
+    fitFace();
+    if (tab === 'highway' && highway && highway.fit()) drawHighway();
+  };
   global.addEventListener('resize', () => {
     global.clearTimeout(resizeTimer);
-    resizeTimer = global.setTimeout(fitFace, 120);
+    resizeTimer = global.setTimeout(refit, 120);
   });
-  global.addEventListener('orientationchange', () => global.setTimeout(fitFace, 260));
+  global.addEventListener('orientationchange', () => global.setTimeout(refit, 260));
 
   systemTheme.addEventListener('change', (event) => {
     if (!store.get(STORE.theme)) applyTheme(event.matches);
@@ -2367,6 +2590,7 @@
   }
 
   app.dataset.part = part;
+  renderHearing();
   renderLibrary();
   renderAbout();
   Engine.setLoop(loopOn);

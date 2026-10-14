@@ -1,7 +1,7 @@
 /* Downbeat's offline shell. An installed app has to work with no connection —
    that is most of the point of installing it — so the whole shell is cached on
    first run and served from the cache whenever the network fails. */
-const CACHE = 'downbeat-shell-v16';
+const CACHE = 'downbeat-shell-v17';
 const SHELL = [
   './',
   './index.html',
@@ -24,6 +24,7 @@ const SHELL = [
   './src/mark.js',
   './src/motion.js',
   './src/devices.js',
+  './src/highway.js',
   './src/arrange.js',
   './src/library.js',
   './src/ios.js',
